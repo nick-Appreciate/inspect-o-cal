@@ -49,7 +49,7 @@ export default function AddFollowUpDialog({
 }: AddFollowUpDialogProps) {
   const [type, setType] = useState<string>(parentInspection.type);
   const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const [time, setTime] = useState("12:00");
   const [isCreating, setIsCreating] = useState(false);
 
   const handleCreate = async () => {

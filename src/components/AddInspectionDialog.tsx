@@ -55,7 +55,7 @@ export default function AddInspectionDialog({
   const [showAddProperty, setShowAddProperty] = useState(false);
   const [date, setDate] = useState<Date>();
   const [type, setType] = useState<InspectionType>();
-  const [time, setTime] = useState("");
+  const [time, setTime] = useState("12:00");
   const [selectedProperty, setSelectedProperty] = useState<Property>();
   const [attachment, setAttachment] = useState<File>();
   const [newPropertyName, setNewPropertyName] = useState("");
