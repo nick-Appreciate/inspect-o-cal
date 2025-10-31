@@ -52,6 +52,7 @@ export default function Tasks() {
   const [session, setSession] = useState<Session | null>(null);
   const [tasks, setTasks] = useState<SubtaskWithInspection[]>([]);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -82,14 +83,14 @@ export default function Tasks() {
     if (user) {
       fetchTasks();
     }
-  }, [user, showAllTasks]);
+  }, [user, showAllTasks, showCompleted]);
 
   const fetchTasks = async () => {
     if (!user) return;
 
     setLoading(true);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("subtasks")
       .select(`
         *,
@@ -103,9 +104,13 @@ export default function Tasks() {
             address
           )
         )
-      `)
-      .eq("completed", false)
-      .order("created_at", { ascending: false });
+      `);
+
+    if (!showCompleted) {
+      query = query.eq("completed", false);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) {
       console.error("Failed to load tasks:", error);
@@ -241,6 +246,12 @@ export default function Tasks() {
                     All Tasks
                   </>
                 )}
+              </Button>
+              <Button
+                variant={showCompleted ? "default" : "outline"}
+                onClick={() => setShowCompleted(!showCompleted)}
+              >
+                {showCompleted ? "Hide Completed" : "Show Completed"}
               </Button>
               <Button variant="outline" size="icon" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4" />
