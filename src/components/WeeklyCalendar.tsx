@@ -58,6 +58,11 @@ export default function WeeklyCalendar({
   const [resizingInspection, setResizingInspection] = useState<string | null>(null);
   const [resizeStartY, setResizeStartY] = useState(0);
   const [resizeStartDuration, setResizeStartDuration] = useState(0);
+  const [draggingInspection, setDraggingInspection] = useState<string | null>(null);
+  const [dragStartY, setDragStartY] = useState(0);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartTime, setDragStartTime] = useState("");
+  const [dragStartDate, setDragStartDate] = useState<Date | null>(null);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 0 });
@@ -71,6 +76,19 @@ export default function WeeklyCalendar({
     return inspections.filter((inspection) => isSameDay(inspection.date, day));
   };
 
+  const handleDragStart = (
+    e: React.MouseEvent,
+    inspectionId: string,
+    currentTime: string,
+    currentDate: Date
+  ) => {
+    setDraggingInspection(inspectionId);
+    setDragStartY(e.clientY);
+    setDragStartX(e.clientX);
+    setDragStartTime(currentTime);
+    setDragStartDate(currentDate);
+  };
+
   const handleResizeStart = (
     e: React.MouseEvent,
     inspectionId: string,
@@ -81,6 +99,26 @@ export default function WeeklyCalendar({
     setResizeStartY(e.clientY);
     setResizeStartDuration(currentDuration);
   };
+
+  const handleDragMove = useCallback((e: MouseEvent) => {
+    if (!draggingInspection) return;
+
+    const deltaY = e.clientY - dragStartY;
+    const deltaMinutes = Math.round((deltaY / HOUR_HEIGHT) * 60);
+    const [hours, minutes] = dragStartTime.split(":").map(Number);
+    const totalMinutes = hours * 60 + minutes + deltaMinutes;
+    
+    // Clamp to valid time range (6 AM to 8 PM)
+    const clampedMinutes = Math.max(6 * 60, Math.min(20 * 60, totalMinutes));
+
+    // Update the visual immediately
+    const element = document.getElementById(`inspection-${draggingInspection}`);
+    if (element) {
+      const timePos = clampedMinutes / 60;
+      const topPosition = (timePos - 6) * HOUR_HEIGHT;
+      element.style.top = `${topPosition}px`;
+    }
+  }, [draggingInspection, dragStartY, dragStartTime]);
 
   const handleResizeMove = useCallback((e: MouseEvent) => {
     if (!resizingInspection) return;
@@ -95,6 +133,43 @@ export default function WeeklyCalendar({
       element.style.height = `${(newDuration / 60) * HOUR_HEIGHT - 4}px`;
     }
   }, [resizingInspection, resizeStartY, resizeStartDuration]);
+
+  const handleDragEnd = useCallback(async () => {
+    if (!draggingInspection || !dragStartDate) return;
+
+    const element = document.getElementById(`inspection-${draggingInspection}`);
+    if (!element) {
+      setDraggingInspection(null);
+      return;
+    }
+
+    const topPx = parseFloat(element.style.top);
+    const timePos = topPx / HOUR_HEIGHT + 6;
+    const totalMinutes = Math.round(timePos * 60);
+    const newHours = Math.floor(totalMinutes / 60);
+    const newMinutes = totalMinutes % 60;
+    const newTime = `${String(newHours).padStart(2, "0")}:${String(newMinutes).padStart(2, "0")}`;
+
+    // Update database
+    const { error } = await supabase
+      .from("inspections")
+      .update({ time: newTime })
+      .eq("id", draggingInspection);
+
+    if (error) {
+      toast.error("Failed to update inspection time");
+      // Revert visual change
+      const [hours, minutes] = dragStartTime.split(":").map(Number);
+      const timePos = hours + minutes / 60;
+      const topPosition = (timePos - 6) * HOUR_HEIGHT;
+      element.style.top = `${topPosition}px`;
+    } else {
+      toast.success("Time updated");
+      onInspectionUpdate?.();
+    }
+
+    setDraggingInspection(null);
+  }, [draggingInspection, dragStartTime, dragStartDate, onInspectionUpdate]);
 
   const handleResizeEnd = useCallback(async () => {
     if (!resizingInspection) return;
@@ -125,6 +200,19 @@ export default function WeeklyCalendar({
 
     setResizingInspection(null);
   }, [resizingInspection, resizeStartDuration, onInspectionUpdate]);
+
+  // Add event listeners for drag
+  useEffect(() => {
+    if (draggingInspection) {
+      document.addEventListener("mousemove", handleDragMove);
+      document.addEventListener("mouseup", handleDragEnd);
+
+      return () => {
+        document.removeEventListener("mousemove", handleDragMove);
+        document.removeEventListener("mouseup", handleDragEnd);
+      };
+    }
+  }, [draggingInspection, handleDragMove, handleDragEnd]);
 
   // Add event listeners for resize
   useEffect(() => {
@@ -229,16 +317,15 @@ export default function WeeklyCalendar({
                       id={`inspection-${inspection.id}`}
                       className={`absolute left-1 right-1 ${getInspectionColor(
                         inspection.type
-                      )} text-white rounded p-2 cursor-pointer hover:opacity-90 transition-opacity shadow-sm group`}
+                      )} text-white rounded p-2 cursor-move hover:opacity-90 transition-opacity shadow-sm group`}
                       style={{
                         top: `${topPosition}px`,
                         height: `${height}px`,
                         zIndex: 10,
                       }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDateClick?.(day);
-                      }}
+                      onMouseDown={(e) =>
+                        handleDragStart(e, inspection.id, inspection.time, day)
+                      }
                     >
                       <div className="text-xs font-semibold truncate">
                         {inspection.time}
