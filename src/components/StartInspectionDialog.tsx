@@ -20,8 +20,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, X } from "lucide-react";
 
 interface Template {
   id: string;
@@ -86,6 +87,15 @@ export function StartInspectionDialog({
   const [users, setUsers] = useState<Profile[]>([]);
   const [assignToUser, setAssignToUser] = useState<string>("");
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+  const [customItems, setCustomItems] = useState<Array<{
+    id: string;
+    description: string;
+    inventory_quantity: number;
+    inventory_type_id: string | null;
+  }>>([]);
+  const [newItemDescription, setNewItemDescription] = useState("");
+  const [newItemQuantity, setNewItemQuantity] = useState(0);
+  const [newItemType, setNewItemType] = useState("");
 
   useEffect(() => {
     if (open && inspectionType) {
@@ -99,6 +109,10 @@ export function StartInspectionDialog({
       setCheckedItems(new Set());
       setItemNotes({});
       setAssignToUser("");
+      setCustomItems([]);
+      setNewItemDescription("");
+      setNewItemQuantity(0);
+      setNewItemType("");
     }
   }, [open, inspectionType]);
 
@@ -203,6 +217,34 @@ export function StartInspectionDialog({
     }));
   };
 
+  const addCustomItem = () => {
+    if (!newItemDescription.trim()) {
+      toast.error("Please enter an item description");
+      return;
+    }
+
+    const newItem = {
+      id: `custom-${Date.now()}`,
+      description: newItemDescription,
+      inventory_quantity: newItemQuantity,
+      inventory_type_id: newItemType || null,
+    };
+
+    setCustomItems((prev) => [...prev, newItem]);
+    setNewItemDescription("");
+    setNewItemQuantity(0);
+    setNewItemType("");
+    toast.success("Custom item added");
+  };
+
+  const removeCustomItem = (itemId: string) => {
+    setCustomItems((prev) => prev.filter(item => item.id !== itemId));
+    // Also remove from checked items if it was checked
+    const newChecked = new Set(checkedItems);
+    newChecked.delete(itemId);
+    setCheckedItems(newChecked);
+  };
+
   const submitInspection = async () => {
     setLoading(true);
 
@@ -210,9 +252,10 @@ export function StartInspectionDialog({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Create subtasks for all UNCHECKED items
+      // Create subtasks for all UNCHECKED items (from template and custom)
       const subtasks: any[] = [];
       
+      // Add template items
       rooms.forEach((room) => {
         const items = itemsByRoom[room.id] || [];
         items.forEach((item) => {
@@ -235,6 +278,26 @@ export function StartInspectionDialog({
         });
       });
 
+      // Add custom items (only unchecked ones)
+      customItems.forEach((item) => {
+        if (!checkedItems.has(item.id)) {
+          const note = itemNotes[item.id];
+          const description = note 
+            ? `${item.description}\n\nNotes: ${note}`
+            : item.description;
+          
+          subtasks.push({
+            inspection_id: inspectionId,
+            original_inspection_id: inspectionId,
+            description: description,
+            inventory_quantity: item.inventory_quantity,
+            inventory_type_id: item.inventory_type_id,
+            assigned_users: assignToUser ? [assignToUser] : null,
+            created_by: user.id,
+          });
+        }
+      });
+
       if (subtasks.length > 0) {
         const { error: insertError } = await supabase
           .from("subtasks")
@@ -253,7 +316,7 @@ export function StartInspectionDialog({
     }
   };
 
-  const totalItems = Object.values(itemsByRoom).flat().length;
+  const totalItems = Object.values(itemsByRoom).flat().length + customItems.length;
   const checkedCount = checkedItems.size;
   const issuesCount = totalItems - checkedCount;
 
@@ -315,6 +378,100 @@ export function StartInspectionDialog({
 
             <ScrollArea className="flex-1 pr-4">
               <div className="space-y-6">
+                {/* Add Custom Item Section */}
+                <div className="p-4 border-2 border-dashed rounded-lg bg-muted/30">
+                  <h3 className="font-semibold text-sm mb-3">Add Custom Item</h3>
+                  <div className="space-y-3">
+                    <Input
+                      placeholder="Item description..."
+                      value={newItemDescription}
+                      onChange={(e) => setNewItemDescription(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addCustomItem()}
+                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="Qty"
+                        value={newItemQuantity || ""}
+                        onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 0)}
+                      />
+                      <Select value={newItemType} onValueChange={setNewItemType}>
+                        <SelectTrigger className="col-span-2">
+                          <SelectValue placeholder="Type (optional)" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          <SelectItem value="">None</SelectItem>
+                          {inventoryTypes.map((type) => (
+                            <SelectItem key={type.id} value={type.id}>
+                              {type.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={addCustomItem} size="sm" className="w-full">
+                      Add Item
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Custom Items */}
+                {customItems.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-lg border-b pb-2">
+                      Custom Items
+                    </h3>
+                    <div className="space-y-2">
+                      {customItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3 border rounded-lg hover:bg-accent/50 transition-colors space-y-2 bg-amber-50/50 dark:bg-amber-950/20"
+                        >
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={checkedItems.has(item.id)}
+                              onCheckedChange={() => toggleItem(item.id)}
+                              className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                              <label
+                                className="text-sm cursor-pointer block"
+                                onClick={() => toggleItem(item.id)}
+                              >
+                                {item.description}
+                              </label>
+                              {item.inventory_quantity > 0 && (
+                                <p className="text-xs text-primary font-medium mt-1">
+                                  Items needed: {item.inventory_quantity}
+                                  {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
+                                    <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeCustomItem(item.id)}
+                              className="h-6 w-6"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <Textarea
+                            placeholder="Add notes (optional)..."
+                            value={itemNotes[item.id] || ""}
+                            onChange={(e) => updateItemNote(item.id, e.target.value)}
+                            className="text-sm min-h-[60px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Template Rooms */}
                 {rooms.map((room) => {
                   const items = itemsByRoom[room.id] || [];
                   if (items.length === 0) return null;
