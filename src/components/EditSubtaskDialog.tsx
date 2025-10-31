@@ -74,7 +74,7 @@ export default function EditSubtaskDialog({
       setSelectedUsers(data.assigned_users || []);
       setOriginalInspectionId(data.original_inspection_id);
       setInventoryQuantity(data.inventory_quantity || 0);
-      setInventoryTypeId(data.inventory_type_id || "");
+      setInventoryTypeId(data.inventory_type_id || "none");
     }
   };
 
@@ -115,7 +115,7 @@ export default function EditSubtaskDialog({
           description: description.trim(),
           assigned_users: selectedUsers.length > 0 ? selectedUsers : null,
           inventory_quantity: inventoryQuantity,
-          inventory_type_id: inventoryTypeId || null,
+          inventory_type_id: inventoryTypeId && inventoryTypeId !== "none" ? inventoryTypeId : null,
         })
         .eq("id", subtaskId);
 
@@ -224,7 +224,7 @@ export default function EditSubtaskDialog({
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {inventoryTypes.map((type) => (
                       <SelectItem key={type.id} value={type.id}>
                         {type.name}

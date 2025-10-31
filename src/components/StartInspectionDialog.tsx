@@ -227,7 +227,7 @@ export function StartInspectionDialog({
       id: `custom-${Date.now()}`,
       description: newItemDescription,
       inventory_quantity: newItemQuantity,
-      inventory_type_id: newItemType || null,
+      inventory_type_id: newItemType && newItemType !== "none" ? newItemType : null,
     };
 
     setCustomItems((prev) => [...prev, newItem]);
@@ -401,7 +401,7 @@ export function StartInspectionDialog({
                           <SelectValue placeholder="Type (optional)" />
                         </SelectTrigger>
                         <SelectContent className="bg-background z-50">
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {inventoryTypes.map((type) => (
                             <SelectItem key={type.id} value={type.id}>
                               {type.name}
