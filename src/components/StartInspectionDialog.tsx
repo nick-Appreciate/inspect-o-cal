@@ -357,7 +357,7 @@ export function StartInspectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh]">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5" />
@@ -395,8 +395,8 @@ export function StartInspectionDialog({
             )}
           </div>
         ) : (
-          <div className="flex flex-col h-full">
-            <div className="mb-4 p-3 bg-muted rounded-lg space-y-2">
+          <>
+            <div className="mb-3 p-3 bg-muted rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Progress:</span>
                 <span className="font-medium">
@@ -411,85 +411,8 @@ export function StartInspectionDialog({
               </div>
             </div>
 
-            <div className="mb-3 flex justify-end">
-              <Button 
-                onClick={() => setShowAddItemDialog(true)} 
-                size="sm" 
-                variant="outline"
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add Custom Item
-              </Button>
-            </div>
-
-            <ScrollArea className="h-[400px] pr-4">
+            <ScrollArea className="flex-1 max-h-[45vh] pr-4">
               <div className="space-y-6">
-
-                {/* Custom Items */}
-                {customItems.length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-lg border-b pb-2">
-                      Custom Items
-                    </h3>
-                    <div className="space-y-2">
-                      {customItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3 border rounded-lg hover:bg-accent/50 transition-colors space-y-2 bg-amber-50/50 dark:bg-amber-950/20"
-                        >
-                           <div className="flex items-start gap-2">
-                            <Checkbox
-                              checked={checkedItems.has(item.id)}
-                              onCheckedChange={() => toggleItem(item.id)}
-                              className="mt-0.5"
-                            />
-                            <div className="flex-1">
-                              <label
-                                className="text-sm cursor-pointer block"
-                                onClick={() => toggleItem(item.id)}
-                              >
-                                {item.description}
-                              </label>
-                              {item.inventory_quantity > 0 && (
-                                <p className="text-xs text-primary font-medium mt-1">
-                                  Items needed: {item.inventory_quantity}
-                                  {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
-                                    <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
-                                  )}
-                                </p>
-                              )}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setShowAddItemDialog(true)}
-                              className="h-6 w-6 shrink-0"
-                              title="Add another item"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeCustomItem(item.id)}
-                              className="h-6 w-6 shrink-0"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <Textarea
-                            placeholder="Add notes (optional)..."
-                            value={itemNotes[item.id] || ""}
-                            onChange={(e) => updateItemNote(item.id, e.target.value)}
-                            className="text-sm min-h-[60px]"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Template Rooms */}
                 {rooms.map((room) => {
                   const items = itemsByRoom[room.id] || [];
@@ -533,7 +456,7 @@ export function StartInspectionDialog({
                                 size="icon"
                                 onClick={() => setShowAddItemDialog(true)}
                                 className="h-6 w-6 shrink-0"
-                                title="Add another item"
+                                title="Add custom item"
                               >
                                 <Plus className="h-3 w-3" />
                               </Button>
@@ -550,11 +473,68 @@ export function StartInspectionDialog({
                     </div>
                   );
                 })}
+                
+                {/* Custom Items Section */}
+                {customItems.length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-lg border-b pb-2 flex items-center gap-2">
+                      <span>Custom Items</span>
+                      <span className="text-xs font-normal text-muted-foreground">({customItems.length})</span>
+                    </h3>
+                    <div className="space-y-2">
+                      {customItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3 border-2 border-dashed border-primary/30 rounded-lg hover:bg-accent/50 transition-colors space-y-2"
+                        >
+                          <div className="flex items-start gap-2">
+                            <Checkbox
+                              checked={checkedItems.has(item.id)}
+                              onCheckedChange={() => toggleItem(item.id)}
+                              className="mt-0.5"
+                            />
+                            <div className="flex-1">
+                              <label
+                                className="text-sm cursor-pointer block font-medium"
+                                onClick={() => toggleItem(item.id)}
+                              >
+                                {item.description}
+                              </label>
+                              {item.inventory_quantity > 0 && (
+                                <p className="text-xs text-primary font-medium mt-1">
+                                  Items needed: {item.inventory_quantity}
+                                  {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
+                                    <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeCustomItem(item.id)}
+                              className="h-6 w-6 shrink-0"
+                              title="Remove custom item"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <Textarea
+                            placeholder="Add notes (optional)..."
+                            value={itemNotes[item.id] || ""}
+                            onChange={(e) => updateItemNote(item.id, e.target.value)}
+                            className="text-sm min-h-[60px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </ScrollArea>
 
             {issuesCount > 0 && (
-              <div className="mt-4 p-4 border-t space-y-2">
+              <div className="mt-3 pt-3 border-t space-y-2">
                 <Label>Assign all issues to (Optional)</Label>
                 <Select value={assignToUser} onValueChange={setAssignToUser}>
                   <SelectTrigger>
@@ -573,7 +553,7 @@ export function StartInspectionDialog({
                 </p>
               </div>
             )}
-          </div>
+          </>
         )}
 
         <DialogFooter>
