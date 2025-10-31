@@ -5,11 +5,9 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar";
 
 const menuItems = [
@@ -19,21 +17,13 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const { state, setOpen } = useSidebar();
-  const isCollapsed = state === "collapsed";
-
   return (
     <Sidebar 
-      collapsible="icon" 
-      className="border-r transition-all duration-500 ease-in-out"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      collapsible="none" 
+      className="border-r w-16"
     >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="transition-opacity duration-500">
-            Navigation
-          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -43,17 +33,14 @@ export function AppSidebar() {
                       to={item.url}
                       end
                       className={({ isActive }) =>
-                        `transition-all duration-500 ease-in-out ${
+                        `flex items-center justify-center transition-colors duration-200 ${
                           isActive
                             ? "bg-accent text-accent-foreground"
                             : "hover:bg-accent/50"
                         }`
                       }
                     >
-                      <item.icon className="h-4 w-4 transition-transform duration-500" />
-                      <span className="transition-all duration-500 ease-in-out">
-                        {item.title}
-                      </span>
+                      <item.icon className="h-5 w-5" />
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

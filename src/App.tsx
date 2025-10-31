@@ -58,7 +58,7 @@ function AppContent() {
 
   // Show app with sidebar for authenticated routes
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1">
