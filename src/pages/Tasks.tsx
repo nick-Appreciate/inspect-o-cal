@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, isPast, parseISO } from "date-fns";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
+import AddTaskDialog from "@/components/AddTaskDialog";
 
 interface SubtaskWithInspection {
   id: string;
@@ -218,6 +219,7 @@ export default function Tasks() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <AddTaskDialog onTaskAdded={fetchTasks} />
               <Button
                 variant="outline"
                 onClick={() => navigate("/")}
