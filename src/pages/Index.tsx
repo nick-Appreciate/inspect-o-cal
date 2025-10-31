@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, LogOut } from "lucide-react";
+import { ClipboardCheck, LogOut, Calendar as CalendarIcon, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import InspectionCalendar from "@/components/InspectionCalendar";
+import WeeklyCalendar from "@/components/WeeklyCalendar";
 import AddInspectionDialog from "@/components/AddInspectionDialog";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import { Inspection, Property } from "@/types/inspection";
@@ -18,6 +19,7 @@ const Index = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"month" | "week">("month");
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -196,6 +198,26 @@ const Index = () => {
               >
                 My Tasks
               </Button>
+              <div className="flex border rounded-lg">
+                <Button
+                  variant={viewMode === "month" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("month")}
+                  className="rounded-r-none"
+                >
+                  <CalendarIcon className="h-4 w-4 mr-2" />
+                  Month
+                </Button>
+                <Button
+                  variant={viewMode === "week" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("week")}
+                  className="rounded-l-none"
+                >
+                  <List className="h-4 w-4 mr-2" />
+                  Week
+                </Button>
+              </div>
               <AddInspectionDialog
                 properties={properties}
                 onAddInspection={handleAddInspection}
@@ -210,7 +232,11 @@ const Index = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <InspectionCalendar inspections={inspections} onDateClick={handleDateClick} />
+        {viewMode === "month" ? (
+          <InspectionCalendar inspections={inspections} onDateClick={handleDateClick} />
+        ) : (
+          <WeeklyCalendar inspections={inspections} onDateClick={handleDateClick} />
+        )}
       </main>
 
       <InspectionDetailsDialog
