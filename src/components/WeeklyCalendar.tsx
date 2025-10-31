@@ -323,7 +323,7 @@ export default function WeeklyCalendar({
                       id={`inspection-${inspection.id}`}
                       className={`absolute left-1 right-1 ${getInspectionColor(
                         inspection.type
-                      )} text-white rounded p-2 cursor-move hover:opacity-90 transition-all duration-75 shadow-sm group ${
+                      )} text-white rounded p-2 cursor-move hover:opacity-90 transition-opacity shadow-sm group ${
                         draggingInspection === inspection.id ? "opacity-75 shadow-lg scale-[1.02]" : ""
                       }`}
                       style={{
