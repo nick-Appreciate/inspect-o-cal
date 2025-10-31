@@ -108,8 +108,11 @@ export default function WeeklyCalendar({
     const [hours, minutes] = dragStartTime.split(":").map(Number);
     const totalMinutes = hours * 60 + minutes + deltaMinutes;
     
+    // Snap to 15-minute increments
+    const snappedMinutes = Math.round(totalMinutes / 15) * 15;
+    
     // Clamp to valid time range (6 AM to 8 PM)
-    const clampedMinutes = Math.max(6 * 60, Math.min(20 * 60, totalMinutes));
+    const clampedMinutes = Math.max(6 * 60, Math.min(20 * 60, snappedMinutes));
 
     // Update the visual immediately
     const element = document.getElementById(`inspection-${draggingInspection}`);
@@ -125,7 +128,10 @@ export default function WeeklyCalendar({
 
     const deltaY = e.clientY - resizeStartY;
     const deltaMinutes = Math.round((deltaY / HOUR_HEIGHT) * 60);
-    const newDuration = Math.max(15, resizeStartDuration + deltaMinutes); // Minimum 15 minutes
+    const rawDuration = resizeStartDuration + deltaMinutes;
+    
+    // Snap to 15-minute increments with minimum of 15 minutes
+    const newDuration = Math.max(15, Math.round(rawDuration / 15) * 15);
 
     // Update the visual immediately by finding the element
     const element = document.getElementById(`inspection-${resizingInspection}`);
@@ -317,11 +323,13 @@ export default function WeeklyCalendar({
                       id={`inspection-${inspection.id}`}
                       className={`absolute left-1 right-1 ${getInspectionColor(
                         inspection.type
-                      )} text-white rounded p-2 cursor-move hover:opacity-90 transition-opacity shadow-sm group`}
+                      )} text-white rounded p-2 cursor-move hover:opacity-90 transition-all duration-75 shadow-sm group ${
+                        draggingInspection === inspection.id ? "opacity-75 shadow-lg scale-[1.02]" : ""
+                      }`}
                       style={{
                         top: `${topPosition}px`,
                         height: `${height}px`,
-                        zIndex: 10,
+                        zIndex: draggingInspection === inspection.id ? 20 : 10,
                       }}
                       onMouseDown={(e) =>
                         handleDragStart(e, inspection.id, inspection.time, day)
