@@ -121,8 +121,7 @@ export default function InspectionDetailsDialog({
     const { data, error } = await supabase
       .from("subtasks")
       .select("*")
-      .eq("inspection_id", inspectionId)
-      .order("created_at", { ascending: false });
+      .eq("inspection_id", inspectionId);
 
     if (error) {
       console.error("Failed to load subtasks:", error);
@@ -143,6 +142,14 @@ export default function InspectionDetailsDialog({
         return subtask;
       })
     );
+
+    // Sort: incomplete tasks first, then completed tasks
+    subtasksWithProfiles.sort((a, b) => {
+      if (a.completed === b.completed) {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      return a.completed ? 1 : -1;
+    });
 
     setSubtasks(subtasksWithProfiles);
   };
@@ -313,7 +320,11 @@ export default function InspectionDetailsDialog({
                 {subtasks.map((subtask) => (
                   <div
                     key={subtask.id}
-                    className="flex items-start gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors group"
+                    className={`flex items-start gap-3 p-3 border rounded-lg transition-colors group ${
+                      subtask.completed
+                        ? "bg-muted/30 opacity-60"
+                        : "hover:bg-accent/50"
+                    }`}
                   >
                     <Checkbox
                       checked={subtask.completed}
@@ -331,7 +342,9 @@ export default function InspectionDetailsDialog({
                         {subtask.description}
                       </p>
                       {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className={`text-xs mt-1 ${
+                          subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"
+                        }`}>
                           Assigned to: {subtask.assignedProfiles
                             .map((p) => p.full_name || p.email)
                             .join(", ")}
@@ -342,14 +355,16 @@ export default function InspectionDetailsDialog({
                           href={subtask.attachment_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline mt-1 block"
+                          className={`text-xs hover:underline mt-1 block ${
+                            subtask.completed ? "text-muted-foreground/60" : "text-primary"
+                          }`}
                         >
                           View Attachment
                         </a>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {subtask.completed && <Check className="h-4 w-4 text-primary" />}
+                      {subtask.completed && <Check className="h-4 w-4 text-muted-foreground" />}
                       <Button
                         variant="ghost"
                         size="icon"
