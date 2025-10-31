@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { FileText, Clock, MapPin, Check, Upload, Send, Trash2 } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -387,36 +387,35 @@ export default function InspectionDetailsDialog({
                     {(showFullForm || newDescription) && (
                       <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                         <div className="space-y-2">
-                          <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-background min-h-[40px]">
-                            {newAssignedUsers.length > 0 ? (
-                              newAssignedUsers.map((userId) => {
-                                const user = users.find((u) => u.id === userId);
-                                return (
-                                  <Badge
-                                    key={userId}
-                                    variant="secondary"
-                                    className="gap-1 pr-1"
-                                  >
-                                    {user?.full_name || user?.email}
-                                    <button
-                                      onClick={() =>
-                                        setNewAssignedUsers(
-                                          newAssignedUsers.filter((id) => id !== userId)
-                                        )
-                                      }
-                                      className="ml-1 hover:bg-muted rounded-full p-0.5"
-                                    >
-                                      <span className="sr-only">Remove</span>
-                                      <span className="text-xs">×</span>
-                                    </button>
-                                  </Badge>
-                                );
-                              })
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                Click to assign users
-                              </span>
-                            )}
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              {newAssignedUsers.length === 0 ? (
+                                "No one assigned"
+                              ) : (
+                                <span className="text-foreground">
+                                  {newAssignedUsers.map((userId, index) => {
+                                    const user = users.find((u) => u.id === userId);
+                                    return (
+                                      <span key={userId} className="inline-flex items-center">
+                                        {user?.full_name || user?.email}
+                                        <button
+                                          onClick={() =>
+                                            setNewAssignedUsers(
+                                              newAssignedUsers.filter((id) => id !== userId)
+                                            )
+                                          }
+                                          className="ml-1 hover:text-destructive"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                        {index < newAssignedUsers.length - 1 && ", "}
+                                      </span>
+                                    );
+                                  })}
+                                </span>
+                              )}
+                            </span>
                           </div>
                           <Select
                             value=""
@@ -426,8 +425,8 @@ export default function InspectionDetailsDialog({
                               }
                             }}
                           >
-                            <SelectTrigger className="bg-background">
-                              <SelectValue placeholder="Add assignee (optional)" />
+                            <SelectTrigger className="bg-background h-9">
+                              <SelectValue placeholder="+ Add assignee" />
                             </SelectTrigger>
                             <SelectContent>
                               {users
