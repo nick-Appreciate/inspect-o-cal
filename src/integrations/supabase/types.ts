@@ -14,7 +14,133 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      inspections: {
+        Row: {
+          attachment_url: string | null
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          property_id: string
+          time: string
+          type: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          date: string
+          id?: string
+          property_id: string
+          time: string
+          type: string
+        }
+        Update: {
+          attachment_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          property_id?: string
+          time?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspections_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      properties: {
+        Row: {
+          address: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      subtasks: {
+        Row: {
+          assigned_to: string | null
+          attachment_url: string | null
+          completed: boolean | null
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          inspection_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          attachment_url?: string | null
+          completed?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          id?: string
+          inspection_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          attachment_url?: string | null
+          completed?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          inspection_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtasks_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
