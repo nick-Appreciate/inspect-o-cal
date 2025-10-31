@@ -20,12 +20,17 @@ interface Template {
   id: string;
   name: string;
   description: string | null;
+  type_id?: string | null;
 }
 
-interface InspectionType {
-  id: string;
-  name: string;
-}
+const inspectionTypes = [
+  "S8 - RFT",
+  "S8 - 1st Annual",
+  "S8 - Reinspection",
+  "S8 - Abatement Cure",
+  "Rental License",
+  "HUD",
+];
 
 export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -33,12 +38,10 @@ export default function Templates() {
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [newTemplateType, setNewTemplateType] = useState("");
-  const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
   const [showInventoryTypes, setShowInventoryTypes] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
-    fetchInspectionTypes();
   }, []);
 
   const fetchTemplates = async () => {
@@ -53,20 +56,6 @@ export default function Templates() {
     }
 
     setTemplates(data || []);
-  };
-
-  const fetchInspectionTypes = async () => {
-    const { data, error } = await supabase
-      .from("inspection_types")
-      .select("*")
-      .order("name");
-
-    if (error) {
-      toast.error("Failed to load inspection types");
-      return;
-    }
-
-    setInspectionTypes(data || []);
   };
 
   const createTemplate = async () => {
@@ -147,47 +136,10 @@ export default function Templates() {
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   {inspectionTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.name}
+                    <SelectItem key={type} value={type}>
+                      {type}
                     </SelectItem>
                   ))}
-                  <div className="p-2 border-t">
-                    <Input
-                      placeholder="Create new type..."
-                      onKeyDown={async (e) => {
-                        if (e.key === "Enter") {
-                          const input = e.currentTarget;
-                          const newTypeName = input.value.trim();
-                          if (!newTypeName) return;
-
-                          const { data: user } = await supabase.auth.getUser();
-                          if (!user.user) {
-                            toast.error("Please sign in to create inspection types");
-                            return;
-                          }
-
-                          const { data, error } = await supabase
-                            .from("inspection_types")
-                            .insert({
-                              name: newTypeName,
-                              created_by: user.user.id,
-                            })
-                            .select()
-                            .single();
-
-                          if (error) {
-                            toast.error("Failed to create inspection type");
-                            return;
-                          }
-
-                          setInspectionTypes((prev) => [...prev, data]);
-                          setNewTemplateType(data.id);
-                          input.value = "";
-                          toast.success("Inspection type created");
-                        }
-                      }}
-                    />
-                  </div>
                 </SelectContent>
               </Select>
             </div>
