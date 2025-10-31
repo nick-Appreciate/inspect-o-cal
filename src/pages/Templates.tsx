@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Plus, Settings } from "lucide-react";
+import { Plus, Settings, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TemplateBuilder } from "@/components/TemplateBuilder";
@@ -15,6 +15,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Template {
   id: string;
@@ -40,6 +50,7 @@ export default function Templates() {
   const [newTemplateType, setNewTemplateType] = useState("");
   const [duplicateFromTemplate, setDuplicateFromTemplate] = useState("");
   const [showInventoryTypes, setShowInventoryTypes] = useState(false);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -156,6 +167,27 @@ export default function Templates() {
     }
   };
 
+  const deleteTemplate = async () => {
+    if (!deleteTemplateId) return;
+
+    const { error } = await supabase
+      .from("inspection_templates")
+      .delete()
+      .eq("id", deleteTemplateId);
+
+    if (error) {
+      toast.error("Failed to delete template");
+      return;
+    }
+
+    setTemplates(templates.filter((t) => t.id !== deleteTemplateId));
+    if (selectedTemplate === deleteTemplateId) {
+      setSelectedTemplate(null);
+    }
+    setDeleteTemplateId(null);
+    toast.success("Template deleted");
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -246,10 +278,24 @@ export default function Templates() {
                 ? "border-primary"
                 : "hover:border-muted-foreground"
             }`}
-            onClick={() => setSelectedTemplate(template.id)}
           >
-            <CardHeader>
-              <CardTitle>{template.name}</CardTitle>
+            <CardHeader className="flex flex-row items-start justify-between space-y-0">
+              <div className="flex-1" onClick={() => setSelectedTemplate(template.id)}>
+                <CardTitle>{template.name}</CardTitle>
+                {template.type && (
+                  <p className="text-sm text-muted-foreground mt-1">{template.type}</p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteTemplateId(template.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </CardHeader>
           </Card>
         ))}
@@ -266,6 +312,23 @@ export default function Templates() {
         open={showInventoryTypes}
         onOpenChange={setShowInventoryTypes}
       />
+
+      <AlertDialog open={!!deleteTemplateId} onOpenChange={() => setDeleteTemplateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this template? This will also delete all rooms and items associated with it. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteTemplate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
