@@ -42,12 +42,12 @@ export function TemplateBuilder({
 }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
+  const [itemsByRoom, setItemsByRoom] = useState<Record<string, Item[]>>({});
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
   const [newRoomName, setNewRoomName] = useState("");
-  const [newItemDescription, setNewItemDescription] = useState("");
-  const [newItemQuantity, setNewItemQuantity] = useState(0);
-  const [newItemType, setNewItemType] = useState<string>("");
+  const [newItemDescription, setNewItemDescription] = useState<Record<string, string>>({});
+  const [newItemQuantity, setNewItemQuantity] = useState<Record<string, number>>({});
+  const [newItemType, setNewItemType] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchRooms();
@@ -55,10 +55,10 @@ export function TemplateBuilder({
   }, [templateId]);
 
   useEffect(() => {
-    if (selectedRoom) {
-      fetchItems(selectedRoom);
-    }
-  }, [selectedRoom]);
+    rooms.forEach((room) => {
+      fetchItems(room.id);
+    });
+  }, [rooms]);
 
   const fetchRooms = async () => {
     const { data, error } = await supabase
@@ -90,7 +90,7 @@ export function TemplateBuilder({
       return;
     }
 
-    setItems(data || []);
+    setItemsByRoom((prev) => ({ ...prev, [roomId]: data || [] }));
   };
 
   const fetchInventoryTypes = async () => {
@@ -151,8 +151,9 @@ export function TemplateBuilder({
     toast.success("Room deleted");
   };
 
-  const addItem = async () => {
-    if (!selectedRoom || !newItemDescription.trim()) {
+  const addItem = async (roomId: string) => {
+    const description = newItemDescription[roomId];
+    if (!description?.trim()) {
       toast.error("Please enter an item description");
       return;
     }
@@ -160,11 +161,11 @@ export function TemplateBuilder({
     const { data, error } = await supabase
       .from("template_items")
       .insert({
-        room_id: selectedRoom,
-        description: newItemDescription,
-        inventory_quantity: newItemQuantity,
-        inventory_type_id: newItemType || null,
-        order_index: items.length,
+        room_id: roomId,
+        description: description,
+        inventory_quantity: newItemQuantity[roomId] || 0,
+        inventory_type_id: newItemType[roomId] || null,
+        order_index: (itemsByRoom[roomId] || []).length,
       })
       .select()
       .single();
@@ -174,14 +175,17 @@ export function TemplateBuilder({
       return;
     }
 
-    setItems([...items, data]);
-    setNewItemDescription("");
-    setNewItemQuantity(0);
-    setNewItemType("");
+    setItemsByRoom((prev) => ({
+      ...prev,
+      [roomId]: [...(prev[roomId] || []), data],
+    }));
+    setNewItemDescription((prev) => ({ ...prev, [roomId]: "" }));
+    setNewItemQuantity((prev) => ({ ...prev, [roomId]: 0 }));
+    setNewItemType((prev) => ({ ...prev, [roomId]: "" }));
     toast.success("Item added");
   };
 
-  const deleteItem = async (itemId: string) => {
+  const deleteItem = async (itemId: string, roomId: string) => {
     const { error } = await supabase
       .from("template_items")
       .delete()
@@ -192,7 +196,10 @@ export function TemplateBuilder({
       return;
     }
 
-    setItems(items.filter((i) => i.id !== itemId));
+    setItemsByRoom((prev) => ({
+      ...prev,
+      [roomId]: (prev[roomId] || []).filter((i) => i.id !== itemId),
+    }));
     toast.success("Item deleted");
   };
 
@@ -206,136 +213,142 @@ export function TemplateBuilder({
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Rooms Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Rooms</h3>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Room name..."
-                value={newRoomName}
-                onChange={(e) => setNewRoomName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addRoom()}
-              />
-              <Button onClick={addRoom} size="icon">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              {rooms.map((room) => (
-                <div
-                  key={room.id}
-                  className={`flex items-center justify-between p-3 border rounded-md cursor-pointer transition-colors ${
-                    selectedRoom === room.id
-                      ? "bg-accent border-primary"
-                      : "hover:bg-accent/50"
-                  }`}
-                  onClick={() => setSelectedRoom(room.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    <span>{room.name}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteRoom(room.id);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+      <CardContent className="space-y-6">
+        {/* Add New Room */}
+        <div className="space-y-2">
+          <Label>Add New Room</Label>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Room name..."
+              value={newRoomName}
+              onChange={(e) => setNewRoomName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addRoom()}
+            />
+            <Button onClick={addRoom} size="icon">
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
+        </div>
 
-          {/* Items Section */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">
-              Checklist Items {selectedRoom && `for ${rooms.find((r) => r.id === selectedRoom)?.name}`}
-            </h3>
+        {/* Rooms with Items */}
+        <div className="space-y-6">
+          {rooms.map((room) => (
+            <div key={room.id} className="space-y-4">
+              {/* Room Header */}
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <div className="flex items-center gap-2">
+                  <GripVertical className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold">{room.name}</h3>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => deleteRoom(room.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
 
-            {selectedRoom ? (
-              <>
-                <div className="space-y-3 border rounded-md p-3 bg-muted/50">
+              {/* Add Item Form for this Room */}
+              <div className="ml-6 space-y-3 border rounded-md p-4 bg-background">
+                <div>
+                  <Label>Item Description</Label>
+                  <Input
+                    placeholder="Item description..."
+                    value={newItemDescription[room.id] || ""}
+                    onChange={(e) =>
+                      setNewItemDescription((prev) => ({ ...prev, [room.id]: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label>Item Description</Label>
+                    <Label>Quantity</Label>
                     <Input
-                      placeholder="Item description..."
-                      value={newItemDescription}
-                      onChange={(e) => setNewItemDescription(e.target.value)}
+                      type="number"
+                      min="0"
+                      value={newItemQuantity[room.id] || 0}
+                      onChange={(e) =>
+                        setNewItemQuantity((prev) => ({
+                          ...prev,
+                          [room.id]: parseInt(e.target.value) || 0,
+                        }))
+                      }
                     />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label>Quantity</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={newItemQuantity}
-                        onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div>
-                      <Label>Inventory Type</Label>
-                      <Select value={newItemType} onValueChange={setNewItemType}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {inventoryTypes.map((type) => (
-                            <SelectItem key={type.id} value={type.id}>
-                              {type.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div>
+                    <Label>Inventory Type</Label>
+                    <Select
+                      value={newItemType[room.id] || ""}
+                      onValueChange={(value) =>
+                        setNewItemType((prev) => ({ ...prev, [room.id]: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inventoryTypes.map((type) => (
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-
-                  <Button onClick={addItem} className="w-full">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Item
-                  </Button>
                 </div>
 
-                <div className="space-y-2">
-                  {items.map((item) => (
+                <Button onClick={() => addItem(room.id)} className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Item to {room.name}
+                </Button>
+              </div>
+
+              {/* Items List for this Room */}
+              <div className="ml-6 space-y-2">
+                {(itemsByRoom[room.id] || []).length > 0 ? (
+                  (itemsByRoom[room.id] || []).map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-start justify-between p-3 border rounded-md"
+                      className="flex items-start justify-between p-3 border rounded-md bg-background"
                     >
                       <div className="flex-1">
                         <p className="font-medium">{item.description}</p>
                         <p className="text-sm text-muted-foreground">
                           Quantity: {item.inventory_quantity}
                           {item.inventory_type_id && (
-                            <> • Type: {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}</>
+                            <>
+                              {" "}
+                              • Type:{" "}
+                              {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
+                            </>
                           )}
                         </p>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => deleteItem(item.id)}
+                        onClick={() => deleteItem(item.id, room.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="text-muted-foreground text-center py-8">
-                Select or create a room to add items
-              </p>
-            )}
-          </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No items yet. Add items using the form above.
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {rooms.length === 0 && (
+            <p className="text-muted-foreground text-center py-8">
+              Create a room to get started
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
