@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { FileText, Clock, MapPin, Plus, Check } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import AddSubtaskDialog from "./AddSubtaskDialog";
 
 interface Inspection {
   id: string;
@@ -37,6 +45,12 @@ interface Subtask {
     full_name: string;
     email: string;
   };
+}
+
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
 }
 
 interface InspectionDetailsDialogProps {
@@ -65,12 +79,20 @@ export default function InspectionDetailsDialog({
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [loading, setLoading] = useState(false);
-  const [addSubtaskOpen, setAddSubtaskOpen] = useState(false);
+  const [users, setUsers] = useState<Profile[]>([]);
+  
+  // New subtask form state
+  const [newDescription, setNewDescription] = useState("");
+  const [newAssignedTo, setNewAssignedTo] = useState<string>("");
+  const [newAttachment, setNewAttachment] = useState<File>();
+  const [isAdding, setIsAdding] = useState(false);
+  const [showFullForm, setShowFullForm] = useState(false);
 
   useEffect(() => {
     if (inspectionId && open) {
       fetchInspectionDetails();
       fetchSubtasks();
+      fetchUsers();
     }
   }, [inspectionId, open]);
 
@@ -125,6 +147,19 @@ export default function InspectionDetailsDialog({
     setSubtasks(subtasksWithProfiles);
   };
 
+  const fetchUsers = async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, full_name")
+      .order("full_name");
+
+    if (error) {
+      console.error("Failed to load users:", error);
+    } else {
+      setUsers(data || []);
+    }
+  };
+
   const toggleSubtaskComplete = async (subtaskId: string, completed: boolean) => {
     const { error } = await supabase
       .from("subtasks")
@@ -138,9 +173,68 @@ export default function InspectionDetailsDialog({
     }
   };
 
-  const handleSubtaskAdded = () => {
-    fetchSubtasks();
-    setAddSubtaskOpen(false);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setNewAttachment(e.target.files[0]);
+    }
+  };
+
+  const handleAddSubtask = async () => {
+    if (!newDescription.trim() || !inspectionId) {
+      return;
+    }
+
+    setIsAdding(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      let attachmentUrl: string | undefined;
+
+      // Upload attachment if provided
+      if (newAttachment) {
+        const fileExt = newAttachment.name.split(".").pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(fileName, newAttachment);
+
+        if (uploadError) throw uploadError;
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("attachments").getPublicUrl(fileName);
+
+        attachmentUrl = publicUrl;
+      }
+
+      // Create subtask
+      const { error } = await supabase.from("subtasks").insert({
+        inspection_id: inspectionId,
+        description: newDescription.trim(),
+        assigned_to: newAssignedTo || null,
+        attachment_url: attachmentUrl,
+        created_by: user.id,
+      });
+
+      if (error) throw error;
+
+      toast.success("Subtask added");
+      fetchSubtasks();
+      
+      // Reset form
+      setNewDescription("");
+      setNewAssignedTo("");
+      setNewAttachment(undefined);
+      setShowFullForm(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add subtask");
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   if (!inspection) return null;
@@ -196,72 +290,121 @@ export default function InspectionDetailsDialog({
             <div className="border-t pt-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-lg">Subtasks</h3>
-                <Button size="sm" onClick={() => setAddSubtaskOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Subtask
-                </Button>
               </div>
 
-              {subtasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No subtasks yet. Click "Add Subtask" to create one.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {subtasks.map((subtask) => (
-                    <div
-                      key={subtask.id}
-                      className="flex items-start gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
-                    >
-                      <Checkbox
-                        checked={subtask.completed}
-                        onCheckedChange={() =>
-                          toggleSubtaskComplete(subtask.id, subtask.completed)
-                        }
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <p
-                          className={`text-sm ${
-                            subtask.completed ? "line-through text-muted-foreground" : ""
-                          }`}
-                        >
-                          {subtask.description}
+              <div className="space-y-3">
+                {subtasks.map((subtask) => (
+                  <div
+                    key={subtask.id}
+                    className="flex items-start gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={subtask.completed}
+                      onCheckedChange={() =>
+                        toggleSubtaskComplete(subtask.id, subtask.completed)
+                      }
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <p
+                        className={`text-sm ${
+                          subtask.completed ? "line-through text-muted-foreground" : ""
+                        }`}
+                      >
+                        {subtask.description}
+                      </p>
+                      {subtask.profiles && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Assigned to: {subtask.profiles.full_name || subtask.profiles.email}
                         </p>
-                        {subtask.profiles && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Assigned to: {subtask.profiles.full_name || subtask.profiles.email}
-                          </p>
-                        )}
-                        {subtask.attachment_url && (
-                          <a
-                            href={subtask.attachment_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline mt-1 block"
-                          >
-                            View Attachment
-                          </a>
-                        )}
-                      </div>
-                      {subtask.completed && (
-                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                      {subtask.attachment_url && (
+                        <a
+                          href={subtask.attachment_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline mt-1 block"
+                        >
+                          View Attachment
+                        </a>
                       )}
                     </div>
-                  ))}
+                    {subtask.completed && <Check className="h-4 w-4 text-primary" />}
+                  </div>
+                ))}
+
+                {/* Inline Add Subtask Form */}
+                <div className="flex items-start gap-3 p-3 border rounded-lg border-dashed bg-muted/30">
+                  <div className="w-5 h-5 mt-1" /> {/* Spacer for checkbox alignment */}
+                  <div className="flex-1 space-y-3">
+                    <Textarea
+                      placeholder="Add a new subtask..."
+                      value={newDescription}
+                      onChange={(e) => {
+                        setNewDescription(e.target.value);
+                        if (e.target.value && !showFullForm) {
+                          setShowFullForm(true);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.ctrlKey) {
+                          handleAddSubtask();
+                        }
+                      }}
+                      className="min-h-[60px] bg-background resize-none"
+                      disabled={isAdding}
+                    />
+
+                    {(showFullForm || newDescription) && (
+                      <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                        <Select value={newAssignedTo} onValueChange={setNewAssignedTo}>
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="Assign to (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {users.map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.full_name || user.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="new-attachment"
+                            type="file"
+                            onChange={handleFileChange}
+                            className="hidden"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById("new-attachment")?.click()}
+                            className="flex-1"
+                          >
+                            <Upload className="h-3 w-3 mr-2" />
+                            {newAttachment ? newAttachment.name : "Attach file"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={handleAddSubtask}
+                            disabled={!newDescription.trim() || isAdding}
+                          >
+                            <Send className="h-3 w-3 mr-1" />
+                            {isAdding ? "Adding..." : "Add"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-
-      <AddSubtaskDialog
-        inspectionId={inspectionId}
-        open={addSubtaskOpen}
-        onOpenChange={setAddSubtaskOpen}
-        onSubtaskAdded={handleSubtaskAdded}
-      />
     </>
   );
 }
