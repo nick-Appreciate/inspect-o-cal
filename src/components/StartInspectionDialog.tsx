@@ -49,6 +49,12 @@ interface StartInspectionDialogProps {
   onInspectionStarted?: () => void;
 }
 
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
+
 export function StartInspectionDialog({
   open,
   onOpenChange,
@@ -64,16 +70,20 @@ export function StartInspectionDialog({
   const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"select" | "inspect">("select");
+  const [users, setUsers] = useState<Profile[]>([]);
+  const [assignToUser, setAssignToUser] = useState<string>("");
 
   useEffect(() => {
     if (open && inspectionType) {
       fetchTemplates();
+      fetchUsers();
       setStep("select");
       setSelectedTemplate("");
       setRooms([]);
       setItemsByRoom({});
       setCheckedItems(new Set());
       setItemNotes({});
+      setAssignToUser("");
     }
   }, [open, inspectionType]);
 
@@ -90,6 +100,19 @@ export function StartInspectionDialog({
     }
 
     setTemplates(data || []);
+  };
+
+  const fetchUsers = async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, full_name")
+      .order("full_name");
+
+    if (error) {
+      console.error("Failed to load users:", error);
+    } else {
+      setUsers(data || []);
+    }
   };
 
   const loadTemplate = async () => {
@@ -175,6 +198,7 @@ export function StartInspectionDialog({
               inspection_id: inspectionId,
               original_inspection_id: inspectionId,
               description: description,
+              assigned_users: assignToUser ? [assignToUser] : null,
               created_by: user.id,
             });
           }
@@ -244,14 +268,14 @@ export function StartInspectionDialog({
           </div>
         ) : (
           <div className="flex flex-col h-full">
-            <div className="mb-4 p-3 bg-muted rounded-lg">
+            <div className="mb-4 p-3 bg-muted rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Progress:</span>
                 <span className="font-medium">
                   {checkedCount} / {totalItems} items checked
                 </span>
               </div>
-              <div className="flex justify-between text-sm mt-1">
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Issues to track:</span>
                 <span className="font-medium text-destructive">
                   {issuesCount} item{issuesCount !== 1 ? 's' : ''}
@@ -303,6 +327,27 @@ export function StartInspectionDialog({
                 })}
               </div>
             </ScrollArea>
+
+            {issuesCount > 0 && (
+              <div className="mt-4 p-4 border-t space-y-2">
+                <Label>Assign all issues to (Optional)</Label>
+                <Select value={assignToUser} onValueChange={setAssignToUser}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select user to assign tasks" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.full_name || user.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  All {issuesCount} unchecked item{issuesCount !== 1 ? 's' : ''} will be assigned to this user
+                </p>
+              </div>
+            )}
           </div>
         )}
 
