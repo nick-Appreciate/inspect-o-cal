@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      inspection_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       inspections: {
         Row: {
           attachment_url: string | null
@@ -67,6 +91,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      inventory_types: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -160,6 +205,83 @@ export type Database = {
             columns: ["original_inspection_id"]
             isOneToOne: false
             referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_items: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          inventory_quantity: number | null
+          inventory_type_id: string | null
+          order_index: number
+          room_id: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          inventory_quantity?: number | null
+          inventory_type_id?: string | null
+          order_index?: number
+          room_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          inventory_quantity?: number | null
+          inventory_type_id?: string | null
+          order_index?: number
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_items_inventory_type_id_fkey"
+            columns: ["inventory_type_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_items_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "template_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_rooms: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          order_index: number
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          order_index?: number
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          order_index?: number
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_rooms_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_templates"
             referencedColumns: ["id"]
           },
         ]
