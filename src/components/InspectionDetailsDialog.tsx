@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { FileText, Clock, MapPin, Check, Upload, Send } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -172,6 +173,20 @@ export default function InspectionDetailsDialog({
     }
   };
 
+  const handleDeleteSubtask = async (subtaskId: string) => {
+    const { error } = await supabase
+      .from("subtasks")
+      .delete()
+      .eq("id", subtaskId);
+
+    if (error) {
+      toast.error("Failed to delete subtask");
+    } else {
+      toast.success("Subtask deleted");
+      fetchSubtasks();
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setNewAttachment(e.target.files[0]);
@@ -247,6 +262,9 @@ export default function InspectionDetailsDialog({
               <FileText className="h-5 w-5 text-primary" />
               Inspection Details
             </DialogTitle>
+            <DialogDescription>
+              View inspection information and manage subtasks
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6">
@@ -295,7 +313,7 @@ export default function InspectionDetailsDialog({
                 {subtasks.map((subtask) => (
                   <div
                     key={subtask.id}
-                    className="flex items-start gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                    className="flex items-start gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors group"
                   >
                     <Checkbox
                       checked={subtask.completed}
@@ -330,7 +348,17 @@ export default function InspectionDetailsDialog({
                         </a>
                       )}
                     </div>
-                    {subtask.completed && <Check className="h-4 w-4 text-primary" />}
+                    <div className="flex items-center gap-2">
+                      {subtask.completed && <Check className="h-4 w-4 text-primary" />}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleDeleteSubtask(subtask.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
 
