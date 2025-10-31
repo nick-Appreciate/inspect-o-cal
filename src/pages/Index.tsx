@@ -190,6 +190,12 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => navigate("/tasks")}
+              >
+                My Tasks
+              </Button>
               <AddInspectionDialog
                 properties={properties}
                 onAddInspection={handleAddInspection}
