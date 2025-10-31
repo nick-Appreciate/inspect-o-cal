@@ -156,7 +156,10 @@ export default function WeeklyCalendar({
     const newMinutes = totalMinutes % 60;
     const newTime = `${String(newHours).padStart(2, "0")}:${String(newMinutes).padStart(2, "0")}`;
 
-    // Update database
+    // Clear dragging state immediately to stop visual following
+    setDraggingInspection(null);
+
+    // Update database in background
     const { error } = await supabase
       .from("inspections")
       .update({ time: newTime })
@@ -173,8 +176,6 @@ export default function WeeklyCalendar({
       toast.success("Time updated");
       onInspectionUpdate?.();
     }
-
-    setDraggingInspection(null);
   }, [draggingInspection, dragStartTime, dragStartDate, onInspectionUpdate]);
 
   const handleResizeEnd = useCallback(async () => {
@@ -189,7 +190,10 @@ export default function WeeklyCalendar({
     const heightPx = parseFloat(element.style.height);
     const newDuration = Math.round(((heightPx + 4) / HOUR_HEIGHT) * 60);
 
-    // Update database
+    // Clear resizing state immediately
+    setResizingInspection(null);
+
+    // Update database in background
     const { error } = await supabase
       .from("inspections")
       .update({ duration: newDuration })
@@ -203,8 +207,6 @@ export default function WeeklyCalendar({
       toast.success("Duration updated");
       onInspectionUpdate?.();
     }
-
-    setResizingInspection(null);
   }, [resizingInspection, resizeStartDuration, onInspectionUpdate]);
 
   // Add event listeners for drag
