@@ -86,6 +86,7 @@ export default function InspectionDetailsDialog({
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<Profile[]>([]);
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
+  const [parentInspection, setParentInspection] = useState<Inspection | null>(null);
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
@@ -116,6 +117,21 @@ export default function InspectionDetailsDialog({
       toast.error("Failed to load inspection details");
     } else {
       setInspection(data);
+      
+      // Fetch parent inspection if exists
+      if (data.parent_inspection_id) {
+        const { data: parentData } = await supabase
+          .from("inspections")
+          .select("*, properties(name, address)")
+          .eq("id", data.parent_inspection_id)
+          .single();
+        
+        if (parentData) {
+          setParentInspection(parentData);
+        }
+      } else {
+        setParentInspection(null);
+      }
     }
     setLoading(false);
   };
@@ -327,10 +343,29 @@ export default function InspectionDetailsDialog({
                 </Button>
               </div>
 
-              {inspection.parent_inspection_id && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-                  <Link2 className="h-4 w-4" />
-                  <span>This is a follow-up inspection</span>
+              {inspection.parent_inspection_id && parentInspection && (
+                <div className="flex items-center gap-2 text-sm mb-3 p-2 bg-accent/30 rounded-md border">
+                  <Link2 className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">Follow-up of:</span>
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 text-sm font-medium"
+                    onClick={() => {
+                      // Navigate to parent inspection by updating the inspection ID
+                      const parentId = inspection.parent_inspection_id;
+                      if (parentId) {
+                        onOpenChange(false);
+                        // Small delay to allow dialog to close before reopening
+                        setTimeout(() => {
+                          window.dispatchEvent(new CustomEvent('openInspectionDetails', { 
+                            detail: { inspectionId: parentId } 
+                          }));
+                        }, 100);
+                      }
+                    }}
+                  >
+                    {parentInspection.type} ({format(new Date(parentInspection.date), "MMM d, yyyy")})
+                  </Button>
                 </div>
               )}
 

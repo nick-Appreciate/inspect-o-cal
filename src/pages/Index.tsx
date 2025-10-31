@@ -54,6 +54,19 @@ const Index = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    const handleOpenInspectionDetails = (event: CustomEvent) => {
+      const { inspectionId } = event.detail;
+      setSelectedInspectionId(inspectionId);
+      setDetailsDialogOpen(true);
+    };
+
+    window.addEventListener('openInspectionDetails' as any, handleOpenInspectionDetails);
+    return () => {
+      window.removeEventListener('openInspectionDetails' as any, handleOpenInspectionDetails);
+    };
+  }, []);
+
   const fetchInspections = async () => {
     const { data, error } = await supabase
       .from("inspections")
