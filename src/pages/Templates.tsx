@@ -6,6 +6,15 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TemplateBuilder } from "@/components/TemplateBuilder";
 import { InventoryTypesDialog } from "@/components/InventoryTypesDialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Template {
   id: string;
@@ -13,15 +22,23 @@ interface Template {
   description: string | null;
 }
 
+interface InspectionType {
+  id: string;
+  name: string;
+}
+
 export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateType, setNewTemplateType] = useState("");
+  const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
   const [showInventoryTypes, setShowInventoryTypes] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
+    fetchInspectionTypes();
   }, []);
 
   const fetchTemplates = async () => {
@@ -38,9 +55,28 @@ export default function Templates() {
     setTemplates(data || []);
   };
 
+  const fetchInspectionTypes = async () => {
+    const { data, error } = await supabase
+      .from("inspection_types")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      toast.error("Failed to load inspection types");
+      return;
+    }
+
+    setInspectionTypes(data || []);
+  };
+
   const createTemplate = async () => {
     if (!newTemplateName.trim()) {
       toast.error("Please enter a template name");
+      return;
+    }
+
+    if (!newTemplateType) {
+      toast.error("Please select an inspection type");
       return;
     }
 
@@ -51,6 +87,7 @@ export default function Templates() {
       .from("inspection_templates")
       .insert({
         name: newTemplateName,
+        type_id: newTemplateType,
         created_by: user.id,
       })
       .select()
@@ -64,6 +101,7 @@ export default function Templates() {
     setTemplates([data, ...templates]);
     setSelectedTemplate(data.id);
     setNewTemplateName("");
+    setNewTemplateType("");
     setShowNewTemplate(false);
     toast.success("Template created");
   };
@@ -92,22 +130,75 @@ export default function Templates() {
           <CardHeader>
             <CardTitle>Create New Template</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-2">
-              <input
-                type="text"
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Template Name</Label>
+              <Input
                 placeholder="Template name..."
                 value={newTemplateName}
                 onChange={(e) => setNewTemplateName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && createTemplate()}
-                className="flex-1 px-3 py-2 border rounded-md"
               />
-              <Button onClick={createTemplate}>Create</Button>
+            </div>
+            <div>
+              <Label>Inspection Type *</Label>
+              <Select value={newTemplateType} onValueChange={setNewTemplateType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select inspection type" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  {inspectionTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                  <div className="p-2 border-t">
+                    <Input
+                      placeholder="Create new type..."
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter") {
+                          const input = e.currentTarget;
+                          const newTypeName = input.value.trim();
+                          if (!newTypeName) return;
+
+                          const { data: user } = await supabase.auth.getUser();
+                          if (!user.user) {
+                            toast.error("Please sign in to create inspection types");
+                            return;
+                          }
+
+                          const { data, error } = await supabase
+                            .from("inspection_types")
+                            .insert({
+                              name: newTypeName,
+                              created_by: user.user.id,
+                            })
+                            .select()
+                            .single();
+
+                          if (error) {
+                            toast.error("Failed to create inspection type");
+                            return;
+                          }
+
+                          setInspectionTypes((prev) => [...prev, data]);
+                          setNewTemplateType(data.id);
+                          input.value = "";
+                          toast.success("Inspection type created");
+                        }
+                      }}
+                    />
+                  </div>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={createTemplate} className="flex-1">Create</Button>
               <Button
                 variant="outline"
                 onClick={() => {
                   setShowNewTemplate(false);
                   setNewTemplateName("");
+                  setNewTemplateType("");
                 }}
               >
                 Cancel

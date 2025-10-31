@@ -21,6 +21,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          type_id: string | null
         }
         Insert: {
           created_at?: string
@@ -28,11 +29,42 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          type_id?: string | null
         }
         Update: {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          id?: string
+          name?: string
+          type_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_templates_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_types: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
           id?: string
           name?: string
         }
