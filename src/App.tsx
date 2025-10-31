@@ -1,6 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -80,13 +79,13 @@ function AppContent() {
 }
 
 const App = () => (
-  <TooltipProvider>
+  <>
     <Toaster />
     <Sonner />
     <BrowserRouter>
       <AppContent />
     </BrowserRouter>
-  </TooltipProvider>
+  </>
 );
 
 export default App;
