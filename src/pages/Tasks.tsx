@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { format, isPast, parseISO } from "date-fns";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import AddTaskDialog from "@/components/AddTaskDialog";
+import EditSubtaskDialog from "@/components/EditSubtaskDialog";
 
 interface SubtaskWithInspection {
   id: string;
@@ -54,6 +55,7 @@ export default function Tasks() {
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     const {
@@ -154,14 +156,30 @@ export default function Tasks() {
   };
 
   const handleToggleComplete = async (taskId: string, completed: boolean) => {
+    // First, get the original_inspection_id of this subtask
+    const { data: currentTask } = await supabase
+      .from("subtasks")
+      .select("original_inspection_id, description")
+      .eq("id", taskId)
+      .single();
+
+    if (!currentTask) {
+      toast.error("Failed to find task");
+      return;
+    }
+
+    // Update all subtasks with the same original_inspection_id
+    // This keeps linked subtasks in sync across follow-up inspections
     const { error } = await supabase
       .from("subtasks")
       .update({ completed: !completed })
-      .eq("id", taskId);
+      .eq("original_inspection_id", currentTask.original_inspection_id)
+      .eq("description", currentTask.description);
 
     if (error) {
       toast.error("Failed to update task");
     } else {
+      toast.success(completed ? "Task marked incomplete" : "Task completed");
       fetchTasks();
     }
   };
@@ -298,13 +316,18 @@ export default function Tasks() {
                       {/* Tasks for this inspection */}
                       <div className="space-y-2 ml-4">
                         {group.tasks.map((task) => (
-                          <Card key={task.id} className="p-3">
+                          <Card 
+                            key={task.id} 
+                            className="p-3 cursor-pointer hover:bg-accent/50 transition-colors"
+                            onClick={() => setEditingTaskId(task.id)}
+                          >
                             <div className="flex items-start gap-3">
                               <Checkbox
                                 checked={task.completed}
                                 onCheckedChange={() =>
                                   handleToggleComplete(task.id, task.completed)
                                 }
+                                onClick={(e) => e.stopPropagation()}
                                 className="mt-1"
                               />
                               <div className="flex-1 space-y-1">
@@ -327,6 +350,7 @@ export default function Tasks() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-xs text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     View Attachment
                                   </a>
@@ -378,7 +402,8 @@ export default function Tasks() {
                         {group.tasks.map((task) => (
                           <Card
                             key={task.id}
-                            className="p-3 border-destructive bg-destructive/5"
+                            className="p-3 border-destructive bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors"
+                            onClick={() => setEditingTaskId(task.id)}
                           >
                             <div className="flex items-start gap-3">
                               <Checkbox
@@ -386,6 +411,7 @@ export default function Tasks() {
                                 onCheckedChange={() =>
                                   handleToggleComplete(task.id, task.completed)
                                 }
+                                onClick={(e) => e.stopPropagation()}
                                 className="mt-1"
                               />
                               <div className="flex-1 space-y-1">
@@ -410,6 +436,7 @@ export default function Tasks() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-xs text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     View Attachment
                                   </a>
@@ -437,6 +464,15 @@ export default function Tasks() {
           </div>
         )}
       </main>
+
+      {editingTaskId && (
+        <EditSubtaskDialog
+          subtaskId={editingTaskId}
+          open={!!editingTaskId}
+          onOpenChange={(open) => !open && setEditingTaskId(null)}
+          onSaved={fetchTasks}
+        />
+      )}
     </div>
   );
 }
