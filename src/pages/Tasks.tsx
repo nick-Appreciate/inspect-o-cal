@@ -165,6 +165,27 @@ export default function Tasks() {
     navigate("/auth");
   };
 
+  // Group tasks by inspection
+  const groupTasksByInspection = (taskList: SubtaskWithInspection[]) => {
+    const grouped = new Map<string, {
+      inspection: SubtaskWithInspection['inspections'];
+      tasks: SubtaskWithInspection[];
+    }>();
+
+    taskList.forEach((task) => {
+      const inspectionId = task.inspections.id;
+      if (!grouped.has(inspectionId)) {
+        grouped.set(inspectionId, {
+          inspection: task.inspections,
+          tasks: [],
+        });
+      }
+      grouped.get(inspectionId)!.tasks.push(task);
+    });
+
+    return Array.from(grouped.values());
+  };
+
   // Separate tasks into upcoming and overdue
   const upcomingTasks = tasks.filter(
     (task) => !isPast(parseISO(task.inspections.date))
@@ -172,6 +193,9 @@ export default function Tasks() {
   const overdueTasks = tasks.filter((task) =>
     isPast(parseISO(task.inspections.date))
   );
+
+  const groupedUpcoming = groupTasksByInspection(upcomingTasks);
+  const groupedOverdue = groupTasksByInspection(overdueTasks);
 
   if (!user) {
     return null;
@@ -230,153 +254,165 @@ export default function Tasks() {
         ) : (
           <div className="space-y-8">
             {/* Upcoming Tasks */}
-            {upcomingTasks.length > 0 && (
+            {groupedUpcoming.length > 0 && (
               <div>
                 <h2 className="text-xl font-semibold mb-4">Upcoming Tasks</h2>
-                <div className="space-y-3">
-                  {upcomingTasks.map((task) => (
-                    <Card key={task.id} className="p-4">
-                      <div className="flex items-start gap-4">
-                        <Checkbox
-                          checked={task.completed}
-                          onCheckedChange={() =>
-                            handleToggleComplete(task.id, task.completed)
-                          }
-                          className="mt-1"
-                        />
-                        <div className="flex-1 space-y-2">
-                          <p className="text-sm font-medium">{task.description}</p>
-                          
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            <Badge
-                              className={`${getInspectionColor(
-                                task.inspections.type
-                              )} text-white`}
-                            >
-                              {task.inspections.type}
-                            </Badge>
-                            
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              <span>
-                                {format(parseISO(task.inspections.date), "MMM d, yyyy")} at{" "}
-                                {task.inspections.time}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              <span>{task.inspections.properties.name}</span>
-                            </div>
-                          </div>
-
-                          {task.assignedProfiles && task.assignedProfiles.length > 0 && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <User className="h-3 w-3" />
-                              <span>
-                                {task.assignedProfiles
-                                  .map((p) => p.full_name || p.email)
-                                  .join(", ")}
-                              </span>
-                            </div>
-                          )}
-
-                          {task.attachment_url && (
-                            <a
-                              href={task.attachment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline"
-                            >
-                              View Attachment
-                            </a>
-                          )}
+                <div className="space-y-6">
+                  {groupedUpcoming.map((group) => (
+                    <div key={group.inspection.id} className="space-y-3">
+                      {/* Inspection Header */}
+                      <div className="flex items-center gap-3 pb-2 border-b">
+                        <Badge
+                          className={`${getInspectionColor(
+                            group.inspection.type
+                          )} text-white`}
+                        >
+                          {group.inspection.type}
+                        </Badge>
+                        <div className="flex items-center gap-1 text-sm">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          <span>
+                            {format(parseISO(group.inspection.date), "MMM d, yyyy")} at{" "}
+                            {group.inspection.time}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <span>{group.inspection.properties.name}</span>
                         </div>
                       </div>
-                    </Card>
+
+                      {/* Tasks for this inspection */}
+                      <div className="space-y-2 ml-4">
+                        {group.tasks.map((task) => (
+                          <Card key={task.id} className="p-3">
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={task.completed}
+                                onCheckedChange={() =>
+                                  handleToggleComplete(task.id, task.completed)
+                                }
+                                className="mt-1"
+                              />
+                              <div className="flex-1 space-y-1">
+                                <p className="text-sm font-medium">{task.description}</p>
+
+                                {task.assignedProfiles && task.assignedProfiles.length > 0 && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <User className="h-3 w-3" />
+                                    <span>
+                                      {task.assignedProfiles
+                                        .map((p) => p.full_name || p.email)
+                                        .join(", ")}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {task.attachment_url && (
+                                  <a
+                                    href={task.attachment_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline"
+                                  >
+                                    View Attachment
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
             {/* Overdue Tasks */}
-            {overdueTasks.length > 0 && (
+            {groupedOverdue.length > 0 && (
               <div>
                 <h2 className="text-xl font-semibold mb-4 text-destructive">
                   Overdue Tasks
                 </h2>
-                <div className="space-y-3">
-                  {overdueTasks.map((task) => (
-                    <Card
-                      key={task.id}
-                      className="p-4 border-destructive bg-destructive/5"
-                    >
-                      <div className="flex items-start gap-4">
-                        <Checkbox
-                          checked={task.completed}
-                          onCheckedChange={() =>
-                            handleToggleComplete(task.id, task.completed)
-                          }
-                          className="mt-1"
-                        />
-                        <div className="flex-1 space-y-2">
-                          <p className="text-sm font-medium text-destructive">
-                            {task.description}
-                          </p>
-                          
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            <Badge
-                              className={`${getInspectionColor(
-                                task.inspections.type
-                              )} text-white`}
-                            >
-                              {task.inspections.type}
-                            </Badge>
-                            
-                            <div className="flex items-center gap-1 text-destructive">
-                              <Calendar className="h-3 w-3" />
-                              <span>
-                                {format(parseISO(task.inspections.date), "MMM d, yyyy")} at{" "}
-                                {task.inspections.time}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              <span>{task.inspections.properties.name}</span>
-                            </div>
-                          </div>
-
-                          {task.assignedProfiles && task.assignedProfiles.length > 0 && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <User className="h-3 w-3" />
-                              <span>
-                                {task.assignedProfiles
-                                  .map((p) => p.full_name || p.email)
-                                  .join(", ")}
-                              </span>
-                            </div>
-                          )}
-
-                          {task.attachment_url && (
-                            <a
-                              href={task.attachment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline"
-                            >
-                              View Attachment
-                            </a>
-                          )}
+                <div className="space-y-6">
+                  {groupedOverdue.map((group) => (
+                    <div key={group.inspection.id} className="space-y-3">
+                      {/* Inspection Header */}
+                      <div className="flex items-center gap-3 pb-2 border-b border-destructive/30">
+                        <Badge
+                          className={`${getInspectionColor(
+                            group.inspection.type
+                          )} text-white`}
+                        >
+                          {group.inspection.type}
+                        </Badge>
+                        <div className="flex items-center gap-1 text-sm text-destructive">
+                          <Calendar className="h-4 w-4" />
+                          <span>
+                            {format(parseISO(group.inspection.date), "MMM d, yyyy")} at{" "}
+                            {group.inspection.time}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <span>{group.inspection.properties.name}</span>
                         </div>
                       </div>
-                    </Card>
+
+                      {/* Tasks for this inspection */}
+                      <div className="space-y-2 ml-4">
+                        {group.tasks.map((task) => (
+                          <Card
+                            key={task.id}
+                            className="p-3 border-destructive bg-destructive/5"
+                          >
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={task.completed}
+                                onCheckedChange={() =>
+                                  handleToggleComplete(task.id, task.completed)
+                                }
+                                className="mt-1"
+                              />
+                              <div className="flex-1 space-y-1">
+                                <p className="text-sm font-medium text-destructive">
+                                  {task.description}
+                                </p>
+
+                                {task.assignedProfiles && task.assignedProfiles.length > 0 && (
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <User className="h-3 w-3" />
+                                    <span>
+                                      {task.assignedProfiles
+                                        .map((p) => p.full_name || p.email)
+                                        .join(", ")}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {task.attachment_url && (
+                                  <a
+                                    href={task.attachment_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline"
+                                  >
+                                    View Attachment
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {upcomingTasks.length === 0 && overdueTasks.length === 0 && (
+            {groupedUpcoming.length === 0 && groupedOverdue.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">
                   {showAllTasks
