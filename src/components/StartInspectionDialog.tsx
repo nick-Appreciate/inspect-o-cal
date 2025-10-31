@@ -97,6 +97,8 @@ export function StartInspectionDialog({
   const [newItemQuantity, setNewItemQuantity] = useState(0);
   const [newItemType, setNewItemType] = useState("");
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
+  const [showAddInventoryType, setShowAddInventoryType] = useState(false);
+  const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
 
   useEffect(() => {
     if (open && inspectionType) {
@@ -245,6 +247,37 @@ export function StartInspectionDialog({
     const newChecked = new Set(checkedItems);
     newChecked.delete(itemId);
     setCheckedItems(newChecked);
+  };
+
+  const createInventoryType = async () => {
+    if (!newInventoryTypeName.trim()) {
+      toast.error("Please enter a type name");
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("inventory_types")
+        .insert({
+          name: newInventoryTypeName.trim(),
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setInventoryTypes((prev) => [...prev, data]);
+      setNewItemType(data.id);
+      setNewInventoryTypeName("");
+      setShowAddInventoryType(false);
+      toast.success("Inventory type created");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create inventory type");
+    }
   };
 
   const submitInspection = async () => {
@@ -602,20 +635,71 @@ export function StartInspectionDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="type">Inventory Type (Optional)</Label>
-              <Select value={newItemType} onValueChange={setNewItemType}>
-                <SelectTrigger id="type">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="none">None</SelectItem>
-                  {inventoryTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="type">Inventory Type (Optional)</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAddInventoryType(!showAddInventoryType)}
+                  className="h-auto py-1 px-2 text-xs"
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  New Type
+                </Button>
+              </div>
+              
+              {showAddInventoryType ? (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Type name..."
+                    value={newInventoryTypeName}
+                    onChange={(e) => setNewInventoryTypeName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newInventoryTypeName.trim()) {
+                        createInventoryType();
+                      } else if (e.key === "Escape") {
+                        setShowAddInventoryType(false);
+                        setNewInventoryTypeName("");
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={createInventoryType}
+                    disabled={!newInventoryTypeName.trim()}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowAddInventoryType(false);
+                      setNewInventoryTypeName("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Select value={newItemType} onValueChange={setNewItemType}>
+                  <SelectTrigger id="type">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="none">None</SelectItem>
+                    {inventoryTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
           <DialogFooter>
