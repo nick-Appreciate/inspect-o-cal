@@ -15,15 +15,20 @@ import {
 const menuItems = [
   { title: "Calendar", url: "/", icon: Calendar },
   { title: "My Tasks", url: "/tasks", icon: CheckSquare },
-  { title: "Inspection Templates", url: "/templates", icon: FileText },
+  { title: "Templates", url: "/templates", icon: FileText },
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
+    <Sidebar 
+      collapsible="icon" 
+      className="border-r transition-all duration-300"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>

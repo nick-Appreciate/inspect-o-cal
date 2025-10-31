@@ -58,13 +58,10 @@ function AppContent() {
 
   // Show app with sidebar for authenticated routes
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1">
-          <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4">
-            <SidebarTrigger />
-          </header>
           <main>
             <Routes>
               <Route path="/" element={<Index />} />
