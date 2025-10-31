@@ -87,6 +87,7 @@ export default function InspectionDetailsDialog({
   const [users, setUsers] = useState<Profile[]>([]);
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [parentInspection, setParentInspection] = useState<Inspection | null>(null);
+  const [childInspections, setChildInspections] = useState<Inspection[]>([]);
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
@@ -131,6 +132,17 @@ export default function InspectionDetailsDialog({
         }
       } else {
         setParentInspection(null);
+      }
+      
+      // Fetch child inspections (follow-ups)
+      const { data: childData } = await supabase
+        .from("inspections")
+        .select("*, properties(name, address)")
+        .eq("parent_inspection_id", inspectionId)
+        .order("date", { ascending: true });
+      
+      if (childData) {
+        setChildInspections(childData);
       }
     }
     setLoading(false);
@@ -351,11 +363,9 @@ export default function InspectionDetailsDialog({
                     variant="link"
                     className="h-auto p-0 text-sm font-medium"
                     onClick={() => {
-                      // Navigate to parent inspection by updating the inspection ID
                       const parentId = inspection.parent_inspection_id;
                       if (parentId) {
                         onOpenChange(false);
-                        // Small delay to allow dialog to close before reopening
                         setTimeout(() => {
                           window.dispatchEvent(new CustomEvent('openInspectionDetails', { 
                             detail: { inspectionId: parentId } 
@@ -366,6 +376,35 @@ export default function InspectionDetailsDialog({
                   >
                     {parentInspection.type} ({format(new Date(parentInspection.date), "MMM d, yyyy")})
                   </Button>
+                </div>
+              )}
+
+              {childInspections.length > 0 && (
+                <div className="mb-3 p-2 bg-accent/30 rounded-md border">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                    <Link2 className="h-4 w-4 text-primary" />
+                    <span>Follow-up inspections:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 ml-6">
+                    {childInspections.map((child) => (
+                      <Button
+                        key={child.id}
+                        variant="outline"
+                        size="sm"
+                        className="h-auto py-1 px-2 text-xs"
+                        onClick={() => {
+                          onOpenChange(false);
+                          setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('openInspectionDetails', { 
+                              detail: { inspectionId: child.id } 
+                            }));
+                          }, 100);
+                        }}
+                      >
+                        {child.type} ({format(new Date(child.date), "MMM d, yyyy")})
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               )}
 
