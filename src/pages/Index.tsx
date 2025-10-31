@@ -106,7 +106,7 @@ const Index = () => {
     }
   };
 
-  const handleAddInspection = async (newInspection: Omit<Inspection, "id">, templateId?: string) => {
+  const handleAddInspection = async (newInspection: Omit<Inspection, "id">) => {
     if (!user) return;
 
     // Upload attachment if provided
@@ -130,67 +130,20 @@ const Index = () => {
       attachmentUrl = publicUrl;
     }
 
-    const { data, error } = await supabase.from("inspections").insert({
+    const { error } = await supabase.from("inspections").insert({
       type: newInspection.type,
       date: newInspection.date.toISOString().split("T")[0],
       time: newInspection.time,
       property_id: newInspection.property.id,
       attachment_url: attachmentUrl,
       created_by: user.id,
-    }).select().single();
+    });
 
     if (error) {
       toast.error("Failed to add inspection");
-      return;
-    }
-
-    // If a template was selected, apply it
-    if (templateId && data) {
-      await applyTemplate(templateId, data.id);
-    }
-
-    toast.success("Inspection added successfully");
-    fetchInspections();
-  };
-
-  const applyTemplate = async (templateId: string, inspectionId: string) => {
-    try {
-      // Fetch all rooms for the template
-      const { data: rooms, error: roomsError } = await supabase
-        .from("template_rooms")
-        .select("*")
-        .eq("template_id", templateId)
-        .order("order_index");
-
-      if (roomsError) throw roomsError;
-
-      // For each room, fetch items and create subtasks
-      for (const room of rooms || []) {
-        const { data: items, error: itemsError } = await supabase
-          .from("template_items")
-          .select("*")
-          .eq("room_id", room.id)
-          .order("order_index");
-
-        if (itemsError) continue;
-
-        // Create subtasks from items
-        const subtasks = (items || []).map(item => ({
-          inspection_id: inspectionId,
-          original_inspection_id: inspectionId,
-          description: item.description,
-          created_by: user!.id,
-        }));
-
-        if (subtasks.length > 0) {
-          await supabase.from("subtasks").insert(subtasks);
-        }
-      }
-
-      toast.success("Template applied with subtasks created");
-    } catch (error) {
-      console.error("Failed to apply template:", error);
-      toast.error("Inspection created but failed to apply template");
+    } else {
+      toast.success("Inspection added successfully");
+      fetchInspections();
     }
   };
 

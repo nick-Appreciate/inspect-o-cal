@@ -23,7 +23,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
-import { TemplateSelector } from "./TemplateSelector";
+import { StartInspectionDialog } from "./StartInspectionDialog";
 
 interface Inspection {
   id: string;
@@ -354,7 +354,7 @@ export default function InspectionDetailsDialog({
                     className="gap-2"
                   >
                     <ClipboardList className="h-4 w-4" />
-                    Apply Template
+                    Start Inspection
                   </Button>
                   <Button
                     variant="outline"
@@ -666,12 +666,12 @@ export default function InspectionDetailsDialog({
             }}
           />
 
-          <TemplateSelector
+          <StartInspectionDialog
             open={showTemplateSelector}
             onOpenChange={setShowTemplateSelector}
             inspectionType={inspection.type}
             inspectionId={inspection.id}
-            onTemplateApplied={fetchSubtasks}
+            onInspectionStarted={fetchSubtasks}
           />
         </>
       )}
