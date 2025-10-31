@@ -40,11 +40,11 @@ interface Subtask {
   description: string;
   completed: boolean;
   attachment_url?: string;
-  assigned_to?: string;
-  profiles?: {
+  assigned_users?: string[];
+  assignedProfiles?: Array<{
     full_name: string;
     email: string;
-  };
+  }>;
 }
 
 interface Profile {
@@ -83,7 +83,7 @@ export default function InspectionDetailsDialog({
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
-  const [newAssignedTo, setNewAssignedTo] = useState<string>("");
+  const [newAssignedUsers, setNewAssignedUsers] = useState<string[]>([]);
   const [newAttachment, setNewAttachment] = useState<File>();
   const [isAdding, setIsAdding] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
@@ -131,14 +131,13 @@ export default function InspectionDetailsDialog({
     // Fetch profiles for assigned users
     const subtasksWithProfiles = await Promise.all(
       (data || []).map(async (subtask) => {
-        if (subtask.assigned_to) {
-          const { data: profile } = await supabase
+        if (subtask.assigned_users && subtask.assigned_users.length > 0) {
+          const { data: profiles } = await supabase
             .from("profiles")
             .select("full_name, email")
-            .eq("id", subtask.assigned_to)
-            .single();
+            .in("id", subtask.assigned_users);
 
-          return { ...subtask, profiles: profile };
+          return { ...subtask, assignedProfiles: profiles || [] };
         }
         return subtask;
       })
@@ -215,7 +214,7 @@ export default function InspectionDetailsDialog({
       const { error } = await supabase.from("subtasks").insert({
         inspection_id: inspectionId,
         description: newDescription.trim(),
-        assigned_to: newAssignedTo || null,
+        assigned_users: newAssignedUsers.length > 0 ? newAssignedUsers : null,
         attachment_url: attachmentUrl,
         created_by: user.id,
       });
@@ -227,7 +226,7 @@ export default function InspectionDetailsDialog({
       
       // Reset form
       setNewDescription("");
-      setNewAssignedTo("");
+      setNewAssignedUsers([]);
       setNewAttachment(undefined);
       setShowFullForm(false);
     } catch (error: any) {
@@ -313,9 +312,11 @@ export default function InspectionDetailsDialog({
                       >
                         {subtask.description}
                       </p>
-                      {subtask.profiles && (
+                      {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Assigned to: {subtask.profiles.full_name || subtask.profiles.email}
+                          Assigned to: {subtask.assignedProfiles
+                            .map((p) => p.full_name || p.email)
+                            .join(", ")}
                         </p>
                       )}
                       {subtask.attachment_url && (
@@ -357,18 +358,60 @@ export default function InspectionDetailsDialog({
 
                     {(showFullForm || newDescription) && (
                       <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                        <Select value={newAssignedTo} onValueChange={setNewAssignedTo}>
-                          <SelectTrigger className="bg-background">
-                            <SelectValue placeholder="Assign to (optional)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                {user.full_name || user.email}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-background min-h-[40px]">
+                            {newAssignedUsers.length > 0 ? (
+                              newAssignedUsers.map((userId) => {
+                                const user = users.find((u) => u.id === userId);
+                                return (
+                                  <Badge
+                                    key={userId}
+                                    variant="secondary"
+                                    className="gap-1 pr-1"
+                                  >
+                                    {user?.full_name || user?.email}
+                                    <button
+                                      onClick={() =>
+                                        setNewAssignedUsers(
+                                          newAssignedUsers.filter((id) => id !== userId)
+                                        )
+                                      }
+                                      className="ml-1 hover:bg-muted rounded-full p-0.5"
+                                    >
+                                      <span className="sr-only">Remove</span>
+                                      <span className="text-xs">×</span>
+                                    </button>
+                                  </Badge>
+                                );
+                              })
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                Click to assign users
+                              </span>
+                            )}
+                          </div>
+                          <Select
+                            value=""
+                            onValueChange={(userId) => {
+                              if (!newAssignedUsers.includes(userId)) {
+                                setNewAssignedUsers([...newAssignedUsers, userId]);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="bg-background">
+                              <SelectValue placeholder="Add assignee (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {users
+                                .filter((user) => !newAssignedUsers.includes(user.id))
+                                .map((user) => (
+                                  <SelectItem key={user.id} value={user.id}>
+                                    {user.full_name || user.email}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
 
                         <div className="flex items-center gap-2">
                           <Input

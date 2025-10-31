@@ -102,7 +102,7 @@ export type Database = {
       }
       subtasks: {
         Row: {
-          assigned_to: string | null
+          assigned_users: string[] | null
           attachment_url: string | null
           completed: boolean | null
           created_at: string
@@ -112,7 +112,7 @@ export type Database = {
           inspection_id: string
         }
         Insert: {
-          assigned_to?: string | null
+          assigned_users?: string[] | null
           attachment_url?: string | null
           completed?: boolean | null
           created_at?: string
@@ -122,7 +122,7 @@ export type Database = {
           inspection_id: string
         }
         Update: {
-          assigned_to?: string | null
+          assigned_users?: string[] | null
           attachment_url?: string | null
           completed?: boolean | null
           created_at?: string
