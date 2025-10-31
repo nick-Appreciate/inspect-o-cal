@@ -22,7 +22,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ClipboardCheck, X } from "lucide-react";
+import { ClipboardCheck, X, Plus } from "lucide-react";
 
 interface Template {
   id: string;
@@ -96,6 +96,7 @@ export function StartInspectionDialog({
   const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState(0);
   const [newItemType, setNewItemType] = useState("");
+  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
 
   useEffect(() => {
     if (open && inspectionType) {
@@ -234,6 +235,7 @@ export function StartInspectionDialog({
     setNewItemDescription("");
     setNewItemQuantity(0);
     setNewItemType("");
+    setShowAddItemDialog(false);
     toast.success("Custom item added");
   };
 
@@ -376,45 +378,20 @@ export function StartInspectionDialog({
               </div>
             </div>
 
-            <ScrollArea className="flex-1 pr-4">
+            <div className="mb-3 flex justify-end">
+              <Button 
+                onClick={() => setShowAddItemDialog(true)} 
+                size="sm" 
+                variant="outline"
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Custom Item
+              </Button>
+            </div>
+
+            <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-6">
-                {/* Add Custom Item Section */}
-                <div className="p-4 border-2 border-dashed rounded-lg bg-muted/30">
-                  <h3 className="font-semibold text-sm mb-3">Add Custom Item</h3>
-                  <div className="space-y-3">
-                    <Input
-                      placeholder="Item description..."
-                      value={newItemDescription}
-                      onChange={(e) => setNewItemDescription(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addCustomItem()}
-                    />
-                    <div className="grid grid-cols-3 gap-2">
-                      <Input
-                        type="number"
-                        min="0"
-                        placeholder="Qty"
-                        value={newItemQuantity || ""}
-                        onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 0)}
-                      />
-                      <Select value={newItemType} onValueChange={setNewItemType}>
-                        <SelectTrigger className="col-span-2">
-                          <SelectValue placeholder="Type (optional)" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-background z-50">
-                          <SelectItem value="none">None</SelectItem>
-                          {inventoryTypes.map((type) => (
-                            <SelectItem key={type.id} value={type.id}>
-                              {type.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button onClick={addCustomItem} size="sm" className="w-full">
-                      Add Item
-                    </Button>
-                  </div>
-                </div>
 
                 {/* Custom Items */}
                 {customItems.length > 0 && (
@@ -428,7 +405,7 @@ export function StartInspectionDialog({
                           key={item.id}
                           className="p-3 border rounded-lg hover:bg-accent/50 transition-colors space-y-2 bg-amber-50/50 dark:bg-amber-950/20"
                         >
-                          <div className="flex items-start gap-3">
+                           <div className="flex items-start gap-2">
                             <Checkbox
                               checked={checkedItems.has(item.id)}
                               onCheckedChange={() => toggleItem(item.id)}
@@ -453,8 +430,17 @@ export function StartInspectionDialog({
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => setShowAddItemDialog(true)}
+                              className="h-6 w-6 shrink-0"
+                              title="Add another item"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => removeCustomItem(item.id)}
-                              className="h-6 w-6"
+                              className="h-6 w-6 shrink-0"
                             >
                               <X className="h-4 w-4" />
                             </Button>
@@ -487,7 +473,7 @@ export function StartInspectionDialog({
                             key={item.id}
                             className="p-3 border rounded-lg hover:bg-accent/50 transition-colors space-y-2"
                           >
-                            <div className="flex items-start gap-3">
+                            <div className="flex items-start gap-2">
                               <Checkbox
                                 checked={checkedItems.has(item.id)}
                                 onCheckedChange={() => toggleItem(item.id)}
@@ -509,6 +495,15 @@ export function StartInspectionDialog({
                                   </p>
                                 )}
                               </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setShowAddItemDialog(true)}
+                                className="h-6 w-6 shrink-0"
+                                title="Add another item"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
                             </div>
                             <Textarea
                               placeholder="Add notes (optional)..."
@@ -570,6 +565,69 @@ export function StartInspectionDialog({
           )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Add Custom Item Dialog */}
+      <Dialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Custom Item</DialogTitle>
+            <DialogDescription>
+              Add a custom item to the inspection checklist
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                placeholder="Item description..."
+                value={newItemDescription}
+                onChange={(e) => setNewItemDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newItemDescription.trim()) {
+                    addCustomItem();
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quantity">Quantity (Optional)</Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="0"
+                placeholder="0"
+                value={newItemQuantity || ""}
+                onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="type">Inventory Type (Optional)</Label>
+              <Select value={newItemType} onValueChange={setNewItemType}>
+                <SelectTrigger id="type">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="none">None</SelectItem>
+                  {inventoryTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddItemDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addCustomItem} disabled={!newItemDescription.trim()}>
+              Add Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
