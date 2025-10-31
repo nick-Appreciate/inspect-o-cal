@@ -19,6 +19,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ClipboardCheck } from "lucide-react";
 
@@ -60,6 +61,7 @@ export function StartInspectionDialog({
   const [rooms, setRooms] = useState<Room[]>([]);
   const [itemsByRoom, setItemsByRoom] = useState<Record<string, Item[]>>({});
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"select" | "inspect">("select");
 
@@ -71,6 +73,7 @@ export function StartInspectionDialog({
       setRooms([]);
       setItemsByRoom({});
       setCheckedItems(new Set());
+      setItemNotes({});
     }
   }, [open, inspectionType]);
 
@@ -142,6 +145,13 @@ export function StartInspectionDialog({
     setCheckedItems(newChecked);
   };
 
+  const updateItemNote = (itemId: string, note: string) => {
+    setItemNotes((prev) => ({
+      ...prev,
+      [itemId]: note,
+    }));
+  };
+
   const submitInspection = async () => {
     setLoading(true);
 
@@ -156,10 +166,15 @@ export function StartInspectionDialog({
         const items = itemsByRoom[room.id] || [];
         items.forEach((item) => {
           if (!checkedItems.has(item.id)) {
+            const note = itemNotes[item.id];
+            const description = note 
+              ? `${item.description}\n\nNotes: ${note}`
+              : item.description;
+            
             subtasks.push({
               inspection_id: inspectionId,
               original_inspection_id: inspectionId,
-              description: item.description,
+              description: description,
               created_by: user.id,
             });
           }
@@ -259,19 +274,27 @@ export function StartInspectionDialog({
                         {items.map((item) => (
                           <div
                             key={item.id}
-                            className="flex items-start gap-3 p-3 border rounded-lg hover:bg-accent/50 transition-colors"
+                            className="p-3 border rounded-lg hover:bg-accent/50 transition-colors space-y-2"
                           >
-                            <Checkbox
-                              checked={checkedItems.has(item.id)}
-                              onCheckedChange={() => toggleItem(item.id)}
-                              className="mt-0.5"
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={checkedItems.has(item.id)}
+                                onCheckedChange={() => toggleItem(item.id)}
+                                className="mt-0.5"
+                              />
+                              <label
+                                className="flex-1 text-sm cursor-pointer"
+                                onClick={() => toggleItem(item.id)}
+                              >
+                                {item.description}
+                              </label>
+                            </div>
+                            <Textarea
+                              placeholder="Add notes (optional)..."
+                              value={itemNotes[item.id] || ""}
+                              onChange={(e) => updateItemNote(item.id, e.target.value)}
+                              className="text-sm min-h-[60px]"
                             />
-                            <label
-                              className="flex-1 text-sm cursor-pointer"
-                              onClick={() => toggleItem(item.id)}
-                            >
-                              {item.description}
-                            </label>
                           </div>
                         ))}
                       </div>
