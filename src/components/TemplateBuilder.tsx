@@ -294,6 +294,43 @@ export function TemplateBuilder({
                             {type.name}
                           </SelectItem>
                         ))}
+                        <div className="p-2 border-t">
+                          <Input
+                            placeholder="Create new type..."
+                            onKeyDown={async (e) => {
+                              if (e.key === "Enter") {
+                                const input = e.currentTarget;
+                                const newTypeName = input.value.trim();
+                                if (!newTypeName) return;
+
+                                const { data: user } = await supabase.auth.getUser();
+                                if (!user.user) {
+                                  toast.error("Please sign in to create inventory types");
+                                  return;
+                                }
+
+                                const { data, error } = await supabase
+                                  .from("inventory_types")
+                                  .insert({
+                                    name: newTypeName,
+                                    created_by: user.user.id,
+                                  })
+                                  .select()
+                                  .single();
+
+                                if (error) {
+                                  toast.error("Failed to create inventory type");
+                                  return;
+                                }
+
+                                setInventoryTypes((prev) => [...prev, data]);
+                                setNewItemType((prev) => ({ ...prev, [room.id]: data.id }));
+                                input.value = "";
+                                toast.success("Inventory type created");
+                              }
+                            }}
+                          />
+                        </div>
                       </SelectContent>
                     </Select>
                   </div>
