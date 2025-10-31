@@ -38,6 +38,7 @@ export default function Templates() {
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [newTemplateType, setNewTemplateType] = useState("");
+  const [duplicateFromTemplate, setDuplicateFromTemplate] = useState("");
   const [showInventoryTypes, setShowInventoryTypes] = useState(false);
 
   useEffect(() => {
@@ -87,12 +88,72 @@ export default function Templates() {
       return;
     }
 
+    // If duplicating from another template, copy rooms and items
+    if (duplicateFromTemplate) {
+      await duplicateTemplateContent(duplicateFromTemplate, data.id);
+    }
+
     setTemplates([data, ...templates]);
     setSelectedTemplate(data.id);
     setNewTemplateName("");
     setNewTemplateType("");
+    setDuplicateFromTemplate("");
     setShowNewTemplate(false);
     toast.success("Template created");
+  };
+
+  const duplicateTemplateContent = async (sourceTemplateId: string, targetTemplateId: string) => {
+    // Fetch rooms from source template
+    const { data: rooms, error: roomsError } = await supabase
+      .from("template_rooms")
+      .select("*")
+      .eq("template_id", sourceTemplateId)
+      .order("order_index");
+
+    if (roomsError || !rooms) {
+      toast.error("Failed to duplicate rooms");
+      return;
+    }
+
+    // Create new rooms in target template
+    for (const room of rooms) {
+      const { data: newRoom, error: newRoomError } = await supabase
+        .from("template_rooms")
+        .insert({
+          template_id: targetTemplateId,
+          name: room.name,
+          order_index: room.order_index,
+        })
+        .select()
+        .single();
+
+      if (newRoomError || !newRoom) {
+        toast.error(`Failed to duplicate room: ${room.name}`);
+        continue;
+      }
+
+      // Fetch items for this room
+      const { data: items, error: itemsError } = await supabase
+        .from("template_items")
+        .select("*")
+        .eq("room_id", room.id)
+        .order("order_index");
+
+      if (itemsError || !items) continue;
+
+      // Create new items in the new room
+      const newItems = items.map(item => ({
+        room_id: newRoom.id,
+        description: item.description,
+        inventory_quantity: item.inventory_quantity,
+        inventory_type_id: item.inventory_type_id,
+        order_index: item.order_index,
+      }));
+
+      if (newItems.length > 0) {
+        await supabase.from("template_items").insert(newItems);
+      }
+    }
   };
 
   return (
@@ -143,6 +204,21 @@ export default function Templates() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Duplicate from Template (Optional)</Label>
+              <Select value={duplicateFromTemplate} onValueChange={setDuplicateFromTemplate}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Start from scratch" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex gap-2">
               <Button onClick={createTemplate} className="flex-1">Create</Button>
               <Button
@@ -151,6 +227,7 @@ export default function Templates() {
                   setShowNewTemplate(false);
                   setNewTemplateName("");
                   setNewTemplateType("");
+                  setDuplicateFromTemplate("");
                 }}
               >
                 Cancel
