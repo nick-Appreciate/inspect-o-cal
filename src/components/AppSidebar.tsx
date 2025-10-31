@@ -25,13 +25,15 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="icon" 
-      className="border-r transition-all duration-300"
+      className="border-r transition-all duration-500 ease-in-out"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="transition-opacity duration-500">
+            Navigation
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -41,13 +43,17 @@ export function AppSidebar() {
                       to={item.url}
                       end
                       className={({ isActive }) =>
-                        isActive
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-accent/50"
+                        `transition-all duration-500 ease-in-out ${
+                          isActive
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent/50"
+                        }`
                       }
                     >
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <item.icon className="h-4 w-4 transition-transform duration-500" />
+                      <span className="transition-all duration-500 ease-in-out">
+                        {item.title}
+                      </span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
