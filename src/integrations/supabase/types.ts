@@ -192,6 +192,8 @@ export type Database = {
           description: string
           id: string
           inspection_id: string
+          inventory_quantity: number | null
+          inventory_type_id: string | null
           original_inspection_id: string
         }
         Insert: {
@@ -203,6 +205,8 @@ export type Database = {
           description: string
           id?: string
           inspection_id: string
+          inventory_quantity?: number | null
+          inventory_type_id?: string | null
           original_inspection_id: string
         }
         Update: {
@@ -214,6 +218,8 @@ export type Database = {
           description?: string
           id?: string
           inspection_id?: string
+          inventory_quantity?: number | null
+          inventory_type_id?: string | null
           original_inspection_id?: string
         }
         Relationships: [
@@ -222,6 +228,13 @@ export type Database = {
             columns: ["inspection_id"]
             isOneToOne: false
             referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtasks_inventory_type_id_fkey"
+            columns: ["inventory_type_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_types"
             referencedColumns: ["id"]
           },
           {

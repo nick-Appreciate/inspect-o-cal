@@ -39,6 +39,19 @@ interface Item {
   id: string;
   description: string;
   room_id: string;
+  inventory_quantity: number;
+  inventory_type_id: string | null;
+}
+
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
+
+interface InventoryType {
+  id: string;
+  name: string;
 }
 
 interface StartInspectionDialogProps {
@@ -72,11 +85,13 @@ export function StartInspectionDialog({
   const [step, setStep] = useState<"select" | "inspect">("select");
   const [users, setUsers] = useState<Profile[]>([]);
   const [assignToUser, setAssignToUser] = useState<string>("");
+  const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
 
   useEffect(() => {
     if (open && inspectionType) {
       fetchTemplates();
       fetchUsers();
+      fetchInventoryTypes();
       setStep("select");
       setSelectedTemplate("");
       setRooms([]);
@@ -115,6 +130,19 @@ export function StartInspectionDialog({
     }
   };
 
+  const fetchInventoryTypes = async () => {
+    const { data, error } = await supabase
+      .from("inventory_types")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      console.error("Failed to load inventory types:", error);
+    } else {
+      setInventoryTypes(data || []);
+    }
+  };
+
   const loadTemplate = async () => {
     if (!selectedTemplate) {
       toast.error("Please select a template");
@@ -140,7 +168,7 @@ export function StartInspectionDialog({
       for (const room of roomsData || []) {
         const { data: items, error: itemsError } = await supabase
           .from("template_items")
-          .select("id, description, room_id")
+          .select("id, description, room_id, inventory_quantity, inventory_type_id")
           .eq("room_id", room.id)
           .order("order_index");
 
@@ -198,6 +226,8 @@ export function StartInspectionDialog({
               inspection_id: inspectionId,
               original_inspection_id: inspectionId,
               description: description,
+              inventory_quantity: item.inventory_quantity,
+              inventory_type_id: item.inventory_type_id,
               assigned_users: assignToUser ? [assignToUser] : null,
               created_by: user.id,
             });
@@ -306,12 +336,22 @@ export function StartInspectionDialog({
                                 onCheckedChange={() => toggleItem(item.id)}
                                 className="mt-0.5"
                               />
-                              <label
-                                className="flex-1 text-sm cursor-pointer"
-                                onClick={() => toggleItem(item.id)}
-                              >
-                                {item.description}
-                              </label>
+                              <div className="flex-1">
+                                <label
+                                  className="text-sm cursor-pointer block"
+                                  onClick={() => toggleItem(item.id)}
+                                >
+                                  {item.description}
+                                </label>
+                                {item.inventory_quantity && item.inventory_quantity > 0 && (
+                                  <p className="text-xs text-primary font-medium mt-1">
+                                    Items needed: {item.inventory_quantity}
+                                    {item.inventory_type_id && (
+                                      <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name || ''}</>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                             <Textarea
                               placeholder="Add notes (optional)..."

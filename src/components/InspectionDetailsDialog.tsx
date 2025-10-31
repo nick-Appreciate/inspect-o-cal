@@ -47,6 +47,8 @@ interface Subtask {
   assigned_users?: string[];
   original_inspection_id: string;
   inspection_id: string;
+  inventory_quantity?: number;
+  inventory_type_id?: string | null;
   assignedProfiles?: Array<{
     full_name: string;
     email: string;
@@ -57,6 +59,11 @@ interface Profile {
   id: string;
   email: string;
   full_name: string | null;
+}
+
+interface InventoryType {
+  id: string;
+  name: string;
 }
 
 interface InspectionDetailsDialogProps {
@@ -90,6 +97,7 @@ export default function InspectionDetailsDialog({
   const [parentInspection, setParentInspection] = useState<Inspection | null>(null);
   const [childInspections, setChildInspections] = useState<Inspection[]>([]);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
@@ -103,6 +111,7 @@ export default function InspectionDetailsDialog({
       fetchInspectionDetails();
       fetchSubtasks();
       fetchUsers();
+      fetchInventoryTypes();
     }
   }, [inspectionId, open]);
 
@@ -232,6 +241,19 @@ export default function InspectionDetailsDialog({
     }
   };
 
+  const fetchInventoryTypes = async () => {
+    const { data, error } = await supabase
+      .from("inventory_types")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      console.error("Failed to load inventory types:", error);
+    } else {
+      setInventoryTypes(data || []);
+    }
+  };
+
   const toggleSubtaskComplete = async (subtaskId: string, completed: boolean) => {
     const { error } = await supabase
       .from("subtasks")
@@ -326,6 +348,22 @@ export default function InspectionDetailsDialog({
 
   if (!inspection) return null;
 
+  // Calculate total items needed from incomplete subtasks
+  const totalItemsNeeded = subtasks
+    .filter(s => !s.completed && s.inventory_quantity && s.inventory_quantity > 0)
+    .reduce((sum, s) => sum + (s.inventory_quantity || 0), 0);
+
+  const itemsByType = subtasks
+    .filter(s => !s.completed && s.inventory_quantity && s.inventory_quantity > 0 && s.inventory_type_id)
+    .reduce((acc, s) => {
+      const typeId = s.inventory_type_id!;
+      if (!acc[typeId]) {
+        acc[typeId] = 0;
+      }
+      acc[typeId] += s.inventory_quantity || 0;
+      return acc;
+    }, {} as Record<string, number>);
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -367,6 +405,28 @@ export default function InspectionDetailsDialog({
                   </Button>
                 </div>
               </div>
+
+              {totalItemsNeeded > 0 && (
+                <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm">Total Items Needed:</span>
+                    <span className="font-bold text-lg text-primary">{totalItemsNeeded}</span>
+                  </div>
+                  {Object.keys(itemsByType).length > 0 && (
+                    <div className="mt-2 text-sm text-muted-foreground space-y-1">
+                      {Object.entries(itemsByType).map(([typeId, qty]) => {
+                        const type = inventoryTypes.find(t => t.id === typeId);
+                        return type ? (
+                          <div key={typeId} className="flex justify-between">
+                            <span>{type.name}:</span>
+                            <span className="font-medium">{qty}</span>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {inspection.parent_inspection_id && parentInspection && (
                 <div className="flex items-center gap-2 text-sm mb-3 p-2 bg-accent/30 rounded-md border">
@@ -482,30 +542,40 @@ export default function InspectionDetailsDialog({
                       }
                       className="mt-1"
                     />
-                    <div className="flex-1">
-                      <div className="flex items-start gap-2">
-                        <p
-                          className={`text-sm flex-1 ${
-                            subtask.completed ? "line-through text-muted-foreground" : ""
-                          }`}
-                        >
-                          {subtask.description}
-                        </p>
-                        {isInherited && (
-                          <Badge variant="outline" className="text-[9px] px-1 py-0">
-                            Inherited
-                          </Badge>
+                      <div className="flex-1">
+                        <div className="flex items-start gap-2">
+                          <p
+                            className={`text-sm flex-1 ${
+                              subtask.completed ? "line-through text-muted-foreground" : ""
+                            }`}
+                          >
+                            {subtask.description}
+                          </p>
+                          {isInherited && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0">
+                              Inherited
+                            </Badge>
+                          )}
+                        </div>
+                        {subtask.inventory_quantity && subtask.inventory_quantity > 0 && (
+                          <p className={`text-xs mt-1 ${
+                            subtask.completed ? "text-muted-foreground/60" : "text-primary font-medium"
+                          }`}>
+                            Items needed: {subtask.inventory_quantity}
+                            {subtask.inventory_type_id && (
+                              <> {inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name || ''}</>
+                            )}
+                          </p>
                         )}
-                      </div>
-                      {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
-                        <p className={`text-xs mt-1 ${
-                          subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"
-                        }`}>
-                          Assigned to: {subtask.assignedProfiles
-                            .map((p) => p.full_name || p.email)
-                            .join(", ")}
-                        </p>
-                      )}
+                        {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
+                          <p className={`text-xs mt-1 ${
+                            subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"
+                          }`}>
+                            Assigned to: {subtask.assignedProfiles
+                              .map((p) => p.full_name || p.email)
+                              .join(", ")}
+                          </p>
+                        )}
                       {subtask.attachment_url && (
                         <a
                           href={subtask.attachment_url}
