@@ -346,8 +346,8 @@ export function StartInspectionDialog({
                                 {item.inventory_quantity && item.inventory_quantity > 0 && (
                                   <p className="text-xs text-primary font-medium mt-1">
                                     Items needed: {item.inventory_quantity}
-                                    {item.inventory_type_id && (
-                                      <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name || ''}</>
+                                    {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
+                                      <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
                                     )}
                                   </p>
                                 )}

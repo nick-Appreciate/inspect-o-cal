@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -18,6 +25,11 @@ interface Profile {
   id: string;
   full_name: string | null;
   email: string;
+}
+
+interface InventoryType {
+  id: string;
+  name: string;
 }
 
 interface EditSubtaskDialogProps {
@@ -38,11 +50,15 @@ export default function EditSubtaskDialog({
   const [users, setUsers] = useState<Profile[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [originalInspectionId, setOriginalInspectionId] = useState("");
+  const [inventoryQuantity, setInventoryQuantity] = useState<number>(0);
+  const [inventoryTypeId, setInventoryTypeId] = useState<string>("");
+  const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
 
   useEffect(() => {
     if (open && subtaskId) {
       fetchSubtask();
       fetchUsers();
+      fetchInventoryTypes();
     }
   }, [open, subtaskId]);
 
@@ -57,6 +73,8 @@ export default function EditSubtaskDialog({
       setDescription(data.description);
       setSelectedUsers(data.assigned_users || []);
       setOriginalInspectionId(data.original_inspection_id);
+      setInventoryQuantity(data.inventory_quantity || 0);
+      setInventoryTypeId(data.inventory_type_id || "");
     }
   };
 
@@ -71,14 +89,20 @@ export default function EditSubtaskDialog({
     }
   };
 
+  const fetchInventoryTypes = async () => {
+    const { data, error } = await supabase
+      .from("inventory_types")
+      .select("*")
+      .order("name");
+
+    if (!error && data) {
+      setInventoryTypes(data);
+    }
+  };
+
   const handleSave = async () => {
     if (!description.trim()) {
       toast.error("Please enter a description");
-      return;
-    }
-
-    if (selectedUsers.length === 0) {
-      toast.error("Please assign at least one user");
       return;
     }
 
@@ -89,7 +113,9 @@ export default function EditSubtaskDialog({
         .from("subtasks")
         .update({
           description: description.trim(),
-          assigned_users: selectedUsers,
+          assigned_users: selectedUsers.length > 0 ? selectedUsers : null,
+          inventory_quantity: inventoryQuantity,
+          inventory_type_id: inventoryTypeId || null,
         })
         .eq("id", subtaskId);
 
@@ -138,7 +164,7 @@ export default function EditSubtaskDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Assigned Users</Label>
+            <Label>Assigned Users (Optional)</Label>
             <p className="text-xs text-muted-foreground mb-2">
               Select one or more users to assign to this task
             </p>
@@ -176,6 +202,38 @@ export default function EditSubtaskDialog({
                 ? "No users assigned" 
                 : `${selectedUsers.length} user${selectedUsers.length === 1 ? '' : 's'} assigned`}
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Inventory Items (Optional)</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Quantity</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={inventoryQuantity}
+                  onChange={(e) => setInventoryQuantity(parseInt(e.target.value) || 0)}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Type</Label>
+                <Select value={inventoryTypeId} onValueChange={setInventoryTypeId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="">None</SelectItem>
+                    {inventoryTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
         </div>
 

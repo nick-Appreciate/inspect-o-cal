@@ -562,8 +562,8 @@ export default function InspectionDetailsDialog({
                             subtask.completed ? "text-muted-foreground/60" : "text-primary font-medium"
                           }`}>
                             Items needed: {subtask.inventory_quantity}
-                            {subtask.inventory_type_id && (
-                              <> {inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name || ''}</>
+                            {subtask.inventory_type_id && inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name && (
+                              <> {inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name}</>
                             )}
                           </p>
                         )}
