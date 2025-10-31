@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -76,17 +77,14 @@ export default function EditSubtaskDialog({
       return;
     }
 
+    if (selectedUsers.length === 0) {
+      toast.error("Please assign at least one user");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
-      // Update all subtasks with the same original_inspection_id and description
-      // This ensures that linked subtasks stay in sync
-      const { data: relatedSubtasks } = await supabase
-        .from("subtasks")
-        .select("id")
-        .eq("original_inspection_id", originalInspectionId)
-        .eq("id", subtaskId); // Only update this specific subtask
-
       const { error } = await supabase
         .from("subtasks")
         .update({
@@ -141,24 +139,43 @@ export default function EditSubtaskDialog({
 
           <div className="space-y-2">
             <Label>Assigned Users</Label>
-            <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2">
-              {users.map((user) => (
-                <label
-                  key={user.id}
-                  className="flex items-center gap-2 cursor-pointer hover:bg-accent p-2 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedUsers.includes(user.id)}
-                    onChange={() => toggleUser(user.id)}
-                    className="rounded"
-                  />
-                  <span className="text-sm">
-                    {user.full_name || user.email}
-                  </span>
-                </label>
-              ))}
+            <p className="text-xs text-muted-foreground mb-2">
+              Select one or more users to assign to this task
+            </p>
+            <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+              {users.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  No users available
+                </p>
+              ) : (
+                users.map((user) => (
+                  <label
+                    key={user.id}
+                    className="flex items-center gap-2 cursor-pointer hover:bg-accent p-2 rounded transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.includes(user.id)}
+                      onChange={() => toggleUser(user.id)}
+                      className="rounded border-input"
+                    />
+                    <span className="text-sm flex-1">
+                      {user.full_name || user.email}
+                    </span>
+                    {selectedUsers.includes(user.id) && (
+                      <Badge variant="secondary" className="text-xs">
+                        Assigned
+                      </Badge>
+                    )}
+                  </label>
+                ))
+              )}
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {selectedUsers.length === 0 
+                ? "No users assigned" 
+                : `${selectedUsers.length} user${selectedUsers.length === 1 ? '' : 's'} assigned`}
+            </p>
           </div>
         </div>
 
