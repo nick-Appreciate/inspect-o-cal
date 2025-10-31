@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,11 +30,18 @@ import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Inspection, InspectionType, Property } from "@/types/inspection";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AddInspectionDialogProps {
   properties: Property[];
-  onAddInspection: (inspection: Omit<Inspection, "id">) => void;
+  onAddInspection: (inspection: Omit<Inspection, "id">, templateId?: string) => void;
   onAddProperty: (property: Omit<Property, "id">) => void;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  type: string | null;
 }
 
 const inspectionTypes: InspectionType[] = [
@@ -60,6 +67,32 @@ export default function AddInspectionDialog({
   const [attachment, setAttachment] = useState<File>();
   const [newPropertyName, setNewPropertyName] = useState("");
   const [newPropertyAddress, setNewPropertyAddress] = useState("");
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+
+  useEffect(() => {
+    if (type) {
+      fetchTemplates(type);
+    } else {
+      setTemplates([]);
+      setSelectedTemplate("");
+    }
+  }, [type]);
+
+  const fetchTemplates = async (inspectionType: InspectionType) => {
+    const { data, error } = await supabase
+      .from("inspection_templates")
+      .select("id, name, type")
+      .eq("type", inspectionType)
+      .order("name");
+
+    if (error) {
+      console.error("Failed to load templates:", error);
+      return;
+    }
+
+    setTemplates(data || []);
+  };
 
   const handleSubmit = () => {
     if (!type || !date || !time || !selectedProperty) {
@@ -73,7 +106,7 @@ export default function AddInspectionDialog({
       time,
       property: selectedProperty,
       attachment,
-    });
+    }, selectedTemplate || undefined);
 
     toast.success("Inspection added successfully");
     setOpen(false);
@@ -104,6 +137,7 @@ export default function AddInspectionDialog({
     setSelectedProperty(undefined);
     setAttachment(undefined);
     setShowAddProperty(false);
+    setSelectedTemplate("");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -246,6 +280,27 @@ export default function AddInspectionDialog({
               <Button onClick={handleAddProperty} className="w-full" size="sm">
                 Save Property
               </Button>
+            </div>
+          )}
+
+          {type && templates.length > 0 && (
+            <div className="space-y-2">
+              <Label>Apply Template (Optional)</Label>
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a template to apply" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Selecting a template will automatically create subtasks from it
+              </p>
             </div>
           )}
 

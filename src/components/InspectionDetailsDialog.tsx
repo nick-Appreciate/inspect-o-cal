@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2 } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
+import { TemplateSelector } from "./TemplateSelector";
 
 interface Inspection {
   id: string;
@@ -88,6 +89,7 @@ export default function InspectionDetailsDialog({
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [parentInspection, setParentInspection] = useState<Inspection | null>(null);
   const [childInspections, setChildInspections] = useState<Inspection[]>([]);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
@@ -344,15 +346,26 @@ export default function InspectionDetailsDialog({
                 <Badge className={`${getInspectionColor(inspection.type)} text-white`}>
                   {inspection.type}
                 </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFollowUpDialog(true)}
-                  className="gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Follow-up
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTemplateSelector(true)}
+                    className="gap-2"
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Apply Template
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowFollowUpDialog(true)}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Follow-up
+                  </Button>
+                </div>
               </div>
 
               {inspection.parent_inspection_id && parentInspection && (
@@ -638,19 +651,29 @@ export default function InspectionDetailsDialog({
       </Dialog>
 
       {inspection && (
-        <AddFollowUpDialog
-          parentInspection={{
-            id: inspection.id,
-            type: inspection.type,
-            property_id: inspection.property_id,
-          }}
-          open={showFollowUpDialog}
-          onOpenChange={setShowFollowUpDialog}
-          onSuccess={() => {
-            fetchInspectionDetails();
-            fetchSubtasks();
-          }}
-        />
+        <>
+          <AddFollowUpDialog
+            parentInspection={{
+              id: inspection.id,
+              type: inspection.type,
+              property_id: inspection.property_id,
+            }}
+            open={showFollowUpDialog}
+            onOpenChange={setShowFollowUpDialog}
+            onSuccess={() => {
+              fetchInspectionDetails();
+              fetchSubtasks();
+            }}
+          />
+
+          <TemplateSelector
+            open={showTemplateSelector}
+            onOpenChange={setShowTemplateSelector}
+            inspectionType={inspection.type}
+            inspectionId={inspection.id}
+            onTemplateApplied={fetchSubtasks}
+          />
+        </>
       )}
     </>
   );
