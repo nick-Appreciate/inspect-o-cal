@@ -20,7 +20,7 @@ interface Template {
   id: string;
   name: string;
   description: string | null;
-  type_id?: string | null;
+  type?: string | null;
 }
 
 const inspectionTypes = [
@@ -77,7 +77,7 @@ export default function Templates() {
       .from("inspection_templates")
       .insert({
         name: newTemplateName,
-        type_id: newTemplateType,
+        type: newTemplateType,
         created_by: user.id,
       })
       .select()
