@@ -154,7 +154,7 @@ export function TemplateBuilder({
   const addItem = async (roomId: string) => {
     const description = newItemDescription[roomId];
     if (!description?.trim()) {
-      toast.error("Please enter an item description");
+      toast.error("Please enter a task");
       return;
     }
 
@@ -252,9 +252,9 @@ export function TemplateBuilder({
               {/* Add Item Form for this Room */}
               <div className="ml-6 space-y-3 border rounded-md p-4 bg-background">
                 <div>
-                  <Label>Item Description</Label>
+                  <Label>Task</Label>
                   <Input
-                    placeholder="Item description..."
+                    placeholder="Task..."
                     value={newItemDescription[room.id] || ""}
                     onChange={(e) =>
                       setNewItemDescription((prev) => ({ ...prev, [room.id]: e.target.value }))
