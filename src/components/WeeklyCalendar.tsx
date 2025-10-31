@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Inspection } from "@/types/inspection";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   format,
   startOfWeek,
@@ -13,12 +15,12 @@ import {
   addWeeks,
   subWeeks,
   isToday,
-  parse,
 } from "date-fns";
 
 interface WeeklyCalendarProps {
   inspections: Inspection[];
   onDateClick?: (date: Date) => void;
+  onInspectionUpdate?: () => void;
 }
 
 const getInspectionColor = (type: string): string => {
@@ -35,6 +37,7 @@ const getInspectionColor = (type: string): string => {
 
 // Generate hours from 6 AM to 8 PM
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 6);
+const HOUR_HEIGHT = 80; // pixels per hour
 
 // Convert time string (e.g., "14:30") to hour position
 const getTimePosition = (timeString: string): number => {
@@ -46,8 +49,15 @@ const getTimePosition = (timeString: string): number => {
   }
 };
 
-export default function WeeklyCalendar({ inspections, onDateClick }: WeeklyCalendarProps) {
+export default function WeeklyCalendar({
+  inspections,
+  onDateClick,
+  onInspectionUpdate,
+}: WeeklyCalendarProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [resizingInspection, setResizingInspection] = useState<string | null>(null);
+  const [resizeStartY, setResizeStartY] = useState(0);
+  const [resizeStartDuration, setResizeStartDuration] = useState(0);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 0 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 0 });
@@ -60,6 +70,74 @@ export default function WeeklyCalendar({ inspections, onDateClick }: WeeklyCalen
   const getInspectionsForDay = (day: Date) => {
     return inspections.filter((inspection) => isSameDay(inspection.date, day));
   };
+
+  const handleResizeStart = (
+    e: React.MouseEvent,
+    inspectionId: string,
+    currentDuration: number
+  ) => {
+    e.stopPropagation();
+    setResizingInspection(inspectionId);
+    setResizeStartY(e.clientY);
+    setResizeStartDuration(currentDuration);
+  };
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!resizingInspection) return;
+
+    const deltaY = e.clientY - resizeStartY;
+    const deltaMinutes = Math.round((deltaY / HOUR_HEIGHT) * 60);
+    const newDuration = Math.max(15, resizeStartDuration + deltaMinutes); // Minimum 15 minutes
+
+    // Update the visual immediately by finding the element
+    const element = document.getElementById(`inspection-${resizingInspection}`);
+    if (element) {
+      element.style.height = `${(newDuration / 60) * HOUR_HEIGHT - 4}px`;
+    }
+  }, [resizingInspection, resizeStartY, resizeStartDuration]);
+
+  const handleResizeEnd = useCallback(async () => {
+    if (!resizingInspection) return;
+
+    const element = document.getElementById(`inspection-${resizingInspection}`);
+    if (!element) {
+      setResizingInspection(null);
+      return;
+    }
+
+    const heightPx = parseFloat(element.style.height);
+    const newDuration = Math.round(((heightPx + 4) / HOUR_HEIGHT) * 60);
+
+    // Update database
+    const { error } = await supabase
+      .from("inspections")
+      .update({ duration: newDuration })
+      .eq("id", resizingInspection);
+
+    if (error) {
+      toast.error("Failed to update inspection duration");
+      // Revert visual change
+      element.style.height = `${(resizeStartDuration / 60) * HOUR_HEIGHT - 4}px`;
+    } else {
+      toast.success("Duration updated");
+      onInspectionUpdate?.();
+    }
+
+    setResizingInspection(null);
+  }, [resizingInspection, resizeStartDuration, onInspectionUpdate]);
+
+  // Add event listeners for resize
+  useEffect(() => {
+    if (resizingInspection) {
+      document.addEventListener("mousemove", handleResizeMove);
+      document.addEventListener("mouseup", handleResizeEnd);
+
+      return () => {
+        document.removeEventListener("mousemove", handleResizeMove);
+        document.removeEventListener("mouseup", handleResizeEnd);
+      };
+    }
+  }, [resizingInspection, handleResizeMove, handleResizeEnd]);
 
   return (
     <Card className="p-6">
@@ -85,7 +163,11 @@ export default function WeeklyCalendar({ inspections, onDateClick }: WeeklyCalen
         <div className="flex-shrink-0 w-16 border-r">
           <div className="h-16 border-b" /> {/* Header spacer */}
           {HOURS.map((hour) => (
-            <div key={hour} className="h-20 border-b flex items-start justify-end pr-2 pt-1">
+            <div
+              key={hour}
+              className="border-b flex items-start justify-end pr-2 pt-1"
+              style={{ height: `${HOUR_HEIGHT}px` }}
+            >
               <span className="text-xs text-muted-foreground">
                 {format(new Date().setHours(hour, 0), "h a")}
               </span>
@@ -126,9 +208,10 @@ export default function WeeklyCalendar({ inspections, onDateClick }: WeeklyCalen
                 {HOURS.map((hour) => (
                   <div
                     key={hour}
-                    className={`h-20 border-b ${
+                    className={`border-b ${
                       isDayToday ? "bg-accent/20" : ""
                     } hover:bg-accent/50 transition-colors cursor-pointer`}
+                    style={{ height: `${HOUR_HEIGHT}px` }}
                     onClick={() => onDateClick?.(day)}
                   />
                 ))}
@@ -136,17 +219,20 @@ export default function WeeklyCalendar({ inspections, onDateClick }: WeeklyCalen
                 {/* Positioned inspections */}
                 {dayInspections.map((inspection) => {
                   const timePos = getTimePosition(inspection.time);
-                  const topPosition = (timePos - 6) * 80; // 80px per hour slot
+                  const topPosition = (timePos - 6) * HOUR_HEIGHT;
+                  const duration = inspection.duration || 60;
+                  const height = (duration / 60) * HOUR_HEIGHT - 4; // -4 for padding
 
                   return (
                     <div
                       key={inspection.id}
+                      id={`inspection-${inspection.id}`}
                       className={`absolute left-1 right-1 ${getInspectionColor(
                         inspection.type
-                      )} text-white rounded p-2 cursor-pointer hover:opacity-90 transition-opacity shadow-sm`}
+                      )} text-white rounded p-2 cursor-pointer hover:opacity-90 transition-opacity shadow-sm group`}
                       style={{
                         top: `${topPosition}px`,
-                        height: "60px",
+                        height: `${height}px`,
                         zIndex: 10,
                       }}
                       onClick={(e) => {
@@ -166,6 +252,16 @@ export default function WeeklyCalendar({ inspections, onDateClick }: WeeklyCalen
                       >
                         {inspection.type.split(" - ")[0]}
                       </Badge>
+
+                      {/* Resize handle */}
+                      <div
+                        className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onMouseDown={(e) =>
+                          handleResizeStart(e, inspection.id, duration)
+                        }
+                      >
+                        <GripVertical className="h-3 w-3" />
+                      </div>
                     </div>
                   );
                 })}

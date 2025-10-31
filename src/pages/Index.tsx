@@ -68,6 +68,7 @@ const Index = () => {
         type: item.type,
         date: new Date(item.date),
         time: item.time,
+        duration: item.duration || 60,
         property: {
           id: item.properties.id,
           name: item.properties.name,
@@ -171,6 +172,10 @@ const Index = () => {
     }
   };
 
+  const handleInspectionUpdate = () => {
+    fetchInspections();
+  };
+
   if (!user) {
     return null;
   }
@@ -235,7 +240,11 @@ const Index = () => {
         {viewMode === "month" ? (
           <InspectionCalendar inspections={inspections} onDateClick={handleDateClick} />
         ) : (
-          <WeeklyCalendar inspections={inspections} onDateClick={handleDateClick} />
+          <WeeklyCalendar
+            inspections={inspections}
+            onDateClick={handleDateClick}
+            onInspectionUpdate={handleInspectionUpdate}
+          />
         )}
       </main>
 

@@ -20,4 +20,5 @@ export interface Inspection {
   property: Property;
   attachment?: File;
   attachmentUrl?: string;
+  duration?: number; // in minutes
 }
