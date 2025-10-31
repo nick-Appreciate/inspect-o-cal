@@ -22,6 +22,7 @@ export type Database = {
           date: string
           duration: number | null
           id: string
+          parent_inspection_id: string | null
           property_id: string
           time: string
           type: string
@@ -33,6 +34,7 @@ export type Database = {
           date: string
           duration?: number | null
           id?: string
+          parent_inspection_id?: string | null
           property_id: string
           time: string
           type: string
@@ -44,11 +46,19 @@ export type Database = {
           date?: string
           duration?: number | null
           id?: string
+          parent_inspection_id?: string | null
           property_id?: string
           time?: string
           type?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inspections_parent_inspection_id_fkey"
+            columns: ["parent_inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inspections_property_id_fkey"
             columns: ["property_id"]
@@ -113,6 +123,7 @@ export type Database = {
           description: string
           id: string
           inspection_id: string
+          original_inspection_id: string
         }
         Insert: {
           assigned_users?: string[] | null
@@ -123,6 +134,7 @@ export type Database = {
           description: string
           id?: string
           inspection_id: string
+          original_inspection_id: string
         }
         Update: {
           assigned_users?: string[] | null
@@ -133,11 +145,19 @@ export type Database = {
           description?: string
           id?: string
           inspection_id?: string
+          original_inspection_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "subtasks_inspection_id_fkey"
             columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtasks_original_inspection_id_fkey"
+            columns: ["original_inspection_id"]
             isOneToOne: false
             referencedRelation: "inspections"
             referencedColumns: ["id"]

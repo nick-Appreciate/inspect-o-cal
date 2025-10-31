@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import AddFollowUpDialog from "./AddFollowUpDialog";
 
 interface Inspection {
   id: string;
@@ -30,6 +31,7 @@ interface Inspection {
   time: string;
   property_id: string;
   attachment_url?: string;
+  parent_inspection_id?: string;
   properties: {
     name: string;
     address: string;
@@ -42,6 +44,8 @@ interface Subtask {
   completed: boolean;
   attachment_url?: string;
   assigned_users?: string[];
+  original_inspection_id: string;
+  inspection_id: string;
   assignedProfiles?: Array<{
     full_name: string;
     email: string;
@@ -81,6 +85,7 @@ export default function InspectionDetailsDialog({
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<Profile[]>([]);
+  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
@@ -118,19 +123,12 @@ export default function InspectionDetailsDialog({
   const fetchSubtasks = async () => {
     if (!inspectionId) return;
 
-    const { data, error } = await supabase
-      .from("subtasks")
-      .select("*")
-      .eq("inspection_id", inspectionId);
-
-    if (error) {
-      console.error("Failed to load subtasks:", error);
-      return;
-    }
+    // Get all subtasks from the entire inspection chain
+    const allSubtasks = await getAllSubtasksInChain(inspectionId);
 
     // Fetch profiles for assigned users
     const subtasksWithProfiles = await Promise.all(
-      (data || []).map(async (subtask) => {
+      allSubtasks.map(async (subtask) => {
         if (subtask.assigned_users && subtask.assigned_users.length > 0) {
           const { data: profiles } = await supabase
             .from("profiles")
@@ -152,6 +150,43 @@ export default function InspectionDetailsDialog({
     });
 
     setSubtasks(subtasksWithProfiles);
+  };
+
+  const getAllSubtasksInChain = async (currentInspectionId: string): Promise<any[]> => {
+    // Get current inspection details
+    const { data: inspection } = await supabase
+      .from("inspections")
+      .select("parent_inspection_id")
+      .eq("id", currentInspectionId)
+      .single();
+
+    // Get subtasks for current inspection
+    const { data: subtasks } = await supabase
+      .from("subtasks")
+      .select("*")
+      .eq("inspection_id", currentInspectionId);
+
+    let allSubtasks = subtasks || [];
+
+    // Recursively get subtasks from parent inspection chain
+    if (inspection?.parent_inspection_id) {
+      const parentSubtasks = await getAllSubtasksInChain(
+        inspection.parent_inspection_id
+      );
+      allSubtasks = [...allSubtasks, ...parentSubtasks];
+    }
+
+    // Remove duplicates (keep most recent version of each unique subtask)
+    const uniqueSubtasks = Array.from(
+      new Map(
+        allSubtasks.map((task) => [
+          `${task.original_inspection_id}-${task.description}`,
+          task,
+        ])
+      ).values()
+    );
+
+    return uniqueSubtasks;
   };
 
   const fetchUsers = async () => {
@@ -235,6 +270,7 @@ export default function InspectionDetailsDialog({
       // Create subtask
       const { error } = await supabase.from("subtasks").insert({
         inspection_id: inspectionId,
+        original_inspection_id: inspectionId, // Mark this as the original inspection
         description: newDescription.trim(),
         assigned_users: newAssignedUsers.length > 0 ? newAssignedUsers : null,
         attachment_url: attachmentUrl,
@@ -276,9 +312,27 @@ export default function InspectionDetailsDialog({
 
           <div className="space-y-6">
             <div>
-              <Badge className={`${getInspectionColor(inspection.type)} text-white mb-4`}>
-                {inspection.type}
-              </Badge>
+              <div className="flex items-center justify-between mb-4">
+                <Badge className={`${getInspectionColor(inspection.type)} text-white`}>
+                  {inspection.type}
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFollowUpDialog(true)}
+                  className="gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Follow-up
+                </Button>
+              </div>
+
+              {inspection.parent_inspection_id && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                  <Link2 className="h-4 w-4" />
+                  <span>This is a follow-up inspection</span>
+                </div>
+              )}
 
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm">
@@ -314,15 +368,23 @@ export default function InspectionDetailsDialog({
             <div className="border-t pt-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-lg">Subtasks</h3>
+                <span className="text-xs text-muted-foreground">
+                  {subtasks.filter(s => s.original_inspection_id === inspectionId).length} original • {subtasks.filter(s => s.original_inspection_id !== inspectionId).length} inherited
+                </span>
               </div>
 
               <div className="space-y-3">
-                {subtasks.map((subtask) => (
+                {subtasks.map((subtask) => {
+                  const isInherited = subtask.original_inspection_id !== inspectionId;
+                  
+                  return (
                   <div
                     key={subtask.id}
                     className={`flex items-start gap-3 p-3 border rounded-lg transition-colors group ${
                       subtask.completed
                         ? "bg-muted/30 opacity-60"
+                        : isInherited
+                        ? "bg-accent/20 hover:bg-accent/30"
                         : "hover:bg-accent/50"
                     }`}
                   >
@@ -334,13 +396,20 @@ export default function InspectionDetailsDialog({
                       className="mt-1"
                     />
                     <div className="flex-1">
-                      <p
-                        className={`text-sm ${
-                          subtask.completed ? "line-through text-muted-foreground" : ""
-                        }`}
-                      >
-                        {subtask.description}
-                      </p>
+                      <div className="flex items-start gap-2">
+                        <p
+                          className={`text-sm flex-1 ${
+                            subtask.completed ? "line-through text-muted-foreground" : ""
+                          }`}
+                        >
+                          {subtask.description}
+                        </p>
+                        {isInherited && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0">
+                            Inherited
+                          </Badge>
+                        )}
+                      </div>
                       {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
                         <p className={`text-xs mt-1 ${
                           subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"
@@ -365,17 +434,20 @@ export default function InspectionDetailsDialog({
                     </div>
                     <div className="flex items-center gap-2">
                       {subtask.completed && <Check className="h-4 w-4 text-muted-foreground" />}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleDeleteSubtask(subtask.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {!isInherited && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteSubtask(subtask.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
                     </div>
                   </div>
-                ))}
+                );
+                })}
 
                 {/* Inline Add Subtask Form */}
                 <div className="flex items-start gap-3 p-3 border rounded-lg border-dashed bg-muted/30">
@@ -490,6 +562,22 @@ export default function InspectionDetailsDialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      {inspection && (
+        <AddFollowUpDialog
+          parentInspection={{
+            id: inspection.id,
+            type: inspection.type,
+            property_id: inspection.property_id,
+          }}
+          open={showFollowUpDialog}
+          onOpenChange={setShowFollowUpDialog}
+          onSuccess={() => {
+            fetchInspectionDetails();
+            fetchSubtasks();
+          }}
+        />
+      )}
     </>
   );
 }

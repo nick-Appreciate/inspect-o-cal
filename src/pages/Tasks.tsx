@@ -92,7 +92,7 @@ export default function Tasks() {
       .from("subtasks")
       .select(`
         *,
-        inspections (
+        inspections!inspection_id (
           id,
           type,
           date,

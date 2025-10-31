@@ -21,4 +21,5 @@ export interface Inspection {
   attachment?: File;
   attachmentUrl?: string;
   duration?: number; // in minutes
+  parent_inspection_id?: string | null;
 }
