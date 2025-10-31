@@ -57,6 +57,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        inspection: {
+          "s8-rft": "hsl(var(--inspection-s8-rft))",
+          "s8-annual": "hsl(var(--inspection-s8-annual))",
+          "s8-reinspection": "hsl(var(--inspection-s8-reinspection))",
+          "s8-abatement": "hsl(var(--inspection-s8-abatement))",
+          "rental": "hsl(var(--inspection-rental))",
+          "hud": "hsl(var(--inspection-hud))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
