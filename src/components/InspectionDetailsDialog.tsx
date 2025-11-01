@@ -958,196 +958,161 @@ export default function InspectionDetailsDialog({
               </Button>
             </div>
 
-            {/* Inspection Runs */}
+
+            {/* Tasks grouped by room */}
             <div className="space-y-3">
-              {inspectionRuns.map((run) => {
-                // Filter subtasks for this run
-                const runSubtasks = subtasks.filter(s => s.inspection_run_id === run.id);
-                const filteredRunSubtasks = showCompleted 
-                  ? runSubtasks 
-                  : runSubtasks.filter(s => !s.completed);
+              {(() => {
+                // Filter subtasks based on showCompleted
+                const filteredSubtasks = showCompleted 
+                  ? subtasks 
+                  : subtasks.filter(s => !s.completed);
 
-                if (filteredRunSubtasks.length === 0 && !showCompleted) return null;
-
-                const isRunCollapsed = collapsedRuns.has(run.id);
-                const completedCount = runSubtasks.filter(s => s.completed).length;
-
-                // Group subtasks by room within this run
-                const groupedByRoom = filteredRunSubtasks.reduce((acc, subtask) => {
+                // Group subtasks by room
+                const groupedByRoom = filteredSubtasks.reduce((acc, subtask) => {
                   const room = subtask.room_name || 'No Room';
                   if (!acc[room]) acc[room] = [];
                   acc[room].push(subtask);
                   return acc;
                 }, {} as Record<string, Subtask[]>);
 
+                return Object.entries(groupedByRoom).map(([roomName, roomSubtasks]) => {
+                const isCollapsed = collapsedRooms.has(roomName);
+                const roomCompletedCount = roomSubtasks.filter(s => s.completed).length;
+                const allCompleted = roomCompletedCount === roomSubtasks.length;
+
                 return (
-                  <div key={run.id} className="border-2 border-primary/30 rounded-lg overflow-hidden">
-                    {/* Run Header */}
+                  <div key={roomName} className="border rounded-lg overflow-hidden">
+                    {/* Room Header */}
                     <button
                       onClick={() => {
-                        setCollapsedRuns(prev => {
+                        setCollapsedRooms(prev => {
                           const next = new Set(prev);
-                          if (next.has(run.id)) {
-                            next.delete(run.id);
+                          if (next.has(roomName)) {
+                            next.delete(roomName);
                           } else {
-                            next.add(run.id);
+                            next.add(roomName);
                           }
                           return next;
                         });
                       }}
-                      className="w-full px-3 py-2 flex items-center justify-between text-sm font-medium bg-primary/10 hover:bg-primary/20 transition-colors"
+                      className={`w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors ${
+                        allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
+                      }`}
                     >
                       <div className="flex items-center gap-2">
-                        {isRunCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                        <span className="font-semibold">
-                          {run.template?.name || 'Inspection Run'}
-                        </span>
+                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        <span>{roomName}</span>
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {completedCount}/{runSubtasks.length}
+                          {roomCompletedCount}/{roomSubtasks.length}
                         </Badge>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {run.completedByProfile && (
-                          <span>
-                            By {run.completedByProfile.full_name || run.completedByProfile.email} • {formatDistanceToNow(new Date(run.completed_at!), { addSuffix: true })}
-                          </span>
-                        )}
-                      </div>
+                      {allCompleted && <Check className="h-4 w-4 text-green-600" />}
                     </button>
 
-                    {/* Run Content */}
-                    {!isRunCollapsed && (
+                    {/* Room Tasks */}
+                    {!isCollapsed && (
                       <div className="p-2 space-y-2">
-                        {Object.entries(groupedByRoom).map(([roomName, roomSubtasks]) => {
-                          const isCollapsed = collapsedRooms.has(`${run.id}-${roomName}`);
-                          const roomCompletedCount = roomSubtasks.filter(s => s.completed).length;
-                          const allCompleted = roomCompletedCount === roomSubtasks.length;
+                        {roomSubtasks.map((subtask) => {
+                          const isInherited = subtask.original_inspection_id !== inspectionId;
+                          const run = inspectionRuns.find(r => r.id === subtask.inspection_run_id);
 
                           return (
-                            <div key={`${run.id}-${roomName}`} className="border rounded-lg overflow-hidden">
-                              {/* Room Header */}
-                              <button
-                                onClick={() => {
-                                  const key = `${run.id}-${roomName}`;
-                                  setCollapsedRooms(prev => {
-                                    const next = new Set(prev);
-                                    if (next.has(key)) {
-                                      next.delete(key);
-                                    } else {
-                                      next.add(key);
-                                    }
-                                    return next;
-                                  });
-                                }}
-                                className={`w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors ${
-                                  allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                  <span>{roomName}</span>
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                                    {roomCompletedCount}/{roomSubtasks.length}
-                                  </Badge>
+                            <div
+                              key={subtask.id}
+                              className={`flex items-start gap-2 p-2 border rounded transition-colors ${
+                                subtask.completed
+                                  ? "bg-muted/30 opacity-60"
+                                  : isInherited
+                                  ? "bg-accent/20"
+                                  : "hover:bg-accent/30"
+                              }`}
+                            >
+                              <Checkbox
+                                checked={subtask.completed}
+                                onCheckedChange={() => toggleSubtaskComplete(subtask.id, subtask.completed)}
+                                className="mt-0.5 flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0 text-xs">
+                                <div className="flex items-start gap-2 flex-wrap">
+                                  <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                                    {subtask.description}
+                                  </p>
+                                  {/* Inspection Run Badge */}
+                                  {run && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="text-[10px] px-1.5 py-0 cursor-pointer hover:bg-secondary/80"
+                                      onClick={() => setShowHistoryDialog(true)}
+                                    >
+                                      <History className="h-2.5 w-2.5 mr-1" />
+                                      {run.template?.name || 'Run'} • {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}
+                                    </Badge>
+                                  )}
                                 </div>
-                                {allCompleted && <Check className="h-4 w-4 text-green-600" />}
-                              </button>
 
-                              {/* Room Tasks */}
-                              {!isCollapsed && (
-                                <div className="p-2 space-y-2">
-                                  {roomSubtasks.map((subtask) => {
-                                    const isInherited = subtask.original_inspection_id !== inspectionId;
+                                {/* Assigned Users */}
+                                {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    {subtask.assignedProfiles.slice(0, 3).map((profile, idx) => (
+                                      <UserAvatar
+                                        key={idx}
+                                        avatarUrl={profile.avatar_url}
+                                        name={profile.full_name}
+                                        email={profile.email}
+                                        size="sm"
+                                      />
+                                    ))}
+                                    {subtask.assignedProfiles.length > 3 && (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        +{subtask.assignedProfiles.length - 3}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
 
-                                    return (
-                                      <div
-                                        key={subtask.id}
-                                        className={`flex items-start gap-2 p-2 border rounded transition-colors ${
-                                          subtask.completed
-                                            ? "bg-muted/30 opacity-60"
-                                            : isInherited
-                                            ? "bg-accent/20"
-                                            : "hover:bg-accent/30"
-                                        }`}
-                                      >
-                                        <Checkbox
-                                          checked={subtask.completed}
-                                          onCheckedChange={() => toggleSubtaskComplete(subtask.id, subtask.completed)}
-                                          className="mt-0.5 flex-shrink-0"
-                                        />
-                                        <div className="flex-1 min-w-0 text-xs">
-                                          <p className={subtask.completed ? "line-through text-muted-foreground" : ""}>
-                                            {subtask.description}
-                                          </p>
-
-                                          {/* Assigned Users */}
-                                          {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
-                                            <div className="flex items-center gap-1 mt-1">
-                                              {subtask.assignedProfiles.slice(0, 3).map((profile, idx) => (
-                                                <UserAvatar
-                                                  key={idx}
-                                                  avatarUrl={profile.avatar_url}
-                                                  name={profile.full_name}
-                                                  email={profile.email}
-                                                  size="sm"
-                                                />
-                                              ))}
-                                              {subtask.assignedProfiles.length > 3 && (
-                                                <span className="text-[10px] text-muted-foreground">
-                                                  +{subtask.assignedProfiles.length - 3}
-                                                </span>
-                                              )}
-                                            </div>
-                                          )}
-
-                                          {/* Creation and Completion Metadata */}
-                                          <div className="mt-1 text-[10px] text-muted-foreground space-y-0.5">
-                                            {subtask.creatorProfile && (
-                                              <div>
-                                                Created by {subtask.creatorProfile.full_name || subtask.creatorProfile.email} • {formatDistanceToNow(new Date(subtask.created_at), { addSuffix: true })}
-                                              </div>
-                                            )}
-                                            {subtask.completed && subtask.completedByProfile && subtask.completed_at && (
-                                              <div className="text-green-600 dark:text-green-400">
-                                                Completed by {subtask.completedByProfile.full_name || subtask.completedByProfile.email} • {formatDistanceToNow(new Date(subtask.completed_at), { addSuffix: true })}
-                                              </div>
-                                            )}
-                                          </div>
-
-                                          {/* Quick Assign Dropdown */}
-                                          {!subtask.completed && !isInherited && (
-                                            <Select
-                                              value=""
-                                              onValueChange={(userId) => handleAssignUser(subtask.id, userId)}
-                                            >
-                                              <SelectTrigger className="h-6 text-[10px] mt-1 w-24 px-1">
-                                                <SelectValue placeholder="+ Assign" />
-                                              </SelectTrigger>
-                                              <SelectContent className="max-h-48">
-                                                {users.map((user) => (
-                                                  <SelectItem key={user.id} value={user.id} className="text-xs">
-                                                    {user.full_name || user.email}
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
-                                          )}
-                                        </div>
-
-                                        {!isInherited && !subtask.completed && (
-                                          <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-6 w-6 flex-shrink-0"
-                                            onClick={() => handleDeleteSubtask(subtask.id)}
-                                          >
-                                            <Trash2 className="h-3 w-3 text-destructive" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
+                                {/* Creation and Completion Metadata */}
+                                <div className="mt-1 text-[10px] text-muted-foreground space-y-0.5">
+                                  {subtask.creatorProfile && (
+                                    <div>
+                                      Created by {subtask.creatorProfile.full_name || subtask.creatorProfile.email} • {formatDistanceToNow(new Date(subtask.created_at), { addSuffix: true })}
+                                    </div>
+                                  )}
+                                  {subtask.completed && subtask.completedByProfile && subtask.completed_at && (
+                                    <div className="text-green-600 dark:text-green-400">
+                                      Completed by {subtask.completedByProfile.full_name || subtask.completedByProfile.email} • {formatDistanceToNow(new Date(subtask.completed_at), { addSuffix: true })}
+                                    </div>
+                                  )}
                                 </div>
+
+                                {/* Quick Assign Dropdown */}
+                                {!subtask.completed && !isInherited && (
+                                  <Select
+                                    value=""
+                                    onValueChange={(userId) => handleAssignUser(subtask.id, userId)}
+                                  >
+                                    <SelectTrigger className="h-6 text-[10px] mt-1 w-24 px-1">
+                                      <SelectValue placeholder="+ Assign" />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-48">
+                                      {users.map((user) => (
+                                        <SelectItem key={user.id} value={user.id} className="text-xs">
+                                          {user.full_name || user.email}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+                              
+                              {!isInherited && !subtask.completed && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 flex-shrink-0"
+                                  onClick={() => handleDeleteSubtask(subtask.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </Button>
                               )}
                             </div>
                           );
@@ -1156,7 +1121,8 @@ export default function InspectionDetailsDialog({
                     )}
                   </div>
                 );
-              })}
+              });
+              })()}
 
               {/* Add New Task */}
               <Button
