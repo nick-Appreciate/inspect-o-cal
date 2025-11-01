@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, ArrowLeft, Search, ArrowUpDown, Check } from "lucide-react";
+import { Trash2, ArrowLeft, Search, ArrowUpDown, Check, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
+import { InspectionHistoryDialog } from "@/components/InspectionHistoryDialog";
 import { DeleteInspectionDialog } from "@/components/DeleteInspectionDialog";
 import { CompleteInspectionDialog } from "@/components/CompleteInspectionDialog";
 import { UnCompleteInspectionDialog } from "@/components/UnCompleteInspectionDialog";
@@ -35,6 +36,7 @@ interface Inspection {
     address: string;
   };
   unit?: {
+    id: string;
     name: string;
   };
   parent_inspection_id: string | null;
@@ -64,6 +66,8 @@ const Inspections = () => {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [showCompleted, setShowCompleted] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyInspection, setHistoryInspection] = useState<Inspection | null>(null);
 
   useEffect(() => {
     fetchInspections();
@@ -73,7 +77,7 @@ const Inspections = () => {
     try {
       const { data, error } = await supabase
         .from("inspections")
-        .select("*, properties(id, name, address), units(name)")
+        .select("*, properties(id, name, address), units(id, name)")
         .order("date", { ascending: true })
         .order("time", { ascending: true });
 
@@ -93,7 +97,7 @@ const Inspections = () => {
           name: item.properties.name,
           address: item.properties.address,
         },
-        unit: item.units ? { name: item.units.name } : undefined,
+        unit: item.units ? { id: item.units.id, name: item.units.name } : undefined,
         parent_inspection_id: item.parent_inspection_id,
         completed: item.completed || false,
       }));
@@ -672,16 +676,31 @@ const Inspections = () => {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeleteClick(inspection.id);
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setHistoryInspection(inspection);
+                                        setHistoryDialogOpen(true);
+                                      }}
+                                      title="View History"
+                                    >
+                                      <History className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteClick(inspection.id);
+                                      }}
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </TableCell>
                               </TableRow>
                             );
@@ -754,18 +773,34 @@ const Inspections = () => {
                                   </div>
                                 </div>
                                 
-                                {/* Delete Button */}
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 flex-shrink-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteClick(inspection.id);
-                                  }}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 flex-shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setHistoryInspection(inspection);
+                                      setHistoryDialogOpen(true);
+                                    }}
+                                    title="View History"
+                                  >
+                                    <History className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 flex-shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteClick(inspection.id);
+                                    }}
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -809,6 +844,14 @@ const Inspections = () => {
         mainInspection={inspectionToUnComplete}
         connectedInspections={connectedInspectionsToUnComplete}
         onConfirm={handleUnCompleteConfirm}
+      />
+
+      <InspectionHistoryDialog
+        open={historyDialogOpen}
+        onOpenChange={setHistoryDialogOpen}
+        inspectionId={historyInspection?.id || ""}
+        propertyId={historyInspection?.property.id}
+        unitId={historyInspection?.unit?.id}
       />
     </div>
   );
