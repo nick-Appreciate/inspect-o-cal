@@ -665,44 +665,32 @@ export function TemplateBuilder({
             items.map((item) => (
               <div
                 key={item.id}
-                className={`flex items-start justify-between p-3 border rounded-md bg-background ${
-                  item.source_room_template_item_id ? 'cursor-pointer hover:bg-accent/50 transition-colors' : ''
-                }`}
-                onClick={() => {
-                  if (item.source_room_template_item_id && onOpenRoomTemplates) {
-                    onOpenRoomTemplates();
-                  }
-                }}
+                className="flex items-start justify-between p-3 border rounded-md bg-background"
               >
-                <div className="flex-1 flex items-start gap-2">
-                  <div className="flex-1">
-                    <p className="font-medium">{item.description}</p>
-                    {(item.inventory_quantity > 0 || item.inventory_quantity === -1) && (
-                      <p className="text-sm text-muted-foreground">
-                        Quantity: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
-                        {item.inventory_type_id && (
-                          <>
-                            {" "}
-                            • Type:{" "}
-                            {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
-                          </>
-                        )}
-                      </p>
-                    )}
-                    {item.vendor_type_id && (
-                      <p className="text-sm text-muted-foreground">
-                        Vendor:{" "}
-                        {vendorTypes.find((t) => t.id === item.vendor_type_id)?.name}
-                      </p>
-                    )}
-                    {item.source_room_template_item_id && (
-                      <p className="text-xs text-primary mt-1">
-                        Synced from room template
-                      </p>
-                    )}
-                  </div>
+                <div className="flex-1">
+                  <p className="font-medium">{item.description}</p>
+                  {(item.inventory_quantity > 0 || item.inventory_quantity === -1) && (
+                    <p className="text-sm text-muted-foreground">
+                      Quantity: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
+                      {item.inventory_type_id && (
+                        <>
+                          {" "}
+                          • Type:{" "}
+                          {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {item.vendor_type_id && (
+                    <p className="text-sm text-muted-foreground">
+                      Vendor:{" "}
+                      {vendorTypes.find((t) => t.id === item.vendor_type_id)?.name}
+                    </p>
+                  )}
                   {item.source_room_template_item_id && (
-                    <ExternalLink className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
+                    <p className="text-xs text-primary mt-1">
+                      Synced from room template
+                    </p>
                   )}
                 </div>
               </div>
