@@ -27,6 +27,7 @@ interface AddFollowUpDialogProps {
     type: string;
     property_id: string;
     unit_id?: string;
+    date: string;
   };
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,6 +57,12 @@ export default function AddFollowUpDialog({
   const handleCreate = async () => {
     if (!type || !date || !time) {
       toast.error("Please fill in all fields");
+      return;
+    }
+
+    // Validate that follow-up date is not before parent inspection date
+    if (date < parentInspection.date) {
+      toast.error("Follow-up inspection date cannot be before the initial inspection date");
       return;
     }
 
@@ -194,8 +201,12 @@ export default function AddFollowUpDialog({
               id="date"
               type="date"
               value={date}
+              min={parentInspection.date}
               onChange={(e) => setDate(e.target.value)}
             />
+            <p className="text-xs text-muted-foreground">
+              Follow-up must be scheduled on or after {new Date(parentInspection.date).toLocaleDateString()}
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -853,6 +853,7 @@ export default function InspectionDetailsDialog({
               type: inspection.type,
               property_id: inspection.property_id,
               unit_id: inspection.unit_id,
+              date: inspection.date,
             }}
             open={showFollowUpDialog}
             onOpenChange={setShowFollowUpDialog}
