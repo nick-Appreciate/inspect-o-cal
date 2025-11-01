@@ -43,6 +43,46 @@ Deno.serve(async (req) => {
 
     console.log('Starting property import for user:', user.id);
 
+    // Get request body to check if we should clear existing data
+    const requestBody = await req.json().catch(() => ({ clearExisting: false }));
+    const shouldClearExisting = requestBody.clearExisting === true;
+
+    if (shouldClearExisting) {
+      console.log('Clearing existing properties, units, and floorplans...');
+      
+      // Delete all units first (foreign key constraint)
+      const { error: unitsDeleteError } = await supabase
+        .from('units')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      
+      if (unitsDeleteError) {
+        console.log('Error deleting units (may not exist):', unitsDeleteError);
+      }
+
+      // Delete all properties
+      const { error: propertiesDeleteError } = await supabase
+        .from('properties')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      
+      if (propertiesDeleteError) {
+        console.log('Error deleting properties (may not exist):', propertiesDeleteError);
+      }
+
+      // Delete all floorplans
+      const { error: floorplansDeleteError } = await supabase
+        .from('floorplans')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      
+      if (floorplansDeleteError) {
+        console.log('Error deleting floorplans (may not exist):', floorplansDeleteError);
+      }
+
+      console.log('Existing data cleared successfully');
+    }
+
     // Define all property data
     const propertyData: PropertyData[] = [
       {

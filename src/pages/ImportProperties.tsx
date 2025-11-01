@@ -5,22 +5,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Upload, CheckCircle, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 export default function ImportProperties() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [clearExisting, setClearExisting] = useState(false);
 
   const handleImport = async () => {
     setLoading(true);
     setResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke('import-properties');
+      const { data, error } = await supabase.functions.invoke('import-properties', {
+        body: { clearExisting }
+      });
 
       if (error) throw error;
 
       setResult(data);
       toast.success("Properties imported successfully!");
+      
+      // Refresh the page after 2 seconds to show new data
+      setTimeout(() => {
+        window.location.href = '/properties';
+      }, 2000);
     } catch (error: any) {
       console.error('Import error:', error);
       toast.error(error.message || "Failed to import properties");
@@ -54,6 +64,20 @@ export default function ImportProperties() {
               </ul>
             </AlertDescription>
           </Alert>
+
+          <div className="flex items-center space-x-2 p-4 border rounded-lg">
+            <Checkbox 
+              id="clear-existing" 
+              checked={clearExisting}
+              onCheckedChange={(checked) => setClearExisting(checked as boolean)}
+            />
+            <Label 
+              htmlFor="clear-existing" 
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+            >
+              Clear existing properties, units, and floorplans before importing
+            </Label>
+          </div>
 
           <Button 
             onClick={handleImport} 
