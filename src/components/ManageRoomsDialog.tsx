@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Trash2, Plus, ChevronDown, Copy, Lock, ArrowRight, Check, X, Edit2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -593,6 +594,40 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setEditingRoomId(null);
     setEditRoomName("");
     toast.success("Room name updated");
+  };
+
+  const toggleDefaultTaskForRoom = async (taskId: string, roomId: string, enabled: boolean) => {
+    try {
+      if (enabled) {
+        // Add association
+        const { error } = await supabase
+          .from("default_task_room_templates" as any)
+          .insert({
+            default_task_id: taskId,
+            room_template_id: roomId,
+          });
+
+        if (error) throw error;
+        toast.success("Default task enabled for this room");
+      } else {
+        // Remove association
+        const { error } = await supabase
+          .from("default_task_room_templates" as any)
+          .delete()
+          .eq("default_task_id", taskId)
+          .eq("room_template_id", roomId);
+
+        if (error) throw error;
+        toast.success("Default task disabled for this room");
+      }
+
+      // Refresh data
+      await fetchDefaultTasks();
+      await fetchRoomItems(roomId);
+    } catch (error: any) {
+      console.error("Error toggling default task:", error);
+      toast.error(error.message || "Failed to toggle default task");
+    }
   };
 
   const addVendorType = async () => {
@@ -1246,41 +1281,79 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                               </Button>
                             </div>
 
-                            {roomItems[room.id] && roomItems[room.id].length > 0 && (
+                            {/* Default Tasks Section */}
+                            {defaultTasks.length > 0 && (
                               <div className="space-y-1">
-                                <Label className="text-xs">Existing Tasks</Label>
-                                {roomItems[room.id].map((item) => {
-                                  const invType = inventoryTypes.find(t => t.id === item.inventory_type_id);
-                                  // Check if this item matches a default task that applies to this room
-                                  const matchingDefaultTask = defaultTasks.find(dt => 
-                                    dt.description === item.description &&
-                                    dt.inventory_type_id === item.inventory_type_id &&
-                                    dt.inventory_quantity === item.inventory_quantity &&
-                                    dt.vendor_type_id === item.vendor_type_id &&
-                                    (dt.applies_to_all_rooms || defaultTaskRoomAssociations[dt.id]?.includes(room.id))
-                                  );
-                                  const isDefaultTask = !!matchingDefaultTask;
+                                <Label className="text-xs">Default Tasks</Label>
+                                {defaultTasks.map((task) => {
+                                  const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
+                                  const isEnabled = task.applies_to_all_rooms || defaultTaskRoomAssociations[task.id]?.includes(room.id);
+                                  
                                   return (
                                     <div
-                                      key={item.id}
+                                      key={task.id}
                                       className="flex items-center justify-between p-2 bg-background rounded border text-sm"
                                     >
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">
-                                          <span>{item.description}</span>
-                                          {isDefaultTask && (
+                                          <span>{task.description}</span>
+                                          {task.applies_to_all_rooms && (
                                             <TooltipProvider>
                                               <Tooltip>
                                                 <TooltipTrigger asChild>
                                                   <Lock className="h-3 w-3 text-primary" />
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                  <p className="text-xs">Controlled by default tasks</p>
+                                                  <p className="text-xs">Applies to all rooms</p>
                                                 </TooltipContent>
                                               </Tooltip>
                                             </TooltipProvider>
                                           )}
                                         </div>
+                                        {invType && (
+                                          <div className="text-xs text-muted-foreground">
+                                            {invType.name} × {task.inventory_quantity === -1 ? "User Selected" : task.inventory_quantity}
+                                          </div>
+                                        )}
+                                        {task.vendor_type_id && (
+                                          <div className="text-xs text-muted-foreground">
+                                            Vendor: {vendorTypes.find(t => t.id === task.vendor_type_id)?.name}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <Switch
+                                        checked={isEnabled}
+                                        disabled={task.applies_to_all_rooms}
+                                        onCheckedChange={(checked) => toggleDefaultTaskForRoom(task.id, room.id, checked)}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {roomItems[room.id] && roomItems[room.id].length > 0 && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Custom Tasks</Label>
+                                {roomItems[room.id].map((item) => {
+                                  const invType = inventoryTypes.find(t => t.id === item.inventory_type_id);
+                                  // Check if this item matches a default task
+                                  const matchingDefaultTask = defaultTasks.find(dt => 
+                                    dt.description === item.description &&
+                                    dt.inventory_type_id === item.inventory_type_id &&
+                                    dt.inventory_quantity === item.inventory_quantity &&
+                                    dt.vendor_type_id === item.vendor_type_id
+                                  );
+                                  // Only show items that don't match any default task
+                                  if (matchingDefaultTask) return null;
+                                  
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className="flex items-center justify-between p-2 bg-background rounded border text-sm"
+                                    >
+                                      <div className="flex-1">
+                                        <span>{item.description}</span>
                                         {invType && (
                                           <div className="text-xs text-muted-foreground">
                                             {invType.name} × {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
@@ -1292,31 +1365,14 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                           </div>
                                         )}
                                       </div>
-                                      {isDefaultTask ? (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 text-xs text-primary hover:text-primary"
-                                          onClick={() => {
-                                            // Scroll to default tasks section
-                                            const defaultTasksSection = document.querySelector('[data-default-tasks-section]');
-                                            if (defaultTasksSection) {
-                                              defaultTasksSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                            }
-                                          }}
-                                        >
-                                          Edit <ArrowRight className="h-3 w-3 ml-1" />
-                                        </Button>
-                                      ) : (
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7"
-                                          onClick={() => setDeleteItemId(item.id)}
-                                        >
-                                          <Trash2 className="h-3 w-3 text-destructive" />
-                                        </Button>
-                                      )}
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => setDeleteItemId(item.id)}
+                                      >
+                                        <Trash2 className="h-3 w-3 text-destructive" />
+                                      </Button>
                                     </div>
                                   );
                                 })}
