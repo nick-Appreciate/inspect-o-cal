@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList, ChevronDown, ChevronUp, History } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList, ChevronDown, ChevronUp, ChevronRight, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -55,6 +55,7 @@ interface Subtask {
   assigned_users?: string[];
   original_inspection_id: string;
   inspection_id: string;
+  inspection_run_id?: string | null;
   inventory_quantity?: number;
   inventory_type_id?: string | null;
   vendor_type_id?: string | null;
@@ -1170,110 +1171,6 @@ export default function InspectionDetailsDialog({
             </div>
           </div>
 
-          {/* Compact Footer - Assign All */}
-          {unassignedCount > 0 && (
-                                subtask.completed
-                                  ? "bg-muted/30 opacity-60"
-                                  : isInherited
-                                  ? "bg-accent/20"
-                                  : "hover:bg-accent/30"
-                              }`}
-                            >
-                              <Checkbox
-                                checked={subtask.completed}
-                                onCheckedChange={() => toggleSubtaskComplete(subtask.id, subtask.completed)}
-                                className="mt-0.5 flex-shrink-0"
-                              />
-                              <div className="flex-1 min-w-0 text-xs">
-                                <p className={subtask.completed ? "line-through text-muted-foreground" : ""}>
-                                  {subtask.description}
-                                </p>
-                                
-                                {/* Assigned Users */}
-                                {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
-                                  <div className="flex items-center gap-1 mt-1">
-                                    {subtask.assignedProfiles.slice(0, 3).map((profile, idx) => (
-                                      <UserAvatar
-                                        key={idx}
-                                        avatarUrl={profile.avatar_url}
-                                        name={profile.full_name}
-                                        email={profile.email}
-                                        size="sm"
-                                      />
-                                    ))}
-                                    {subtask.assignedProfiles.length > 3 && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        +{subtask.assignedProfiles.length - 3}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Creation and Completion Metadata */}
-                                <div className="mt-1 text-[10px] text-muted-foreground space-y-0.5">
-                                  {subtask.creatorProfile && (
-                                    <div>
-                                      Created by {subtask.creatorProfile.full_name || subtask.creatorProfile.email} • {formatDistanceToNow(new Date(subtask.created_at), { addSuffix: true })}
-                                    </div>
-                                  )}
-                                  {subtask.completed && subtask.completedByProfile && subtask.completed_at && (
-                                    <div className="text-green-600 dark:text-green-400">
-                                      Completed by {subtask.completedByProfile.full_name || subtask.completedByProfile.email} • {formatDistanceToNow(new Date(subtask.completed_at), { addSuffix: true })}
-                                    </div>
-                                  )}
-                                </div>
-                                
-                                {/* Quick Assign Dropdown */}
-                                {!subtask.completed && !isInherited && (
-                                  <Select
-                                    value=""
-                                    onValueChange={(userId) => handleAssignUser(subtask.id, userId)}
-                                  >
-                                    <SelectTrigger className="h-6 text-[10px] mt-1 w-24 px-1">
-                                      <SelectValue placeholder="+ Assign" />
-                                    </SelectTrigger>
-                                    <SelectContent className="max-h-48">
-                                      {users.map((user) => (
-                                        <SelectItem key={user.id} value={user.id} className="text-xs">
-                                          {user.full_name || user.email}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              </div>
-                              
-                              {!isInherited && !subtask.completed && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 flex-shrink-0"
-                                  onClick={() => handleDeleteSubtask(subtask.id)}
-                                >
-                                  <Trash2 className="h-3 w-3 text-destructive" />
-                                </Button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Add New Task */}
-              <Button
-                onClick={() => setShowAddTaskDialog(true)}
-                variant="outline"
-                size="sm"
-                className="w-full border-dashed h-10"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Task
-              </Button>
-            </div>
-          </div>
 
           {/* Compact Footer - Assign All */}
           {unassignedCount > 0 && (
