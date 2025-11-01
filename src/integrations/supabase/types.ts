@@ -14,32 +14,61 @@ export type Database = {
   }
   public: {
     Tables: {
+      floorplans: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       inspection_templates: {
         Row: {
           created_at: string
           created_by: string
           description: string | null
+          floorplan_id: string | null
           id: string
           name: string
-          type: string | null
         }
         Insert: {
           created_at?: string
           created_by: string
           description?: string | null
+          floorplan_id?: string | null
           id?: string
           name: string
-          type?: string | null
         }
         Update: {
           created_at?: string
           created_by?: string
           description?: string | null
+          floorplan_id?: string | null
           id?: string
           name?: string
-          type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "inspection_templates_floorplan_id_fkey"
+            columns: ["floorplan_id"]
+            isOneToOne: false
+            referencedRelation: "floorplans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inspection_types: {
         Row: {
@@ -307,6 +336,42 @@ export type Database = {
           },
         ]
       }
+      template_properties: {
+        Row: {
+          created_at: string
+          id: string
+          property_id: string
+          template_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          property_id: string
+          template_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          property_id?: string
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_properties_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_properties_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       template_rooms: {
         Row: {
           created_at: string
@@ -343,6 +408,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          floorplan_id: string | null
           id: string
           name: string
           property_id: string
@@ -350,6 +416,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
+          floorplan_id?: string | null
           id?: string
           name: string
           property_id: string
@@ -357,11 +424,19 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
+          floorplan_id?: string | null
           id?: string
           name?: string
           property_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "units_floorplan_id_fkey"
+            columns: ["floorplan_id"]
+            isOneToOne: false
+            referencedRelation: "floorplans"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "units_property_id_fkey"
             columns: ["property_id"]

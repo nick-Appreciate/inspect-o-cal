@@ -27,7 +27,6 @@ import { ClipboardCheck, X, Plus } from "lucide-react";
 interface Template {
   id: string;
   name: string;
-  type: string | null;
 }
 
 interface Room {
@@ -58,7 +57,6 @@ interface InventoryType {
 interface StartInspectionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  inspectionType: string;
   inspectionId: string;
   onInspectionStarted?: () => void;
 }
@@ -72,7 +70,6 @@ interface Profile {
 export function StartInspectionDialog({
   open,
   onOpenChange,
-  inspectionType,
   inspectionId,
   onInspectionStarted,
 }: StartInspectionDialogProps) {
@@ -101,7 +98,7 @@ export function StartInspectionDialog({
   const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
 
   useEffect(() => {
-    if (open && inspectionType) {
+    if (open) {
       fetchTemplates();
       fetchUsers();
       fetchInventoryTypes();
@@ -117,13 +114,12 @@ export function StartInspectionDialog({
       setNewItemQuantity(0);
       setNewItemType("");
     }
-  }, [open, inspectionType]);
+  }, [open]);
 
   const fetchTemplates = async () => {
     const { data, error } = await supabase
       .from("inspection_templates")
-      .select("id, name, type")
-      .eq("type", inspectionType)
+      .select("id, name")
       .order("name");
 
     if (error) {
@@ -365,7 +361,7 @@ export function StartInspectionDialog({
           </DialogTitle>
           <DialogDescription>
             {step === "select"
-              ? `Select a template to start the ${inspectionType} inspection`
+              ? "Select a template to start the inspection"
               : `Check items that pass inspection. Unchecked items will become subtasks.`}
           </DialogDescription>
         </DialogHeader>
@@ -374,7 +370,7 @@ export function StartInspectionDialog({
           <div className="space-y-4 py-4">
             {templates.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No templates found for {inspectionType}
+                No templates found
               </p>
             ) : (
               <div>

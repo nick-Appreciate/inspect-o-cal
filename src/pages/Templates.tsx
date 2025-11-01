@@ -8,6 +8,7 @@ import { TemplateBuilder } from "@/components/TemplateBuilder";
 import { InventoryTypesDialog } from "@/components/InventoryTypesDialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -30,36 +31,53 @@ interface Template {
   id: string;
   name: string;
   description: string | null;
-  type?: string | null;
+  floorplan_id?: string | null;
+  floorplan?: { name: string } | null;
+  template_properties?: { property_id: string; properties: { name: string } }[];
 }
 
-const inspectionTypes = [
-  "S8 - RFT",
-  "S8 - 1st Annual",
-  "S8 - Reinspection",
-  "S8 - Abatement Cure",
-  "Rental License",
-  "HUD",
-];
+interface Floorplan {
+  id: string;
+  name: string;
+}
+
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+}
 
 export default function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
-  const [newTemplateType, setNewTemplateType] = useState("");
+  const [newFloorplanId, setNewFloorplanId] = useState("");
+  const [newFloorplanName, setNewFloorplanName] = useState("");
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [duplicateFromTemplate, setDuplicateFromTemplate] = useState("");
   const [showInventoryTypes, setShowInventoryTypes] = useState(false);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+  const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
 
   useEffect(() => {
     fetchTemplates();
+    fetchFloorplans();
+    fetchProperties();
   }, []);
 
   const fetchTemplates = async () => {
     const { data, error } = await supabase
       .from("inspection_templates")
-      .select("*")
+      .select(`
+        *,
+        floorplan:floorplans(name),
+        template_properties(
+          property_id,
+          properties(name)
+        )
+      `)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -70,25 +88,64 @@ export default function Templates() {
     setTemplates(data || []);
   };
 
+  const fetchFloorplans = async () => {
+    const { data, error } = await supabase
+      .from("floorplans")
+      .select("*")
+      .order("name");
+
+    if (!error && data) {
+      setFloorplans(data);
+    }
+  };
+
+  const fetchProperties = async () => {
+    const { data, error } = await supabase
+      .from("properties")
+      .select("*")
+      .order("name");
+
+    if (!error && data) {
+      setProperties(data);
+    }
+  };
+
   const createTemplate = async () => {
     if (!newTemplateName.trim()) {
       toast.error("Please enter a template name");
       return;
     }
 
-    if (!newTemplateType) {
-      toast.error("Please select an inspection type");
-      return;
-    }
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    let floorplanId = newFloorplanId;
+
+    // Create new floorplan if name is provided
+    if (newFloorplanName.trim()) {
+      const { data: newFloorplan, error: floorplanError } = await supabase
+        .from("floorplans")
+        .insert({
+          name: newFloorplanName,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (floorplanError) {
+        toast.error("Failed to create floorplan");
+        return;
+      }
+
+      floorplanId = newFloorplan.id;
+      setFloorplans([...floorplans, newFloorplan]);
+    }
 
     const { data, error } = await supabase
       .from("inspection_templates")
       .insert({
         name: newTemplateName,
-        type: newTemplateType,
+        floorplan_id: floorplanId || null,
         created_by: user.id,
       })
       .select()
@@ -99,15 +156,27 @@ export default function Templates() {
       return;
     }
 
+    // Associate template with selected properties
+    if (selectedPropertyIds.length > 0) {
+      const propertyAssociations = selectedPropertyIds.map(propertyId => ({
+        template_id: data.id,
+        property_id: propertyId,
+      }));
+
+      await supabase.from("template_properties").insert(propertyAssociations);
+    }
+
     // If duplicating from another template, copy rooms and items
     if (duplicateFromTemplate) {
       await duplicateTemplateContent(duplicateFromTemplate, data.id);
     }
 
-    setTemplates([data, ...templates]);
+    await fetchTemplates();
     setSelectedTemplate(data.id);
     setNewTemplateName("");
-    setNewTemplateType("");
+    setNewFloorplanId("");
+    setNewFloorplanName("");
+    setSelectedPropertyIds([]);
     setDuplicateFromTemplate("");
     setShowNewTemplate(false);
     toast.success("Template created");
@@ -222,19 +291,66 @@ export default function Templates() {
               />
             </div>
             <div>
-              <Label>Inspection Type *</Label>
-              <Select value={newTemplateType} onValueChange={setNewTemplateType}>
+              <Label>Floorplan (Optional)</Label>
+              <Select 
+                value={newFloorplanId} 
+                onValueChange={(value) => {
+                  setNewFloorplanId(value);
+                  if (value) setNewFloorplanName("");
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select inspection type" />
+                  <SelectValue placeholder="Select existing floorplan" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  {inspectionTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
+                  {floorplans.map((floorplan) => (
+                    <SelectItem key={floorplan.id} value={floorplan.id}>
+                      {floorplan.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Or Create New Floorplan</Label>
+              <Input
+                placeholder="New floorplan name..."
+                value={newFloorplanName}
+                onChange={(e) => {
+                  setNewFloorplanName(e.target.value);
+                  if (e.target.value) setNewFloorplanId("");
+                }}
+              />
+            </div>
+            <div>
+              <Label>Associate with Properties (Optional)</Label>
+              <div className="border rounded-md p-4 max-h-48 overflow-y-auto space-y-2">
+                {properties.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No properties available</p>
+                ) : (
+                  properties.map((property) => (
+                    <div key={property.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={property.id}
+                        checked={selectedPropertyIds.includes(property.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedPropertyIds([...selectedPropertyIds, property.id]);
+                          } else {
+                            setSelectedPropertyIds(selectedPropertyIds.filter(id => id !== property.id));
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={property.id}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {property.name} - {property.address}
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
             <div>
               <Label>Duplicate from Template (Optional)</Label>
@@ -258,7 +374,9 @@ export default function Templates() {
                 onClick={() => {
                   setShowNewTemplate(false);
                   setNewTemplateName("");
-                  setNewTemplateType("");
+                  setNewFloorplanId("");
+                  setNewFloorplanName("");
+                  setSelectedPropertyIds([]);
                   setDuplicateFromTemplate("");
                 }}
               >
@@ -282,9 +400,18 @@ export default function Templates() {
             <CardHeader className="flex flex-row items-start justify-between space-y-0">
               <div className="flex-1" onClick={() => setSelectedTemplate(template.id)}>
                 <CardTitle>{template.name}</CardTitle>
-                {template.type && (
-                  <p className="text-sm text-muted-foreground mt-1">{template.type}</p>
-                )}
+                <div className="space-y-1 mt-1">
+                  {template.floorplan && (
+                    <p className="text-sm text-muted-foreground">
+                      Floorplan: {template.floorplan.name}
+                    </p>
+                  )}
+                  {template.template_properties && template.template_properties.length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Properties: {template.template_properties.map(tp => tp.properties.name).join(", ")}
+                    </p>
+                  )}
+                </div>
               </div>
               <Button
                 variant="ghost"
