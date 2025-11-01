@@ -138,7 +138,8 @@ export function TemplateBuilder({
     const roomTemplate = roomTemplates.find(rt => rt.id === selectedRoomTemplate);
     if (!roomTemplate) return;
 
-    const { data, error } = await supabase
+    // Create the room
+    const { data: newRoom, error: roomError } = await supabase
       .from("template_rooms")
       .insert({
         template_id: templateId,
@@ -149,15 +150,53 @@ export function TemplateBuilder({
       .select()
       .single();
 
-    if (error) {
-      console.error("Failed to add room:", error);
-      toast.error(error.message || "Failed to add room");
+    if (roomError) {
+      console.error("Failed to add room:", roomError);
+      toast.error(roomError.message || "Failed to add room");
       return;
     }
 
-    setRooms([...rooms, data]);
+    // Fetch tasks from the room template
+    const { data: templateItems, error: itemsError } = await supabase
+      .from("room_template_items" as any)
+      .select("*")
+      .eq("room_template_id", selectedRoomTemplate)
+      .order("order_index");
+
+    if (itemsError) {
+      console.error("Failed to fetch template items:", itemsError);
+      toast.error("Room added but failed to copy tasks");
+      setRooms([...rooms, newRoom]);
+      setSelectedRoomTemplate("");
+      return;
+    }
+
+    // Copy tasks to the new room if any exist
+    if (templateItems && templateItems.length > 0) {
+      const itemsToInsert = templateItems.map((item: any) => ({
+        room_id: newRoom.id,
+        description: item.description,
+        order_index: item.order_index,
+        inventory_type_id: item.inventory_type_id,
+        inventory_quantity: item.inventory_quantity,
+      }));
+
+      const { error: insertItemsError } = await supabase
+        .from("template_items")
+        .insert(itemsToInsert);
+
+      if (insertItemsError) {
+        console.error("Failed to copy template items:", insertItemsError);
+        toast.error("Room added but failed to copy some tasks");
+      }
+
+      // Fetch the newly added items to update the UI
+      await fetchItems(newRoom.id);
+    }
+
+    setRooms([...rooms, newRoom]);
     setSelectedRoomTemplate("");
-    toast.success("Room added from template");
+    toast.success(`Room added with ${templateItems?.length || 0} tasks`);
   };
 
   const deleteRoom = async (roomId: string) => {
