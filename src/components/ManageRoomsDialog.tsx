@@ -229,7 +229,8 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
     setNewRoomName("");
     setSelectedDuplicateRoomId("");
-    fetchRooms();
+    // Refresh rooms and default task associations so toggles show correctly
+    await Promise.all([fetchRooms(), fetchDefaultTasks(), fetchRoomItems((newRoom as any).id)]);
   };
 
   const deleteRoom = async () => {
