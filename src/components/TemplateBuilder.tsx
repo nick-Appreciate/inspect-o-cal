@@ -96,6 +96,7 @@ export function TemplateBuilder({
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [showTemplateSettings, setShowTemplateSettings] = useState(true);
+  const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchRooms();
@@ -125,8 +126,12 @@ export function TemplateBuilder({
     }
 
     setRooms(data || []);
-    if (data && data.length > 0 && !selectedRoom) {
-      setSelectedRoom(data[0].id);
+    if (data && data.length > 0) {
+      if (!selectedRoom) {
+        setSelectedRoom(data[0].id);
+      }
+      // Auto-expand all rooms by default
+      setExpandedRoomIds(new Set(data.map(r => r.id)));
     }
   };
 
@@ -339,6 +344,7 @@ export function TemplateBuilder({
 
     setRooms([...rooms, newRoom]);
     setSelectedRoomTemplate("");
+    setExpandedRoomIds(prev => new Set([...prev, newRoom.id]));
     toast.success(`Room added with ${templateItems?.length || 0} tasks`);
   };
 
@@ -452,6 +458,18 @@ export function TemplateBuilder({
     toast.success("Room order updated");
   };
 
+  const toggleRoomExpansion = (roomId: string) => {
+    setExpandedRoomIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(roomId)) {
+        newSet.delete(roomId);
+      } else {
+        newSet.add(roomId);
+      }
+      return newSet;
+    });
+  };
+
   interface SortableRoomItemProps {
     room: Room;
     items: Item[];
@@ -459,6 +477,8 @@ export function TemplateBuilder({
     newItemDescription: string;
     newItemQuantity: number;
     newItemType: string;
+    isExpanded: boolean;
+    onToggleExpansion: () => void;
     onDescriptionChange: (value: string) => void;
     onQuantityChange: (value: number) => void;
     onTypeChange: (value: string) => void;
@@ -474,6 +494,8 @@ export function TemplateBuilder({
     newItemDescription,
     newItemQuantity,
     newItemType,
+    isExpanded,
+    onToggleExpansion,
     onDescriptionChange,
     onQuantityChange,
     onTypeChange,
@@ -499,23 +521,44 @@ export function TemplateBuilder({
     return (
       <div ref={setNodeRef} style={style} className="space-y-4">
         {/* Room Header */}
-        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+        <div 
+          className="flex items-center justify-between p-4 bg-muted rounded-lg cursor-pointer hover:bg-muted/80 transition-colors"
+          onClick={onToggleExpansion}
+        >
           <div className="flex items-center gap-2">
-            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+            <div 
+              {...attributes} 
+              {...listeners} 
+              className="cursor-grab active:cursor-grabbing"
+              onClick={(e) => e.stopPropagation()}
+            >
               <GripVertical className="h-5 w-5 text-muted-foreground" />
             </div>
+            <ChevronDown 
+              className={`h-4 w-4 transition-transform ${
+                isExpanded ? 'rotate-180' : ''
+              }`}
+            />
             <h3 className="text-lg font-semibold">{room.name}</h3>
+            <span className="text-sm text-muted-foreground">
+              ({items.length} task{items.length !== 1 ? 's' : ''})
+            </span>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            onClick={onDeleteRoom}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteRoom();
+            }}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Add Item Form for this Room */}
+        {isExpanded && (
+          <>
+            {/* Add Item Form for this Room */}
         <div className="ml-6 space-y-3 border rounded-md p-4 bg-background">
           <div>
             <Label>Task</Label>
@@ -648,6 +691,8 @@ export function TemplateBuilder({
             </p>
           )}
         </div>
+        </>
+        )}
       </div>
     );
   }
@@ -691,7 +736,7 @@ export function TemplateBuilder({
                       <SelectValue placeholder="Select floorplan" />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
-                      <SelectItem value="none">No Floorplan</SelectItem>
+                      <SelectItem value="none">Property Inspection</SelectItem>
                       {floorplans.map((floorplan) => (
                         <SelectItem key={floorplan.id} value={floorplan.id}>
                           {floorplan.name}
@@ -788,6 +833,8 @@ export function TemplateBuilder({
                   newItemDescription={newItemDescription[room.id] || ""}
                   newItemQuantity={newItemQuantity[room.id] || 0}
                   newItemType={newItemType[room.id] || ""}
+                  isExpanded={expandedRoomIds.has(room.id)}
+                  onToggleExpansion={() => toggleRoomExpansion(room.id)}
                   onDescriptionChange={(value) =>
                     setNewItemDescription((prev) => ({ ...prev, [room.id]: value }))
                   }
