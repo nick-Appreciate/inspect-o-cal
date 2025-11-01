@@ -400,6 +400,7 @@ export type Database = {
           inventory_quantity: number | null
           inventory_type_id: string | null
           original_inspection_id: string
+          room_name: string | null
           vendor_type_id: string | null
         }
         Insert: {
@@ -414,6 +415,7 @@ export type Database = {
           inventory_quantity?: number | null
           inventory_type_id?: string | null
           original_inspection_id: string
+          room_name?: string | null
           vendor_type_id?: string | null
         }
         Update: {
@@ -428,6 +430,7 @@ export type Database = {
           inventory_quantity?: number | null
           inventory_type_id?: string | null
           original_inspection_id?: string
+          room_name?: string | null
           vendor_type_id?: string | null
         }
         Relationships: [
