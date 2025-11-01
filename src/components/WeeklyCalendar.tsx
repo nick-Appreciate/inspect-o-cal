@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -238,25 +238,41 @@ export default function WeeklyCalendar({
   }, [resizingInspection, handleResizeMove, handleResizeEnd]);
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">
+    <Card className="p-3 sm:p-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+        <h2 className="text-lg sm:text-2xl font-bold">
           {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
         </h2>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={goToToday}>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={goToToday} size="sm" className="flex-1 sm:flex-none">
             Today
           </Button>
-          <Button variant="outline" size="icon" onClick={previousWeek}>
+          <Button variant="outline" size="icon" onClick={previousWeek} className="h-9 w-9">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={nextWeek}>
+          <Button variant="outline" size="icon" onClick={nextWeek} className="h-9 w-9">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <div className="flex overflow-x-auto">
+      {/* Mobile: Show message about desktop-only feature */}
+      <div className="block lg:hidden">
+        <div className="border rounded-lg p-6 text-center bg-muted/30">
+          <Calendar className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+          <h3 className="font-semibold mb-2">Weekly Calendar View</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            The interactive weekly calendar with drag & drop is optimized for desktop screens.
+          </p>
+          <Button onClick={() => window.location.href = "/"} variant="outline" size="sm">
+            <Calendar className="h-4 w-4 mr-2" />
+            View Month Calendar
+          </Button>
+        </div>
+      </div>
+
+      {/* Desktop: Show full weekly calendar */}
+      <div className="hidden lg:flex overflow-x-auto">
         {/* Time column */}
         <div className="flex-shrink-0 w-16 border-r">
           <div className="h-16 border-b" /> {/* Header spacer */}

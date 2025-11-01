@@ -5,6 +5,7 @@ import { Trash2, ArrowLeft, Search, ArrowUpDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import { DeleteInspectionDialog } from "@/components/DeleteInspectionDialog";
 import { CompleteInspectionDialog } from "@/components/CompleteInspectionDialog";
@@ -546,7 +547,9 @@ const Inspections = () => {
                 <p className="text-muted-foreground">No inspections match your search</p>
               </div>
             ) : (
-              <div className="rounded-lg border bg-card overflow-x-auto">
+              <>
+                {/* Desktop: Table View */}
+                <div className="hidden md:block rounded-lg border bg-card overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -689,6 +692,90 @@ const Inspections = () => {
                   </TableBody>
                 </Table>
               </div>
+
+              {/* Mobile: Card View */}
+              <div className="md:hidden space-y-4">
+                {Object.entries(groupedByProperty).map(([propertyId, { property, chains }]) => (
+                  <div key={propertyId} className="space-y-3">
+                    {/* Property Header */}
+                    <div className="bg-muted/30 rounded-lg p-3">
+                      <div className="font-semibold text-sm">{property.name}</div>
+                      <div className="text-xs text-muted-foreground">{property.address}</div>
+                    </div>
+
+                    {/* Inspections */}
+                    {chains.map((chain) =>
+                      chain.map((inspection, idx) => {
+                        const isPast = isInspectionPast(inspection.date, inspection.id);
+                        return (
+                          <Card
+                            key={inspection.id}
+                            className={`cursor-pointer transition-colors ${
+                              isPast ? "bg-red-50 dark:bg-red-950/20" : ""
+                            } ${inspection.completed ? "opacity-60" : ""} ${
+                              idx > 0 ? "border-l-4 border-l-primary/30 ml-4" : ""
+                            }`}
+                            onClick={() => {
+                              setSelectedInspectionId(inspection.id);
+                              setDetailsDialogOpen(true);
+                            }}
+                          >
+                            <CardContent className="p-3 space-y-2">
+                              {/* Checkbox and Type */}
+                              <div className="flex items-start gap-2">
+                                <Checkbox
+                                  checked={inspection.completed}
+                                  onCheckedChange={(checked) =>
+                                    handleToggleCompleteClick(inspection.id, inspection.completed, {
+                                      stopPropagation: () => {},
+                                    } as any)
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="mt-1"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    {idx > 0 && (
+                                      <span className="text-xs text-muted-foreground">└─</span>
+                                    )}
+                                    <Badge className={getInspectionColor(inspection.type)}>
+                                      {inspection.type}
+                                    </Badge>
+                                  </div>
+                                  
+                                  {/* Date and Time */}
+                                  <div className="text-xs text-muted-foreground space-y-0.5">
+                                    <div>
+                                      📅 {format(new Date(inspection.date), "MMM d, yyyy")} at {inspection.time}
+                                    </div>
+                                    {inspection.unit && (
+                                      <div>🏢 Unit: {inspection.unit.name}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Delete Button */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 flex-shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(inspection.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
             )}
           </div>
         )}

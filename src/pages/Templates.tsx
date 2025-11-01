@@ -296,33 +296,39 @@ export default function Templates() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Inspection Templates</h1>
-        <div className="flex gap-2">
+    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Inspection Templates</h1>
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setShowManageRooms(true)}
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
-            <Settings className="mr-2 h-4 w-4" />
-            Manage Rooms
+            <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Manage </span>Rooms
           </Button>
           <Button
             variant="outline"
             onClick={() => setShowInventoryTypes(true)}
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
-            <Settings className="mr-2 h-4 w-4" />
-            Inventory Types
+            <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Inventory </span>Types
           </Button>
           <Button
             variant="outline"
             onClick={() => setShowVendorTypes(true)}
+            size="sm"
+            className="flex-1 sm:flex-none"
           >
-            <Settings className="mr-2 h-4 w-4" />
-            Vendor Types
+            <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Vendor </span>Types
           </Button>
-          <Button onClick={() => setShowNewTemplate(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button onClick={() => setShowNewTemplate(true)} size="sm" className="w-full sm:w-auto">
+            <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
             New Template
           </Button>
         </div>
@@ -455,7 +461,7 @@ export default function Templates() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {templates.map((template) => (
           <Card
             key={template.id}
@@ -466,17 +472,17 @@ export default function Templates() {
             }`}
             onClick={() => setSelectedTemplate(template.id)}
           >
-            <CardHeader className="flex flex-row items-start justify-between space-y-0">
-              <div className="flex-1">
-                <CardTitle>{template.name}</CardTitle>
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 p-4 sm:p-6">
+              <div className="flex-1 min-w-0">
+                <CardTitle className="text-base sm:text-lg truncate">{template.name}</CardTitle>
                 <div className="space-y-1 mt-1">
                   {template.floorplan && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
                       Floorplan: {template.floorplan.name}
                     </p>
                   )}
                   {template.template_properties && template.template_properties.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
                       Properties: {template.template_properties.map(tp => tp.properties.name).join(", ")}
                     </p>
                   )}
@@ -489,8 +495,9 @@ export default function Templates() {
                   e.stopPropagation();
                   setDeleteTemplateId(template.id);
                 }}
+                className="flex-shrink-0 h-8 w-8"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
             </CardHeader>
           </Card>
