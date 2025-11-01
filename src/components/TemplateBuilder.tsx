@@ -3,9 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, GripVertical, ChevronDown } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ExternalLink, Info } from "lucide-react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -49,6 +50,7 @@ interface Item {
   inventory_quantity: number;
   inventory_type_id: string | null;
   order_index: number;
+  source_room_template_item_id?: string | null;
 }
 
 interface InventoryType {
@@ -78,9 +80,11 @@ interface TemplateInfo {
 export function TemplateBuilder({
   templateId,
   onClose,
+  onOpenRoomTemplates,
 }: {
   templateId: string;
   onClose: () => void;
+  onOpenRoomTemplates?: () => void;
 }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomTemplates, setRoomTemplates] = useState<RoomTemplate[]>([]);
@@ -112,6 +116,33 @@ export function TemplateBuilder({
       fetchItems(room.id);
     });
   }, [rooms]);
+
+  // Realtime subscription for template items updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('template-items-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'template_items',
+        },
+        (payload) => {
+          // Refresh items for the affected room
+          if (payload.new && 'room_id' in payload.new) {
+            fetchItems(payload.new.room_id as string);
+          } else if (payload.old && 'room_id' in payload.old) {
+            fetchItems(payload.old.room_id as string);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const fetchRooms = async () => {
     const { data, error } = await supabase
@@ -539,6 +570,12 @@ export function TemplateBuilder({
       opacity: isDragging ? 0.5 : 1,
     };
 
+    const handleRoomClick = () => {
+      if (room.room_template_id && onOpenRoomTemplates) {
+        onOpenRoomTemplates();
+      }
+    };
+
     return (
       <div ref={setNodeRef} style={style} className="space-y-4">
         {/* Room Header */}
@@ -561,6 +598,20 @@ export function TemplateBuilder({
               }`}
             />
             <h3 className="text-lg font-semibold">{room.name}</h3>
+            {room.room_template_id && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRoomClick();
+                }}
+                title="View Room Template"
+              >
+                <ExternalLink className="h-4 w-4 text-primary" />
+              </Button>
+            )}
             <span className="text-sm text-muted-foreground">
               ({items.length} task{items.length !== 1 ? 's' : ''})
             </span>
@@ -680,30 +731,52 @@ export function TemplateBuilder({
             items.map((item) => (
               <div
                 key={item.id}
-                className="flex items-start justify-between p-3 border rounded-md bg-background"
+                className={`flex items-start justify-between p-3 border rounded-md bg-background ${
+                  item.source_room_template_item_id ? 'cursor-pointer hover:bg-accent/50 transition-colors' : ''
+                }`}
+                onClick={() => {
+                  if (item.source_room_template_item_id && onOpenRoomTemplates) {
+                    onOpenRoomTemplates();
+                  }
+                }}
               >
-                <div className="flex-1">
-                  <p className="font-medium">{item.description}</p>
-                  {item.inventory_quantity > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Quantity: {item.inventory_quantity}
-                      {item.inventory_type_id && (
-                        <>
-                          {" "}
-                          • Type:{" "}
-                          {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
-                        </>
-                      )}
-                    </p>
+                <div className="flex-1 flex items-start gap-2">
+                  <div className="flex-1">
+                    <p className="font-medium">{item.description}</p>
+                    {item.inventory_quantity > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        Quantity: {item.inventory_quantity}
+                        {item.inventory_type_id && (
+                          <>
+                            {" "}
+                            • Type:{" "}
+                            {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
+                          </>
+                        )}
+                      </p>
+                    )}
+                    {item.source_room_template_item_id && (
+                      <p className="text-xs text-primary mt-1">
+                        Synced from room template
+                      </p>
+                    )}
+                  </div>
+                  {item.source_room_template_item_id && (
+                    <ExternalLink className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
                   )}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onDeleteItem(item.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {!item.source_room_template_item_id && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteItem(item.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             ))
           ) : (
@@ -722,7 +795,25 @@ export function TemplateBuilder({
     <Card className="flex flex-col max-h-[85vh]">
       <CardHeader className="flex-shrink-0">
         <div className="flex justify-between items-center">
-          <CardTitle>Template Builder</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle>Template Builder</CardTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-sm">
+                  <p className="text-sm">
+                    Tasks marked as "Synced from room template" are controlled at the room template level. 
+                    When you update the room template, changes automatically sync to all inspection templates using it. 
+                    You can add custom tasks directly here, but synced tasks can only be edited in the room template.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>

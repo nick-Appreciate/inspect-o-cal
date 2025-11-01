@@ -449,6 +449,7 @@ export default function Templates() {
         <TemplateBuilder
           templateId={selectedTemplate}
           onClose={() => setSelectedTemplate(null)}
+          onOpenRoomTemplates={() => setShowManageRooms(true)}
         />
       )}
 
