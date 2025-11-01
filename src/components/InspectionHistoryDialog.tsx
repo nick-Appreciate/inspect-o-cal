@@ -8,7 +8,8 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, CheckCircle2, XCircle, User, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, Clock, CheckCircle2, XCircle, User, ArrowRight, Circle } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -59,6 +60,7 @@ export function InspectionHistoryDialog({
   const [history, setHistory] = useState<HistoricalInspection[]>([]);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<Record<string, { full_name: string | null }>>({});
+  const [showAllItems, setShowAllItems] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -162,7 +164,9 @@ export function InspectionHistoryDialog({
           st => st.original_inspection_id === inspection.id
         );
 
-        const subtasksWithStatus: SubtaskWithStatus[] = initialSubtasks.map(initial => {
+        const subtasksWithStatus: SubtaskWithStatus[] = initialSubtasks
+          .filter(initial => showAllItems || initial.status === 'bad')
+          .map(initial => {
           const key = `${initial.room_name || 'no-room'}-${initial.description}`;
           
           // Find latest status of this issue across all inspections
@@ -232,7 +236,16 @@ export function InspectionHistoryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>Inspection History</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Inspection History</DialogTitle>
+            <Button
+              variant={showAllItems ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowAllItems(!showAllItems)}
+            >
+              {showAllItems ? "Show Problems Only" : "Show All Items"}
+            </Button>
+          </div>
         </DialogHeader>
         
         {loading ? (
@@ -286,29 +299,51 @@ export function InspectionHistoryDialog({
                   {inspection.subtasks.length > 0 && (
                     <div className="space-y-2 pt-2 border-t">
                       <h4 className="text-sm font-medium">
-                        Issues Found ({inspection.subtasks.length})
+                        {showAllItems ? 'Items Checked' : 'Issues Found'} ({inspection.subtasks.length})
                       </h4>
                       <div className="space-y-2">
-                        {inspection.subtasks.map((subtask) => (
-                          <div
-                            key={subtask.id}
-                            className={`border rounded p-3 ${
-                              subtask.status_changed ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800' : 'bg-muted/30'
-                            }`}
-                          >
-                            <div className="space-y-2">
-                              {/* Issue Description */}
-                              <div className="flex items-start gap-2">
-                                <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium">{subtask.description}</p>
-                                  {subtask.room_name && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Room: {subtask.room_name}
-                                    </p>
+                        {inspection.subtasks.map((subtask) => {
+                          const isGood = subtask.initial_status === 'good';
+                          const isBad = subtask.initial_status === 'bad';
+                          
+                          return (
+                            <div
+                              key={subtask.id}
+                              className={`border rounded p-3 ${
+                                subtask.status_changed 
+                                  ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800' 
+                                  : isGood 
+                                  ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
+                                  : 'bg-muted/30'
+                              }`}
+                            >
+                              <div className="space-y-2">
+                                {/* Item Description */}
+                                <div className="flex items-start gap-2">
+                                  {isGood ? (
+                                    <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                                  ) : isBad ? (
+                                    <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                                  ) : (
+                                    <Circle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                                   )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium">{subtask.description}</p>
+                                      <Badge 
+                                        variant={isGood ? "default" : isBad ? "destructive" : "outline"}
+                                        className="text-xs"
+                                      >
+                                        {isGood ? "Good" : isBad ? "Bad" : "Unchecked"}
+                                      </Badge>
+                                    </div>
+                                    {subtask.room_name && (
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        Room: {subtask.room_name}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
 
                               {/* Initial vs Current Status */}
                               <div className="grid grid-cols-[1fr,auto,1fr] gap-2 items-center text-xs">
@@ -380,7 +415,8 @@ export function InspectionHistoryDialog({
                               )}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
