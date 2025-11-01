@@ -192,14 +192,16 @@ export default function AddInspectionDialog({
           Add Inspection
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Add New Inspection</DialogTitle>
-          <DialogDescription>
-            Schedule a new property inspection with all required details.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-0">
+        <div className="p-6 pb-3 flex-shrink-0">
+          <DialogHeader>
+            <DialogTitle>Add New Inspection</DialogTitle>
+            <DialogDescription>
+              Schedule a new property inspection with all required details.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+        <div className="space-y-4 py-4 px-6 overflow-y-auto flex-1">
           <div className="space-y-2">
             <Label htmlFor="type">Inspection Type</Label>
             <Select value={type} onValueChange={(value) => setType(value as InspectionType)}>
@@ -390,12 +392,14 @@ export default function AddInspectionDialog({
             </div>
           </div>
         </div>
-        <DialogFooter>
+        <div className="p-6 pt-3 flex-shrink-0 border-t">
+          <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
           <Button onClick={handleSubmit}>Add Inspection</Button>
-        </DialogFooter>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

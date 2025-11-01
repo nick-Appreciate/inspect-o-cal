@@ -209,8 +209,8 @@ export function TemplateBuilder({
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col max-h-[85vh]">
+      <CardHeader className="flex-shrink-0">
         <div className="flex justify-between items-center">
           <CardTitle>Template Builder</CardTitle>
           <Button variant="outline" onClick={onClose}>
@@ -218,7 +218,7 @@ export function TemplateBuilder({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 overflow-y-auto flex-1">
         {/* Add New Room */}
         <div className="space-y-2">
           <Label>Add New Room</Label>

@@ -395,18 +395,20 @@ export default function InspectionDetailsDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              Inspection Details
-            </DialogTitle>
-            <DialogDescription>
-              View inspection information and manage subtasks
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+          <div className="p-6 pb-3">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Inspection Details
+              </DialogTitle>
+              <DialogDescription>
+                View inspection information and manage subtasks
+              </DialogDescription>
+            </DialogHeader>
+          </div>
 
-          <div className="space-y-6">
+          <div className="space-y-6 overflow-y-auto px-6 pb-6 flex-1">
             <div>
               <div className="flex items-center justify-between mb-4">
                 <Badge className={`${getInspectionColor(inspection.type)} text-white`}>
