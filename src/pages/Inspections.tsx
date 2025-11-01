@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import { DeleteInspectionDialog } from "@/components/DeleteInspectionDialog";
 import { CompleteInspectionDialog } from "@/components/CompleteInspectionDialog";
+import { UnCompleteInspectionDialog } from "@/components/UnCompleteInspectionDialog";
 import {
   Table,
   TableBody,
@@ -53,6 +54,9 @@ const Inspections = () => {
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
   const [inspectionToComplete, setInspectionToComplete] = useState<Inspection | null>(null);
   const [connectedInspectionsToComplete, setConnectedInspectionsToComplete] = useState<Inspection[]>([]);
+  const [unCompleteDialogOpen, setUnCompleteDialogOpen] = useState(false);
+  const [inspectionToUnComplete, setInspectionToUnComplete] = useState<Inspection | null>(null);
+  const [connectedInspectionsToUnComplete, setConnectedInspectionsToUnComplete] = useState<Inspection[]>([]);
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -154,25 +158,25 @@ const Inspections = () => {
   const handleToggleCompleteClick = async (inspectionId: string, currentCompleted: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // If marking as complete, check for connected inspections
-    if (!currentCompleted) {
-      const completingInspection = inspections.find(i => i.id === inspectionId);
-      if (!completingInspection) return;
+    const toggleInspection = inspections.find(i => i.id === inspectionId);
+    if (!toggleInspection) return;
 
+    // If marking as complete, check for connected incomplete inspections
+    if (!currentCompleted) {
       console.log('Completing inspection:', {
         id: inspectionId,
-        type: completingInspection.type,
-        parentId: completingInspection.parent_inspection_id
+        type: toggleInspection.type,
+        parentId: toggleInspection.parent_inspection_id
       });
 
       const connectedInspections = inspections.filter(i => 
         ((i.parent_inspection_id === inspectionId) || // Children
-        (completingInspection.parent_inspection_id && i.id === completingInspection.parent_inspection_id) || // Parent
-        (completingInspection.parent_inspection_id && i.parent_inspection_id === completingInspection.parent_inspection_id && i.id !== inspectionId)) // Siblings
+        (toggleInspection.parent_inspection_id && i.id === toggleInspection.parent_inspection_id) || // Parent
+        (toggleInspection.parent_inspection_id && i.parent_inspection_id === toggleInspection.parent_inspection_id && i.id !== inspectionId)) // Siblings
         && !i.completed // Only incomplete ones
       );
 
-      console.log('Found connected inspections:', connectedInspections.map(i => ({
+      console.log('Found connected incomplete inspections:', connectedInspections.map(i => ({
         id: i.id,
         type: i.type,
         date: i.date,
@@ -181,9 +185,38 @@ const Inspections = () => {
 
       if (connectedInspections.length > 0) {
         // Show dialog with checkboxes
-        setInspectionToComplete(completingInspection);
+        setInspectionToComplete(toggleInspection);
         setConnectedInspectionsToComplete(connectedInspections);
         setCompleteDialogOpen(true);
+        return;
+      }
+    } else {
+      // If marking as incomplete, check for connected completed inspections
+      console.log('Uncompleting inspection:', {
+        id: inspectionId,
+        type: toggleInspection.type,
+        parentId: toggleInspection.parent_inspection_id
+      });
+
+      const connectedInspections = inspections.filter(i => 
+        ((i.parent_inspection_id === inspectionId) || // Children
+        (toggleInspection.parent_inspection_id && i.id === toggleInspection.parent_inspection_id) || // Parent
+        (toggleInspection.parent_inspection_id && i.parent_inspection_id === toggleInspection.parent_inspection_id && i.id !== inspectionId)) // Siblings
+        && i.completed // Only completed ones
+      );
+
+      console.log('Found connected completed inspections:', connectedInspections.map(i => ({
+        id: i.id,
+        type: i.type,
+        date: i.date,
+        parentId: i.parent_inspection_id
+      })));
+
+      if (connectedInspections.length > 0) {
+        // Show uncomplete dialog with checkboxes
+        setInspectionToUnComplete(toggleInspection);
+        setConnectedInspectionsToUnComplete(connectedInspections);
+        setUnCompleteDialogOpen(true);
         return;
       }
     }
@@ -250,6 +283,43 @@ const Inspections = () => {
       if (!showCompleted) {
         toast("Completed inspections are hidden. Use 'Show Completed' to view them.");
       }
+      fetchInspections(); // Refresh the list
+    } catch (err) {
+      console.error("Error updating inspections:", err);
+      toast.error("An error occurred");
+    }
+  };
+
+  const handleUnCompleteConfirm = async (inspectionIdsToUncomplete: string[]) => {
+    console.log('handleUnCompleteConfirm - IDs to uncomplete:', inspectionIdsToUncomplete);
+    try {
+      const { data, error } = await supabase
+        .from("inspections")
+        .update({ completed: false })
+        .in("id", inspectionIdsToUncomplete)
+        .select("id");
+
+      if (error) {
+        console.error('Update error:', error);
+        toast.error("Failed to update inspections");
+        return;
+      }
+
+      const updatedIds = new Set((data || []).map((d: any) => d.id));
+      const notUpdated = inspectionIdsToUncomplete.filter(id => !updatedIds.has(id));
+
+      if (notUpdated.length > 0) {
+        toast.warning(`${notUpdated.length} inspection(s) could not be marked incomplete due to permissions`);
+      }
+
+      setInspections(prev => 
+        prev.map(i => updatedIds.has(i.id) ? { ...i, completed: false } : i)
+      );
+      toast.success(
+        (data?.length || 0) > 1 
+          ? `${data?.length} inspections marked as incomplete` 
+          : "Inspection marked as incomplete"
+      );
       fetchInspections(); // Refresh the list
     } catch (err) {
       console.error("Error updating inspections:", err);
@@ -642,6 +712,14 @@ const Inspections = () => {
         mainInspection={inspectionToComplete}
         connectedInspections={connectedInspectionsToComplete}
         onConfirm={handleCompleteConfirm}
+      />
+
+      <UnCompleteInspectionDialog
+        open={unCompleteDialogOpen}
+        onOpenChange={setUnCompleteDialogOpen}
+        mainInspection={inspectionToUnComplete}
+        connectedInspections={connectedInspectionsToUnComplete}
+        onConfirm={handleUnCompleteConfirm}
       />
     </div>
   );
