@@ -811,14 +811,28 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                           </div>
                                         )}
                                       </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        onClick={() => setDeleteItemId(item.id)}
-                                      >
-                                        <Trash2 className="h-3 w-3 text-destructive" />
-                                      </Button>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                onClick={() => !isDefaultTask && setDeleteItemId(item.id)}
+                                                disabled={isDefaultTask}
+                                              >
+                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                              </Button>
+                                            </span>
+                                          </TooltipTrigger>
+                                          {isDefaultTask && (
+                                            <TooltipContent>
+                                              <p className="text-xs">Can only be deleted from Default Tasks</p>
+                                            </TooltipContent>
+                                          )}
+                                        </Tooltip>
+                                      </TooltipProvider>
                                     </div>
                                   );
                                 })}
