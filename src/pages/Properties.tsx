@@ -98,9 +98,13 @@ export default function Properties() {
   }, []);
 
   const fetchProperties = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const { data, error } = await supabase
       .from("properties")
       .select("*")
+      .eq("created_by", user.id)
       .order("name");
 
     if (error) {
@@ -695,7 +699,7 @@ export default function Properties() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Property Confirmation */}
+      {/* Delete Property Confirmation - use edge function for all deletes */}
       <AlertDialog open={!!deletePropertyId} onOpenChange={() => setDeletePropertyId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -707,7 +711,40 @@ export default function Properties() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => deleteProperty()}
+              onClick={async () => {
+                const pid = deletePropertyId;
+                setDeletePropertyId(null);
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (!session) {
+                    toast.error('Not authenticated');
+                    return;
+                  }
+                  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cascade-delete`, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${session.access_token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ type: 'property', id: pid })
+                  });
+                  if (!res.ok) {
+                    const txt = await res.text();
+                    throw new Error(txt);
+                  }
+
+                  setProperties(prev => prev.filter(p => p.id !== pid));
+                  setUnitsByProperty(prev => {
+                    const copy = { ...prev };
+                    delete copy[pid];
+                    return copy;
+                  });
+                  toast.success('Property deleted');
+                } catch (e: any) {
+                  console.error(e);
+                  toast.error(e?.message || 'Failed to delete');
+                }
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
@@ -716,7 +753,7 @@ export default function Properties() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Unit Confirmation */}
+      {/* Delete Unit Confirmation - use edge function for all deletes */}
       <AlertDialog open={!!deleteUnitId} onOpenChange={() => setDeleteUnitId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -728,7 +765,43 @@ export default function Properties() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => deleteUnit()}
+              onClick={async () => {
+                const uid = deleteUnitId;
+                setDeleteUnitId(null);
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (!session) {
+                    toast.error('Not authenticated');
+                    return;
+                  }
+                  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cascade-delete`, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${session.access_token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ type: 'unit', id: uid })
+                  });
+                  if (!res.ok) {
+                    const txt = await res.text();
+                    throw new Error(txt);
+                  }
+
+                  const propertyId = Object.keys(unitsByProperty).find(pid => 
+                    unitsByProperty[pid].some(u => u.id === uid)
+                  );
+                  if (propertyId) {
+                    setUnitsByProperty(prev => ({
+                      ...prev,
+                      [propertyId]: prev[propertyId].filter(u => u.id !== uid)
+                    }));
+                  }
+                  toast.success('Unit deleted');
+                } catch (e: any) {
+                  console.error(e);
+                  toast.error(e?.message || 'Failed to delete');
+                }
+              }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
