@@ -209,54 +209,7 @@ const Inspections = () => {
     return searchableText.includes(query);
   });
 
-  const sortedInspections = [...filteredInspections].sort((a, b) => {
-    let compareA: any;
-    let compareB: any;
-
-    switch (sortField) {
-      case "type":
-        compareA = a.type;
-        compareB = b.type;
-        break;
-      case "date":
-        compareA = new Date(a.date).getTime();
-        compareB = new Date(b.date).getTime();
-        break;
-      case "time":
-        compareA = a.time;
-        compareB = b.time;
-        break;
-      case "property":
-        compareA = a.property.name;
-        compareB = b.property.name;
-        break;
-      case "unit":
-        compareA = a.unit?.name || "";
-        compareB = b.unit?.name || "";
-        break;
-      default:
-        return 0;
-    }
-
-    if (compareA < compareB) return sortDirection === "asc" ? -1 : 1;
-    if (compareA > compareB) return sortDirection === "asc" ? 1 : -1;
-    return 0;
-  });
-
-  // Group by property
-  const groupedByProperty = sortedInspections.reduce((acc, inspection) => {
-    const propertyId = inspection.property.id;
-    if (!acc[propertyId]) {
-      acc[propertyId] = {
-        property: inspection.property,
-        inspections: [],
-      };
-    }
-    acc[propertyId].inspections.push(inspection);
-    return acc;
-  }, {} as Record<string, { property: { id: string; name: string; address: string }; inspections: Inspection[] }>);
-
-  // Build inspection chains (connected inspections)
+  // Build inspection chains first (before sorting)
   const buildInspectionChains = (inspections: Inspection[]) => {
     const chains: Inspection[][] = [];
     const processed = new Set<string>();
@@ -294,6 +247,59 @@ const Inspections = () => {
 
     return chains;
   };
+
+  // Build all chains first
+  const allChains = buildInspectionChains(filteredInspections);
+
+  // Sort chains based on their first inspection
+  const sortedChains = [...allChains].sort((chainA, chainB) => {
+    const a = chainA[0];
+    const b = chainB[0];
+    let compareA: any;
+    let compareB: any;
+
+    switch (sortField) {
+      case "type":
+        compareA = a.type;
+        compareB = b.type;
+        break;
+      case "date":
+        compareA = new Date(a.date).getTime();
+        compareB = new Date(b.date).getTime();
+        break;
+      case "time":
+        compareA = a.time;
+        compareB = b.time;
+        break;
+      case "property":
+        compareA = a.property.name;
+        compareB = b.property.name;
+        break;
+      case "unit":
+        compareA = a.unit?.name || "";
+        compareB = b.unit?.name || "";
+        break;
+      default:
+        return 0;
+    }
+
+    if (compareA < compareB) return sortDirection === "asc" ? -1 : 1;
+    if (compareA > compareB) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // Group sorted chains by property
+  const groupedByProperty = sortedChains.reduce((acc, chain) => {
+    const propertyId = chain[0].property.id;
+    if (!acc[propertyId]) {
+      acc[propertyId] = {
+        property: chain[0].property,
+        chains: [],
+      };
+    }
+    acc[propertyId].chains.push(chain);
+    return acc;
+  }, {} as Record<string, { property: { id: string; name: string; address: string }; chains: Inspection[][] }>);
 
   if (loading) {
     return (
@@ -345,15 +351,13 @@ const Inspections = () => {
               />
             </div>
 
-            {sortedInspections.length === 0 ? (
+            {sortedChains.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg bg-card">
                 <p className="text-muted-foreground">No inspections match your search</p>
               </div>
             ) : (
               <div className="space-y-6">
-                {Object.entries(groupedByProperty).map(([propertyId, { property, inspections: propertyInspections }]) => {
-                  const chains = buildInspectionChains(propertyInspections);
-                  
+                {Object.entries(groupedByProperty).map(([propertyId, { property, chains }]) => {
                   return (
                     <div key={propertyId} className="rounded-lg border bg-card">
                       <div className="p-4 border-b bg-muted/30">
