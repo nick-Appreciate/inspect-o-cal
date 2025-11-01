@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,13 @@ import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { Inspection, InspectionType, Property } from "@/types/inspection";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Unit {
+  id: string;
+  property_id: string;
+  name: string;
+}
 
 interface AddInspectionDialogProps {
   properties: Property[];
@@ -60,6 +67,66 @@ export default function AddInspectionDialog({
   const [attachment, setAttachment] = useState<File>();
   const [newPropertyName, setNewPropertyName] = useState("");
   const [newPropertyAddress, setNewPropertyAddress] = useState("");
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [selectedUnit, setSelectedUnit] = useState<string>();
+  const [showAddUnit, setShowAddUnit] = useState(false);
+  const [newUnitName, setNewUnitName] = useState("");
+
+  // Fetch units when property is selected
+  useEffect(() => {
+    if (selectedProperty?.id) {
+      fetchUnits(selectedProperty.id);
+    } else {
+      setUnits([]);
+      setSelectedUnit(undefined);
+    }
+  }, [selectedProperty]);
+
+  const fetchUnits = async (propertyId: string) => {
+    const { data, error } = await supabase
+      .from("units")
+      .select("*")
+      .eq("property_id", propertyId)
+      .order("name");
+
+    if (!error && data) {
+      setUnits(data);
+    }
+  };
+
+  const handleAddUnit = async () => {
+    if (!newUnitName.trim() || !selectedProperty?.id) {
+      toast.error("Please enter a unit name");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("units")
+      .insert({
+        property_id: selectedProperty.id,
+        name: newUnitName.trim(),
+        created_by: user.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to add unit");
+      return;
+    }
+
+    setUnits([...units, data]);
+    setSelectedUnit(data.id);
+    setShowAddUnit(false);
+    setNewUnitName("");
+    toast.success("Unit added successfully");
+  };
 
   const handleSubmit = () => {
     if (!type || !date || !time || !selectedProperty) {
@@ -73,6 +140,7 @@ export default function AddInspectionDialog({
       time,
       property: selectedProperty,
       attachment,
+      unitId: selectedUnit,
     });
 
     toast.success("Inspection added successfully");
@@ -104,6 +172,10 @@ export default function AddInspectionDialog({
     setSelectedProperty(undefined);
     setAttachment(undefined);
     setShowAddProperty(false);
+    setUnits([]);
+    setSelectedUnit(undefined);
+    setShowAddUnit(false);
+    setNewUnitName("");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -246,6 +318,54 @@ export default function AddInspectionDialog({
               <Button onClick={handleAddProperty} className="w-full" size="sm">
                 Save Property
               </Button>
+            </div>
+          )}
+
+          {selectedProperty && !showAddProperty && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Unit (Optional)</Label>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => setShowAddUnit(!showAddUnit)}
+                  className="h-auto p-0 text-primary"
+                >
+                  {showAddUnit ? "Cancel" : "+ Add New Unit"}
+                </Button>
+              </div>
+              
+              {!showAddUnit ? (
+                <Select value={selectedUnit} onValueChange={setSelectedUnit}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a unit (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No unit</SelectItem>
+                    {units.map((unit) => (
+                      <SelectItem key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-2 p-3 border rounded-lg bg-accent/30">
+                  <Input
+                    placeholder="Unit name (e.g., Unit 101, Apt A)"
+                    value={newUnitName}
+                    onChange={(e) => setNewUnitName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleAddUnit();
+                      }
+                    }}
+                  />
+                  <Button onClick={handleAddUnit} className="w-full" size="sm">
+                    Save Unit
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

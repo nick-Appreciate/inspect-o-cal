@@ -74,6 +74,7 @@ export type Database = {
           property_id: string
           time: string
           type: string
+          unit_id: string | null
         }
         Insert: {
           attachment_url?: string | null
@@ -86,6 +87,7 @@ export type Database = {
           property_id: string
           time: string
           type: string
+          unit_id?: string | null
         }
         Update: {
           attachment_url?: string | null
@@ -98,6 +100,7 @@ export type Database = {
           property_id?: string
           time?: string
           type?: string
+          unit_id?: string | null
         }
         Relationships: [
           {
@@ -112,6 +115,13 @@ export type Database = {
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspections_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -322,6 +332,38 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "inspection_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      units: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          property_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          property_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          property_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
         ]

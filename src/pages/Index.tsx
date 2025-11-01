@@ -70,7 +70,7 @@ const Index = () => {
   const fetchInspections = async () => {
     const { data, error } = await supabase
       .from("inspections")
-      .select("*, properties(id, name, address)")
+      .select("*, properties(id, name, address), units(id, name)")
       .order("date", { ascending: true });
 
     if (error) {
@@ -88,6 +88,8 @@ const Index = () => {
           address: item.properties.address,
         },
         attachmentUrl: item.attachment_url,
+        unitId: item.units?.id,
+        unitName: item.units?.name,
       }));
       setInspections(transformedData);
     }
@@ -135,6 +137,7 @@ const Index = () => {
       date: newInspection.date.toISOString().split("T")[0],
       time: newInspection.time,
       property_id: newInspection.property.id,
+      unit_id: newInspection.unitId && newInspection.unitId !== "none" ? newInspection.unitId : null,
       attachment_url: attachmentUrl,
       created_by: user.id,
     });

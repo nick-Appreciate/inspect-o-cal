@@ -342,6 +342,11 @@ export default function WeeklyCalendar({
                       </div>
                       <div className="text-xs truncate mt-1">
                         {inspection.property.name}
+                        {inspection.unitName && (
+                          <div className="text-[10px] opacity-80">
+                            {inspection.unitName}
+                          </div>
+                        )}
                       </div>
                       <Badge
                         variant="secondary"

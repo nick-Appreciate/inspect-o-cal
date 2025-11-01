@@ -34,10 +34,15 @@ interface Inspection {
   property_id: string;
   attachment_url?: string;
   parent_inspection_id?: string;
+  unit_id?: string;
   properties: {
     name: string;
     address: string;
   };
+  units?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 interface Subtask {
@@ -124,7 +129,7 @@ export default function InspectionDetailsDialog({
     setLoading(true);
     const { data, error } = await supabase
       .from("inspections")
-      .select("*, properties(name, address)")
+      .select("*, properties(name, address), units(id, name)")
       .eq("id", inspectionId)
       .single();
 
@@ -137,7 +142,7 @@ export default function InspectionDetailsDialog({
       if (data.parent_inspection_id) {
         const { data: parentData } = await supabase
           .from("inspections")
-          .select("*, properties(name, address)")
+          .select("*, properties(name, address), units(id, name)")
           .eq("id", data.parent_inspection_id)
           .single();
         
@@ -151,7 +156,7 @@ export default function InspectionDetailsDialog({
       // Fetch child inspections (follow-ups)
       const { data: childData } = await supabase
         .from("inspections")
-        .select("*, properties(name, address)")
+        .select("*, properties(name, address), units(id, name)")
         .eq("parent_inspection_id", inspectionId)
         .order("date", { ascending: true });
       
@@ -499,6 +504,11 @@ export default function InspectionDetailsDialog({
                   <div>
                     <div className="font-medium">{inspection.properties.name}</div>
                     <div className="text-muted-foreground">{inspection.properties.address}</div>
+                    {inspection.units && (
+                      <div className="text-muted-foreground text-xs mt-1">
+                        Unit: {inspection.units.name}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -745,6 +755,7 @@ export default function InspectionDetailsDialog({
               id: inspection.id,
               type: inspection.type,
               property_id: inspection.property_id,
+              unit_id: inspection.unit_id,
             }}
             open={showFollowUpDialog}
             onOpenChange={setShowFollowUpDialog}

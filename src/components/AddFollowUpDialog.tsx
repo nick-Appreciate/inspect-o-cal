@@ -26,6 +26,7 @@ interface AddFollowUpDialogProps {
     id: string;
     type: string;
     property_id: string;
+    unit_id?: string;
   };
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -74,6 +75,7 @@ export default function AddFollowUpDialog({
           date,
           time,
           property_id: parentInspection.property_id,
+          unit_id: parentInspection.unit_id || null,
           parent_inspection_id: parentInspection.id,
           created_by: user.id,
         })

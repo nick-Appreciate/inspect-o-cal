@@ -22,4 +22,6 @@ export interface Inspection {
   attachmentUrl?: string;
   duration?: number; // in minutes
   parent_inspection_id?: string | null;
+  unitId?: string;
+  unitName?: string;
 }

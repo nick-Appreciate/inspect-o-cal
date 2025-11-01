@@ -91,6 +91,7 @@ export default function InspectionCalendar({ inspections, onDateClick }: Inspect
                         className={`${getInspectionColor(inspection.type)} text-white text-xs w-full justify-start truncate`}
                       >
                         {inspection.time} - {inspection.property.name}
+                        {inspection.unitName && ` (${inspection.unitName})`}
                       </Badge>
                     ))}
                     {dayInspections.length > 2 && (
