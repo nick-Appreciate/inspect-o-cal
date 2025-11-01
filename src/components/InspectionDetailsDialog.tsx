@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList, ChevronDown, ChevronUp, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,7 @@ import AddFollowUpDialog from "./AddFollowUpDialog";
 import { StartInspectionDialog } from "./StartInspectionDialog";
 import { UserAvatar } from "./UserAvatar";
 import { AddTaskDialog } from "./AddTaskDialog";
+import { InspectionHistoryDialog } from "./InspectionHistoryDialog";
 
 interface Inspection {
   id: string;
@@ -153,6 +154,8 @@ export default function InspectionDetailsDialog({
     type: string;
     subtaskCount: number;
   }>>([]);
+  const [showCompleted, setShowCompleted] = useState(true);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -758,21 +761,10 @@ export default function InspectionDetailsDialog({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    onOpenChange(false);
-                    setTimeout(() => {
-                      window.dispatchEvent(new CustomEvent('openHistoryDialog', { 
-                        detail: { 
-                          inspectionId: inspection.id,
-                          propertyId: inspection.property_id,
-                          unitId: inspection.unit_id
-                        } 
-                      }));
-                    }, 100);
-                  }}
+                  onClick={() => setShowHistoryDialog(true)}
                   className="h-7 text-xs px-2"
                 >
-                  <FileText className="h-3 w-3 mr-1" />
+                  <History className="h-3 w-3 mr-1" />
                   <span>History</span>
                 </Button>
               </div>
@@ -872,9 +864,30 @@ export default function InspectionDetailsDialog({
               </div>
             )}
 
+            {/* Show Completed Toggle */}
+            <div className="flex items-center justify-between mb-3 p-2 bg-muted/30 rounded">
+              <span className="text-sm font-medium">Show Completed Tasks</span>
+              <Button
+                variant={showCompleted ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowCompleted(!showCompleted)}
+                className="h-7 text-xs"
+              >
+                {showCompleted ? "Hide" : "Show"}
+              </Button>
+            </div>
+
             {/* Subtasks Grouped by Room */}
             <div className="space-y-2">
               {Object.entries(groupedSubtasks).map(([roomName, roomSubtasks]) => {
+                // Filter subtasks based on showCompleted state
+                const filteredSubtasks = showCompleted 
+                  ? roomSubtasks 
+                  : roomSubtasks.filter(s => !s.completed);
+                
+                // Don't show room if no tasks after filtering
+                if (filteredSubtasks.length === 0) return null;
+                
                 const isCollapsed = collapsedRooms.has(roomName);
                 const completedCount = roomSubtasks.filter(s => s.completed).length;
                 const allCompleted = completedCount === roomSubtasks.length;
@@ -901,7 +914,7 @@ export default function InspectionDetailsDialog({
                     {/* Room Tasks */}
                     {!isCollapsed && (
                       <div className="p-2 space-y-2">
-                        {roomSubtasks.map((subtask) => {
+                        {filteredSubtasks.map((subtask) => {
                           const isInherited = subtask.original_inspection_id !== inspectionId;
                           
                           return (
@@ -1081,6 +1094,14 @@ export default function InspectionDetailsDialog({
             unitId={inspection.unit_id}
             propertyId={inspection.property_id}
             onInspectionStarted={fetchSubtasks}
+          />
+
+          <InspectionHistoryDialog
+            open={showHistoryDialog}
+            onOpenChange={setShowHistoryDialog}
+            inspectionId={inspection.id}
+            propertyId={inspection.property_id}
+            unitId={inspection.unit_id}
           />
         </>
       )}
