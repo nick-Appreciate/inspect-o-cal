@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       default_room_tasks: {
         Row: {
+          applies_to_all_rooms: boolean
           created_at: string
           created_by: string
           description: string
@@ -25,6 +26,7 @@ export type Database = {
           vendor_type_id: string | null
         }
         Insert: {
+          applies_to_all_rooms?: boolean
           created_at?: string
           created_by: string
           description: string
@@ -34,6 +36,7 @@ export type Database = {
           vendor_type_id?: string | null
         }
         Update: {
+          applies_to_all_rooms?: boolean
           created_at?: string
           created_by?: string
           description?: string
@@ -55,6 +58,42 @@ export type Database = {
             columns: ["vendor_type_id"]
             isOneToOne: false
             referencedRelation: "vendor_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      default_task_room_templates: {
+        Row: {
+          created_at: string
+          default_task_id: string
+          id: string
+          room_template_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_task_id: string
+          id?: string
+          room_template_id: string
+        }
+        Update: {
+          created_at?: string
+          default_task_id?: string
+          id?: string
+          room_template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "default_task_room_templates_default_task_id_fkey"
+            columns: ["default_task_id"]
+            isOneToOne: false
+            referencedRelation: "default_room_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "default_task_room_templates_room_template_id_fkey"
+            columns: ["room_template_id"]
+            isOneToOne: false
+            referencedRelation: "room_templates"
             referencedColumns: ["id"]
           },
         ]

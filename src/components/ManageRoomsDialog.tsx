@@ -58,6 +58,7 @@ interface DefaultTask {
   inventory_type_id: string | null;
   inventory_quantity: number;
   vendor_type_id: string | null;
+  applies_to_all_rooms: boolean;
 }
 
 interface ManageRoomsDialogProps {
@@ -86,6 +87,9 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [defaultTaskInventoryType, setDefaultTaskInventoryType] = useState<string>("");
   const [defaultTaskQuantity, setDefaultTaskQuantity] = useState<string>("");
   const [defaultTaskVendorType, setDefaultTaskVendorType] = useState<string>("");
+  const [defaultTaskRooms, setDefaultTaskRooms] = useState<string[]>([]);
+  const [defaultTaskAppliesToAll, setDefaultTaskAppliesToAll] = useState(true);
+  const [defaultTaskRoomAssociations, setDefaultTaskRoomAssociations] = useState<Record<string, string[]>>({});
   const [deleteDefaultTaskId, setDeleteDefaultTaskId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,6 +133,28 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     }
 
     setDefaultTasks(data as any || []);
+    
+    // Fetch room associations for tasks that don't apply to all
+    const tasksNotApplyingToAll = (data as any[])?.filter(t => !t.applies_to_all_rooms) || [];
+    
+    if (tasksNotApplyingToAll.length > 0) {
+      const { data: associations } = await supabase
+        .from("default_task_room_templates" as any)
+        .select("default_task_id, room_template_id")
+        .in("default_task_id", tasksNotApplyingToAll.map(t => t.id));
+      
+      if (associations) {
+        const assocMap = (associations as any[]).reduce((acc: Record<string, string[]>, assoc: any) => {
+          if (!acc[assoc.default_task_id]) acc[assoc.default_task_id] = [];
+          acc[assoc.default_task_id].push(assoc.room_template_id);
+          return acc;
+        }, {} as Record<string, string[]>);
+        
+        setDefaultTaskRoomAssociations(assocMap);
+      }
+    } else {
+      setDefaultTaskRoomAssociations({});
+    }
   };
 
   const addRoom = async () => {
@@ -156,17 +182,42 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
     const itemsToInsert: any[] = [];
 
-    // Add default tasks to the new room
+    // Add default tasks to the new room (only those that apply to all or are specifically associated)
     if (defaultTasks.length > 0) {
+      // Fetch room associations for tasks that don't apply to all
+      const tasksNotApplyingToAll = defaultTasks.filter(t => !t.applies_to_all_rooms);
+      let taskRoomAssociations: Record<string, string[]> = {};
+      
+      if (tasksNotApplyingToAll.length > 0) {
+        const { data: associations } = await supabase
+          .from("default_task_room_templates" as any)
+          .select("default_task_id, room_template_id")
+          .in("default_task_id", tasksNotApplyingToAll.map(t => t.id));
+        
+        if (associations) {
+          taskRoomAssociations = (associations as any[]).reduce((acc: Record<string, string[]>, assoc: any) => {
+            if (!acc[assoc.default_task_id]) acc[assoc.default_task_id] = [];
+            acc[assoc.default_task_id].push(assoc.room_template_id);
+            return acc;
+          }, {} as Record<string, string[]>);
+        }
+      }
+      
       defaultTasks.forEach((task, index) => {
-        itemsToInsert.push({
-          room_template_id: (newRoom as any).id,
-          description: task.description,
-          order_index: index,
-          inventory_type_id: task.inventory_type_id,
-          inventory_quantity: task.inventory_quantity,
-          vendor_type_id: task.vendor_type_id,
-        });
+        // Add task if it applies to all rooms OR if this room is in its associations
+        const shouldAdd = task.applies_to_all_rooms || 
+          (taskRoomAssociations[task.id]?.includes((newRoom as any).id));
+        
+        if (shouldAdd) {
+          itemsToInsert.push({
+            room_template_id: (newRoom as any).id,
+            description: task.description,
+            order_index: index,
+            inventory_type_id: task.inventory_type_id,
+            inventory_quantity: task.inventory_quantity,
+            vendor_type_id: task.vendor_type_id,
+          });
+        }
       });
     }
 
@@ -379,6 +430,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         inventory_type_id: defaultTaskInventoryType || null,
         inventory_quantity: parseInt(defaultTaskQuantity) || 0,
         vendor_type_id: defaultTaskVendorType || null,
+        applies_to_all_rooms: defaultTaskAppliesToAll,
         created_by: user.id,
       })
       .select()
@@ -389,33 +441,51 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
       return;
     }
 
-    // Add this task to all existing room templates
+    // If not applying to all rooms, create associations
+    if (!defaultTaskAppliesToAll && defaultTaskRooms.length > 0) {
+      const associations = defaultTaskRooms.map(roomId => ({
+        default_task_id: (newDefaultTask as any).id,
+        room_template_id: roomId,
+      }));
+
+      await supabase
+        .from("default_task_room_templates" as any)
+        .insert(associations);
+    }
+
+    // Add this task to existing room templates (only those selected or if applies to all)
     if (rooms.length > 0) {
-      const itemsToInsert = [];
-      for (const room of rooms) {
-        const items = roomItems[room.id] || [];
-        const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order_index)) : -1;
-        
-        itemsToInsert.push({
-          room_template_id: room.id,
-          description: defaultTaskDescription.trim(),
-          order_index: maxOrder + 1,
-          inventory_type_id: defaultTaskInventoryType || null,
-          inventory_quantity: parseInt(defaultTaskQuantity) || 0,
-          vendor_type_id: defaultTaskVendorType || null,
-        });
-      }
+      const roomsToAddTo = defaultTaskAppliesToAll ? rooms : rooms.filter(r => defaultTaskRooms.includes(r.id));
+      
+      if (roomsToAddTo.length > 0) {
+        const itemsToInsert = [];
+        for (const room of roomsToAddTo) {
+          const items = roomItems[room.id] || [];
+          const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order_index)) : -1;
+          
+          itemsToInsert.push({
+            room_template_id: room.id,
+            description: defaultTaskDescription.trim(),
+            order_index: maxOrder + 1,
+            inventory_type_id: defaultTaskInventoryType || null,
+            inventory_quantity: parseInt(defaultTaskQuantity) || 0,
+            vendor_type_id: defaultTaskVendorType || null,
+          });
+        }
 
-      const { error: insertError } = await supabase
-        .from("room_template_items" as any)
-        .insert(itemsToInsert);
+        const { error: insertError } = await supabase
+          .from("room_template_items" as any)
+          .insert(itemsToInsert);
 
-      if (insertError) {
-        toast.error("Default task created but failed to add to existing rooms");
+        if (insertError) {
+          toast.error("Default task created but failed to add to existing rooms");
+        } else {
+          // Refresh items for affected rooms
+          roomsToAddTo.forEach(room => fetchRoomItems(room.id));
+          toast.success(`Default task added to ${roomsToAddTo.length} room template${roomsToAddTo.length > 1 ? 's' : ''}`);
+        }
       } else {
-        // Refresh items for all rooms
-        rooms.forEach(room => fetchRoomItems(room.id));
-        toast.success(`Default task added to all ${rooms.length} room template${rooms.length > 1 ? 's' : ''}`);
+        toast.success("Default task created (will be added to selected rooms)");
       }
     } else {
       toast.success("Default task created (will be added to future rooms)");
@@ -426,6 +496,8 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setDefaultTaskInventoryType("");
     setDefaultTaskQuantity("");
     setDefaultTaskVendorType("");
+    setDefaultTaskRooms([]);
+    setDefaultTaskAppliesToAll(true);
     fetchDefaultTasks();
   };
 
@@ -568,6 +640,52 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                   </select>
                 </div>
 
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="appliesToAll"
+                      checked={defaultTaskAppliesToAll}
+                      onChange={(e) => {
+                        setDefaultTaskAppliesToAll(e.target.checked);
+                        if (e.target.checked) {
+                          setDefaultTaskRooms([]);
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <Label htmlFor="appliesToAll" className="text-xs font-normal cursor-pointer">
+                      Apply to all room templates
+                    </Label>
+                  </div>
+
+                  {!defaultTaskAppliesToAll && rooms.length > 0 && (
+                    <div className="border rounded-md p-3 max-h-32 overflow-y-auto space-y-2">
+                      <Label className="text-xs">Select Room Templates</Label>
+                      {rooms.map((room) => (
+                        <label
+                          key={room.id}
+                          className="flex items-center gap-2 cursor-pointer hover:bg-accent p-1 rounded"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={defaultTaskRooms.includes(room.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setDefaultTaskRooms([...defaultTaskRooms, room.id]);
+                              } else {
+                                setDefaultTaskRooms(defaultTaskRooms.filter(id => id !== room.id));
+                              }
+                            }}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{room.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <Button onClick={addDefaultTask} className="w-full">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Default Task
@@ -578,6 +696,10 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                     <Label className="text-xs">Current Default Tasks</Label>
                     {defaultTasks.map((task) => {
                       const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
+                      const associatedRooms = task.applies_to_all_rooms 
+                        ? rooms 
+                        : rooms.filter(r => defaultTaskRoomAssociations[task.id]?.includes(r.id));
+                      
                       return (
                         <div
                           key={task.id}
@@ -595,6 +717,13 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                 Vendor: {vendorTypes.find(t => t.id === task.vendor_type_id)?.name}
                               </div>
                             )}
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {task.applies_to_all_rooms ? (
+                                "Applies to all room templates"
+                              ) : (
+                                <>Applies to: {associatedRooms.map(r => r.name).join(", ") || "No rooms"}</>
+                              )}
+                            </div>
                           </div>
                           <Button
                             variant="ghost"
@@ -772,13 +901,15 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                 <Label className="text-xs">Existing Tasks</Label>
                                 {roomItems[room.id].map((item) => {
                                   const invType = inventoryTypes.find(t => t.id === item.inventory_type_id);
-                                  // Check if this item matches a default task
-                                  const isDefaultTask = defaultTasks.some(dt => 
+                                  // Check if this item matches a default task that applies to this room
+                                  const matchingDefaultTask = defaultTasks.find(dt => 
                                     dt.description === item.description &&
                                     dt.inventory_type_id === item.inventory_type_id &&
                                     dt.inventory_quantity === item.inventory_quantity &&
-                                    dt.vendor_type_id === item.vendor_type_id
+                                    dt.vendor_type_id === item.vendor_type_id &&
+                                    (dt.applies_to_all_rooms || defaultTaskRoomAssociations[dt.id]?.includes(room.id))
                                   );
+                                  const isDefaultTask = !!matchingDefaultTask;
                                   return (
                                     <div
                                       key={item.id}
