@@ -754,17 +754,46 @@ export default function Properties() {
                   )}
                 </ul>
               )}
-              <p className="mt-3 font-semibold">Do you want to proceed with deleting everything?</p>
+              <div className="mt-3 font-semibold">Do you want to proceed with deleting everything?</div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setCascadeDeleteProperty(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => {
+              onClick={async () => {
                 if (cascadeDeleteProperty) {
-                  setDeletePropertyId(cascadeDeleteProperty.propertyId);
+                  const pid = cascadeDeleteProperty.propertyId;
                   setCascadeDeleteProperty(null);
-                  setTimeout(() => deleteProperty(true), 0);
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                      toast.error('Not authenticated');
+                      return;
+                    }
+                    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cascade-delete`, {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${session.access_token}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ type: 'property', id: pid })
+                    });
+                    if (!res.ok) {
+                      const txt = await res.text();
+                      throw new Error(txt);
+                    }
+
+                    setProperties(prev => prev.filter(p => p.id !== pid));
+                    setUnitsByProperty(prev => {
+                      const copy = { ...prev };
+                      delete copy[pid];
+                      return copy;
+                    });
+                    toast.success('Property and associations deleted');
+                  } catch (e: any) {
+                    console.error(e);
+                    toast.error(e?.message || 'Failed to delete');
+                  }
                 }
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -782,17 +811,50 @@ export default function Properties() {
             <AlertDialogTitle>Delete Unit with Associations</AlertDialogTitle>
             <AlertDialogDescription>
               This unit has {cascadeDeleteUnit?.inspections} associated inspection(s) that will also be deleted.
-              <p className="mt-3 font-semibold">Do you want to proceed with deleting everything?</p>
+              <div className="mt-3 font-semibold">Do you want to proceed with deleting everything?</div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setCascadeDeleteUnit(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => {
+              onClick={async () => {
                 if (cascadeDeleteUnit) {
-                  setDeleteUnitId(cascadeDeleteUnit.unitId);
+                  const uid = cascadeDeleteUnit.unitId;
                   setCascadeDeleteUnit(null);
-                  setTimeout(() => deleteUnit(true), 0);
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                      toast.error('Not authenticated');
+                      return;
+                    }
+                    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cascade-delete`, {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${session.access_token}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ type: 'unit', id: uid })
+                    });
+                    if (!res.ok) {
+                      const txt = await res.text();
+                      throw new Error(txt);
+                    }
+
+                    // Update local state
+                    const propertyId = Object.keys(unitsByProperty).find(pid => 
+                      unitsByProperty[pid].some(u => u.id === uid)
+                    );
+                    if (propertyId) {
+                      setUnitsByProperty(prev => ({
+                        ...prev,
+                        [propertyId]: prev[propertyId].filter(u => u.id !== uid)
+                      }));
+                    }
+                    toast.success('Unit and associations deleted');
+                  } catch (e: any) {
+                    console.error(e);
+                    toast.error(e?.message || 'Failed to delete');
+                  }
                 }
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
