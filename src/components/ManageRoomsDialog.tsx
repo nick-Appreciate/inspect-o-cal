@@ -227,6 +227,15 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
       return;
     }
 
+    // Check for duplicates
+    const existingType = inventoryTypes.find(
+      type => type.name.toLowerCase() === newInventoryTypeName.trim().toLowerCase()
+    );
+    if (existingType) {
+      toast.error("An inventory type with this name already exists");
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -362,6 +371,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                           }
                                         }}
                                         className="h-9"
+                                        autoFocus
                                       />
                                       <Button
                                         size="sm"
@@ -369,6 +379,17 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                         className="h-9 px-2"
                                       >
                                         <Plus className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                          setShowAddInventoryType(false);
+                                          setNewInventoryTypeName("");
+                                        }}
+                                        className="h-9 px-2"
+                                      >
+                                        ✕
                                       </Button>
                                     </div>
                                   ) : (
