@@ -239,12 +239,28 @@ export default function Properties() {
       return;
     }
 
-    // Delete associated inspections
-    if (inspections && inspections.length > 0) {
-      await supabase
+    // Delete associated subtasks and inspections
+    const inspectionIds = (inspections || []).map(i => i.id);
+    if (inspectionIds.length > 0) {
+      const { error: subtasksError } = await supabase
+        .from("subtasks")
+        .delete()
+        .in("inspection_id", inspectionIds);
+      if (subtasksError) {
+        console.error("Delete subtasks error:", subtasksError);
+        toast.error("Failed to delete associated subtasks: " + subtasksError.message);
+        return;
+      }
+
+      const { error: inspectionsError } = await supabase
         .from("inspections")
         .delete()
-        .eq("property_id", deletePropertyId);
+        .in("id", inspectionIds);
+      if (inspectionsError) {
+        console.error("Delete inspections error:", inspectionsError);
+        toast.error("Failed to delete associated inspections: " + inspectionsError.message);
+        return;
+      }
     }
 
     // Delete associated units
@@ -386,12 +402,28 @@ export default function Properties() {
       return;
     }
 
-    // Delete associated inspections
-    if (inspections && inspections.length > 0) {
-      await supabase
+    // Delete associated subtasks and inspections
+    const unitInspectionIds = (inspections || []).map(i => i.id);
+    if (unitInspectionIds.length > 0) {
+      const { error: unitSubtasksError } = await supabase
+        .from("subtasks")
+        .delete()
+        .in("inspection_id", unitInspectionIds);
+      if (unitSubtasksError) {
+        console.error("Delete subtasks error:", unitSubtasksError);
+        toast.error("Failed to delete associated subtasks: " + unitSubtasksError.message);
+        return;
+      }
+
+      const { error: unitInspectionsError } = await supabase
         .from("inspections")
         .delete()
-        .eq("unit_id", deleteUnitId);
+        .in("id", unitInspectionIds);
+      if (unitInspectionsError) {
+        console.error("Delete inspections error:", unitInspectionsError);
+        toast.error("Failed to delete associated inspections: " + unitInspectionsError.message);
+        return;
+      }
     }
 
     const { error } = await supabase
