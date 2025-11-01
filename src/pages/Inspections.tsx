@@ -492,18 +492,19 @@ const Inspections = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-20">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
+        <div className="container mx-auto px-4 py-4 sm:py-6">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/")}
+              className="flex-shrink-0"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">All Inspections</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-xl sm:text-2xl font-bold">All Inspections</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 View and manage all scheduled inspections
               </p>
             </div>
@@ -511,7 +512,7 @@ const Inspections = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-6 sm:py-8">
         {inspections.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground mb-4">No inspections found</p>
@@ -521,7 +522,7 @@ const Inspections = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -534,6 +535,7 @@ const Inspections = () => {
               <Button
                 variant={showCompleted ? "default" : "outline"}
                 onClick={() => setShowCompleted(!showCompleted)}
+                className="w-full sm:w-auto"
               >
                 {showCompleted ? "Hide" : "Show"} Completed
               </Button>
@@ -544,7 +546,7 @@ const Inspections = () => {
                 <p className="text-muted-foreground">No inspections match your search</p>
               </div>
             ) : (
-              <div className="rounded-lg border bg-card">
+              <div className="rounded-lg border bg-card overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -561,7 +563,7 @@ const Inspections = () => {
                         />
                       </TableHead>
                       <TableHead 
-                        className="cursor-pointer select-none"
+                        className="cursor-pointer select-none min-w-[120px]"
                         onClick={() => handleSort("type")}
                       >
                         <div className="flex items-center gap-2">
@@ -570,7 +572,7 @@ const Inspections = () => {
                         </div>
                       </TableHead>
                       <TableHead 
-                        className="cursor-pointer select-none"
+                        className="cursor-pointer select-none min-w-[100px]"
                         onClick={() => handleSort("date")}
                       >
                         <div className="flex items-center gap-2">
@@ -579,7 +581,7 @@ const Inspections = () => {
                         </div>
                       </TableHead>
                       <TableHead 
-                        className="cursor-pointer select-none"
+                        className="cursor-pointer select-none min-w-[80px]"
                         onClick={() => handleSort("time")}
                       >
                         <div className="flex items-center gap-2">
@@ -588,7 +590,7 @@ const Inspections = () => {
                         </div>
                       </TableHead>
                       <TableHead 
-                        className="cursor-pointer select-none"
+                        className="cursor-pointer select-none min-w-[150px]"
                         onClick={() => handleSort("property")}
                       >
                         <div className="flex items-center gap-2">
@@ -597,7 +599,7 @@ const Inspections = () => {
                         </div>
                       </TableHead>
                       <TableHead 
-                        className="cursor-pointer select-none"
+                        className="cursor-pointer select-none min-w-[100px]"
                         onClick={() => handleSort("unit")}
                       >
                         <div className="flex items-center gap-2">
@@ -605,7 +607,7 @@ const Inspections = () => {
                           <ArrowUpDown className="h-4 w-4" />
                         </div>
                       </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right min-w-[80px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -444,8 +444,8 @@ export default function InspectionDetailsDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
-          <div className="p-6 pb-3">
+        <DialogContent className="max-w-2xl max-h-[90vh] h-[90vh] sm:max-h-[85vh] sm:h-[85vh] flex flex-col p-0 gap-0">
+          <div className="p-4 sm:p-6 pb-3 flex-shrink-0">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
@@ -457,30 +457,32 @@ export default function InspectionDetailsDialog({
             </DialogHeader>
           </div>
 
-          <div className="space-y-6 overflow-y-auto px-6 pb-6 flex-1">
+          <div className="space-y-4 sm:space-y-6 overflow-y-auto px-4 sm:px-6 pb-4 sm:pb-6 flex-1">
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
                 <Badge className={`${getInspectionColor(inspection.type)} text-white`}>
                   {inspection.type}
                 </Badge>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowTemplateSelector(true)}
-                    className="gap-2"
+                    className="gap-2 flex-1 sm:flex-none"
                   >
                     <ClipboardList className="h-4 w-4" />
-                    Start Inspection
+                    <span className="hidden sm:inline">Start Inspection</span>
+                    <span className="sm:hidden">Start</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowFollowUpDialog(true)}
-                    className="gap-2"
+                    className="gap-2 flex-1 sm:flex-none"
                   >
                     <Plus className="h-4 w-4" />
-                    Add Follow-up
+                    <span className="hidden sm:inline">Add Follow-up</span>
+                    <span className="sm:hidden">Follow-up</span>
                   </Button>
                 </div>
               </div>
@@ -635,7 +637,7 @@ export default function InspectionDetailsDialog({
             </div>
 
             <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                 <h3 className="font-semibold text-lg">Subtasks</h3>
                 <span className="text-xs text-muted-foreground">
                   {subtasks.filter(s => s.original_inspection_id === inspectionId).length} original • {subtasks.filter(s => s.original_inspection_id !== inspectionId).length} inherited
@@ -649,7 +651,7 @@ export default function InspectionDetailsDialog({
                   return (
                   <div
                     key={subtask.id}
-                    className={`flex items-start gap-3 p-3 border rounded-lg transition-colors group ${
+                    className={`flex flex-col sm:flex-row items-start gap-3 p-3 border rounded-lg transition-colors group ${
                       subtask.completed
                         ? "bg-muted/30 opacity-60"
                         : isInherited
@@ -657,14 +659,15 @@ export default function InspectionDetailsDialog({
                         : "hover:bg-accent/50"
                     }`}
                   >
-                    <Checkbox
-                      checked={subtask.completed}
-                      onCheckedChange={() =>
-                        toggleSubtaskComplete(subtask.id, subtask.completed)
-                      }
-                      className="mt-1"
-                    />
-                      <div className="flex-1">
+                    <div className="flex items-start gap-3 w-full sm:w-auto sm:flex-1">
+                      <Checkbox
+                        checked={subtask.completed}
+                        onCheckedChange={() =>
+                          toggleSubtaskComplete(subtask.id, subtask.completed)
+                        }
+                        className="mt-1 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-2">
                           <p
                             className={`text-sm flex-1 ${
@@ -742,14 +745,15 @@ export default function InspectionDetailsDialog({
                           View Attachment
                         </a>
                       )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {subtask.completed && <Check className="h-4 w-4 text-muted-foreground" />}
+                    <div className="flex items-center gap-2 self-start sm:self-center ml-8 sm:ml-0">
+                      {subtask.completed && <Check className="h-4 w-4 text-muted-foreground flex-shrink-0" />}
                       {!isInherited && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-8 w-8 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           onClick={() => handleDeleteSubtask(subtask.id)}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -761,9 +765,9 @@ export default function InspectionDetailsDialog({
                 })}
 
                 {/* Inline Add Subtask Form */}
-                <div className="flex items-start gap-3 p-3 border rounded-lg border-dashed bg-muted/30">
-                  <div className="w-5 h-5 mt-1" /> {/* Spacer for checkbox alignment */}
-                  <div className="flex-1 space-y-3">
+                <div className="flex flex-col sm:flex-row items-start gap-3 p-3 border rounded-lg border-dashed bg-muted/30">
+                  <div className="hidden sm:block w-5 h-5 mt-1 flex-shrink-0" /> {/* Spacer for checkbox alignment on desktop */}
+                  <div className="flex-1 w-full space-y-3">
                     <Textarea
                       placeholder="Add a new subtask..."
                       value={newDescription}
@@ -778,7 +782,7 @@ export default function InspectionDetailsDialog({
                           handleAddSubtask();
                         }
                       }}
-                      className="min-h-[60px] bg-background resize-none"
+                      className="min-h-[60px] bg-background resize-none w-full"
                       disabled={isAdding}
                     />
 
@@ -838,7 +842,7 @@ export default function InspectionDetailsDialog({
                           </Select>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                           <Input
                             id="new-attachment"
                             type="file"
@@ -853,12 +857,13 @@ export default function InspectionDetailsDialog({
                             className="flex-1"
                           >
                             <Upload className="h-3 w-3 mr-2" />
-                            {newAttachment ? newAttachment.name : "Attach file"}
+                            <span className="truncate">{newAttachment ? newAttachment.name : "Attach file"}</span>
                           </Button>
                           <Button
                             size="sm"
                             onClick={handleAddSubtask}
                             disabled={!newDescription.trim() || isAdding}
+                            className="flex-shrink-0"
                           >
                             <Send className="h-3 w-3 mr-1" />
                             {isAdding ? "Adding..." : "Add"}
