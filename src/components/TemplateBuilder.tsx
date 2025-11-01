@@ -108,7 +108,7 @@ export function TemplateBuilder({
   const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
-  const [showTemplateSettings, setShowTemplateSettings] = useState(true);
+  const [showTemplateSettings, setShowTemplateSettings] = useState(false);
   const [expandedRoomIds, setExpandedRoomIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -171,8 +171,7 @@ export function TemplateBuilder({
       if (!selectedRoom) {
         setSelectedRoom(data[0].id);
       }
-      // Auto-expand all rooms by default
-      setExpandedRoomIds(new Set(data.map(r => r.id)));
+      // Rooms are collapsed by default
     }
   };
 
