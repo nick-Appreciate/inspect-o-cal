@@ -63,6 +63,10 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
   const [selectedDuplicateRoomId, setSelectedDuplicateRoomId] = useState<string>("");
+  const [bulkTaskDescription, setBulkTaskDescription] = useState("");
+  const [bulkTaskInventoryType, setBulkTaskInventoryType] = useState<string>("");
+  const [bulkTaskQuantity, setBulkTaskQuantity] = useState<string>("");
+  const [selectedBulkRoomIds, setSelectedBulkRoomIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
@@ -286,6 +290,67 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     toast.success("Inventory type created");
   };
 
+  const bulkAddTask = async () => {
+    if (!bulkTaskDescription.trim()) {
+      toast.error("Please enter a task description");
+      return;
+    }
+
+    if (selectedBulkRoomIds.size === 0) {
+      toast.error("Please select at least one room template");
+      return;
+    }
+
+    const roomIdsArray = Array.from(selectedBulkRoomIds);
+    
+    // Prepare items to insert
+    const itemsToInsert = [];
+    for (const roomId of roomIdsArray) {
+      const items = roomItems[roomId] || [];
+      const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order_index)) : -1;
+      
+      itemsToInsert.push({
+        room_template_id: roomId,
+        description: bulkTaskDescription.trim(),
+        order_index: maxOrder + 1,
+        inventory_type_id: bulkTaskInventoryType || null,
+        inventory_quantity: parseInt(bulkTaskQuantity) || 0,
+      });
+    }
+
+    const { error } = await supabase
+      .from("room_template_items" as any)
+      .insert(itemsToInsert);
+
+    if (error) {
+      toast.error("Failed to add tasks");
+      return;
+    }
+
+    // Clear form and refresh
+    setBulkTaskDescription("");
+    setBulkTaskInventoryType("");
+    setBulkTaskQuantity("");
+    setSelectedBulkRoomIds(new Set());
+    
+    // Refresh items for all affected rooms
+    roomIdsArray.forEach(roomId => fetchRoomItems(roomId));
+    
+    toast.success(`Task added to ${roomIdsArray.length} room template${roomIdsArray.length > 1 ? 's' : ''}`);
+  };
+
+  const toggleBulkRoomSelection = (roomId: string) => {
+    setSelectedBulkRoomIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(roomId)) {
+        newSet.delete(roomId);
+      } else {
+        newSet.add(roomId);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -339,6 +404,89 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                 <Button onClick={addRoom} className="w-full">
                   <Plus className="mr-2 h-4 w-4" />
                   Create Room Template
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Bulk Add Task to Multiple Rooms</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label>Task Description</Label>
+                  <Input
+                    placeholder="e.g., Check smoke detector"
+                    value={bulkTaskDescription}
+                    onChange={(e) => setBulkTaskDescription(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Inventory Type (Optional)</Label>
+                    <select
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={bulkTaskInventoryType}
+                      onChange={(e) => setBulkTaskInventoryType(e.target.value)}
+                    >
+                      <option value="">None</option>
+                      {inventoryTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Quantity</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={bulkTaskQuantity}
+                      onChange={(e) => setBulkTaskQuantity(e.target.value)}
+                      disabled={!bulkTaskInventoryType}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Select Room Templates</Label>
+                  {rooms.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">
+                      Create room templates first before bulk adding tasks
+                    </p>
+                  ) : (
+                    <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2">
+                      {rooms.map((room) => (
+                        <div key={room.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`bulk-${room.id}`}
+                            checked={selectedBulkRoomIds.has(room.id)}
+                            onChange={() => toggleBulkRoomSelection(room.id)}
+                            className="rounded border-input"
+                          />
+                          <label
+                            htmlFor={`bulk-${room.id}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            {room.name} ({roomItems[room.id]?.length || 0} tasks)
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Button 
+                  onClick={bulkAddTask} 
+                  className="w-full"
+                  disabled={rooms.length === 0}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Task to {selectedBulkRoomIds.size} Selected Room{selectedBulkRoomIds.size !== 1 ? 's' : ''}
                 </Button>
               </CardContent>
             </Card>
