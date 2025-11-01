@@ -22,7 +22,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ClipboardCheck, X, Plus } from "lucide-react";
+import { ClipboardCheck, X, Plus, CheckCircle2, XCircle, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Template {
   id: string;
@@ -81,12 +91,12 @@ export function StartInspectionDialog({
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [itemsByRoom, setItemsByRoom] = useState<Record<string, Item[]>>({});
-  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [itemStatus, setItemStatus] = useState<Record<string, 'good' | 'bad' | 'pending'>>({});
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"select" | "inspect">("select");
   const [users, setUsers] = useState<Profile[]>([]);
-  const [assignToUser, setAssignToUser] = useState<string>("");
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
   const [customItems, setCustomItems] = useState<Array<{
     id: string;
@@ -104,6 +114,9 @@ export function StartInspectionDialog({
   const [mentionSearch, setMentionSearch] = useState("");
   const [showMentionDropdown, setShowMentionDropdown] = useState<string | null>(null);
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [assignToUser, setAssignToUser] = useState<string>("");
+  const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set());
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement>>({});
 
   useEffect(() => {
@@ -115,7 +128,8 @@ export function StartInspectionDialog({
       setSelectedTemplate("");
       setRooms([]);
       setItemsByRoom({});
-      setCheckedItems(new Set());
+      setItemStatus({});
+      setExpandedNotes(new Set());
       setItemNotes({});
       setAssignToUser("");
       setCustomItems([]);
@@ -125,6 +139,8 @@ export function StartInspectionDialog({
       setItemAssignments({});
       setMentionSearch("");
       setShowMentionDropdown(null);
+      setShowAssignDialog(false);
+      setCollapsedRooms(new Set());
     }
   }, [open]);
 
@@ -249,14 +265,32 @@ export function StartInspectionDialog({
     }
   };
 
-  const toggleItem = (itemId: string) => {
-    const newChecked = new Set(checkedItems);
-    if (newChecked.has(itemId)) {
-      newChecked.delete(itemId);
-    } else {
-      newChecked.add(itemId);
-    }
-    setCheckedItems(newChecked);
+  const setItemAsGood = (itemId: string) => {
+    setItemStatus(prev => ({ ...prev, [itemId]: 'good' }));
+    // Collapse notes when marked good
+    setExpandedNotes(prev => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
+  };
+
+  const setItemAsBad = (itemId: string) => {
+    setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
+    // Expand notes when marked bad
+    setExpandedNotes(prev => new Set(prev).add(itemId));
+  };
+
+  const toggleNoteExpanded = (itemId: string) => {
+    setExpandedNotes(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
   };
 
   const updateItemNote = (itemId: string, note: string) => {
@@ -358,10 +392,12 @@ export function StartInspectionDialog({
 
   const removeCustomItem = (itemId: string) => {
     setCustomItems((prev) => prev.filter(item => item.id !== itemId));
-    // Also remove from checked items if it was checked
-    const newChecked = new Set(checkedItems);
-    newChecked.delete(itemId);
-    setCheckedItems(newChecked);
+    // Remove item state
+    setItemStatus(prev => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
   };
 
   const createInventoryType = async () => {
@@ -395,6 +431,18 @@ export function StartInspectionDialog({
     }
   };
 
+  const handleComplete = () => {
+    const allItems = [...Object.values(itemsByRoom).flat(), ...customItems];
+    const badItems = allItems.filter(item => itemStatus[item.id] === 'bad');
+    const unassignedBadItems = badItems.filter(item => !itemAssignments[item.id]?.length);
+
+    if (unassignedBadItems.length > 0) {
+      setShowAssignDialog(true);
+    } else {
+      submitInspection();
+    }
+  };
+
   const submitInspection = async () => {
     setLoading(true);
 
@@ -402,14 +450,14 @@ export function StartInspectionDialog({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Create subtasks for all UNCHECKED items (from template and custom)
+      // Create subtasks for all BAD items (from template and custom)
       const subtasks: any[] = [];
       
-      // Add template items
+      // Add template items marked as bad
       rooms.forEach((room) => {
         const items = itemsByRoom[room.id] || [];
         items.forEach((item) => {
-          if (!checkedItems.has(item.id)) {
+          if (itemStatus[item.id] === 'bad') {
             const note = itemNotes[item.id];
             const description = note 
               ? `${item.description}\n\nNotes: ${note}`
@@ -432,9 +480,9 @@ export function StartInspectionDialog({
         });
       });
 
-      // Add custom items (only unchecked ones)
+      // Add custom items marked as bad
       customItems.forEach((item) => {
-        if (!checkedItems.has(item.id)) {
+        if (itemStatus[item.id] === 'bad') {
           const note = itemNotes[item.id];
           const description = note 
             ? `${item.description}\n\nNotes: ${note}`
@@ -467,6 +515,7 @@ export function StartInspectionDialog({
       toast.success(`Inspection complete! ${subtasks.length} issue${subtasks.length !== 1 ? 's' : ''} recorded.`);
       onInspectionStarted?.();
       onOpenChange(false);
+      setShowAssignDialog(false);
     } catch (error: any) {
       toast.error(error.message || "Failed to submit inspection");
     } finally {
@@ -474,14 +523,11 @@ export function StartInspectionDialog({
     }
   };
 
-  const totalItems = Object.values(itemsByRoom).flat().length + customItems.length;
-  const checkedCount = checkedItems.size;
-  const issuesCount = totalItems - checkedCount;
-  
-  // Count unassigned issues
-  const unassignedCount = [...Object.values(itemsByRoom).flat(), ...customItems]
-    .filter(item => !checkedItems.has(item.id) && !itemAssignments[item.id]?.length)
-    .length;
+  const allItems = [...Object.values(itemsByRoom).flat(), ...customItems];
+  const totalItems = allItems.length;
+  const goodCount = allItems.filter(item => itemStatus[item.id] === 'good').length;
+  const badCount = allItems.filter(item => itemStatus[item.id] === 'bad').length;
+  const pendingCount = totalItems - goodCount - badCount;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -529,11 +575,10 @@ export function StartInspectionDialog({
         ) : (
           <>
             <div className="px-6 py-2 bg-muted shrink-0">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Progress: {checkedCount}/{totalItems}</span>
-                <span className="font-medium text-destructive">
-                  {issuesCount} issue{issuesCount !== 1 ? 's' : ''}
-                </span>
+              <div className="flex justify-between text-xs gap-4">
+                <span className="text-green-600 font-medium">✓ {goodCount} Good</span>
+                <span className="text-destructive font-medium">✗ {badCount} Bad</span>
+                <span className="text-muted-foreground">⊙ {pendingCount} Pending</span>
               </div>
             </div>
 
@@ -544,86 +589,127 @@ export function StartInspectionDialog({
                   const items = itemsByRoom[room.id] || [];
                   if (items.length === 0) return null;
 
+                  const isCollapsed = collapsedRooms.has(room.id);
                   return (
                     <div key={room.id} className="space-y-2">
-                      <h3 className="font-semibold text-base sticky top-0 bg-background py-1 border-b">
+                      <button
+                        onClick={() => {
+                          setCollapsedRooms(prev => {
+                            const next = new Set(prev);
+                            if (next.has(room.id)) {
+                              next.delete(room.id);
+                            } else {
+                              next.add(room.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="w-full flex items-center gap-2 font-semibold text-base sticky top-0 bg-background py-1 border-b hover:bg-accent/50 transition-colors"
+                      >
+                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         {room.name}
-                      </h3>
-                      <div className="space-y-2">
-                        {items.map((item) => {
-                          const assignedUsers = itemAssignments[item.id] || [];
-                          return (
-                            <div
-                              key={item.id}
-                              className="p-2 border rounded-lg hover:bg-accent/50 transition-colors space-y-2"
-                            >
-                              <div className="flex items-start gap-2">
-                                <Checkbox
-                                  checked={checkedItems.has(item.id)}
-                                  onCheckedChange={() => toggleItem(item.id)}
-                                  className="mt-0.5"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <label
-                                    className="text-sm cursor-pointer block"
-                                    onClick={() => toggleItem(item.id)}
-                                  >
-                                    {item.description}
-                                  </label>
-                                  {(item.inventory_quantity && item.inventory_quantity > 0) || item.inventory_quantity === -1 ? (
-                                    <p className="text-xs text-primary font-medium mt-1">
-                                      Items: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
-                                      {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
-                                        <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
-                                      )}
-                                    </p>
-                                  ) : null}
-                                  {assignedUsers.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {assignedUsers.map(userId => {
-                                        const user = users.find(u => u.id === userId);
-                                        return user ? (
-                                          <span key={userId} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
-                                            {user.full_name || user.email}
-                                            <X 
-                                              className="h-3 w-3 cursor-pointer hover:text-destructive" 
-                                              onClick={() => removeAssignment(item.id, userId)}
-                                            />
-                                          </span>
-                                        ) : null;
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="relative">
-                                <Textarea
-                                  ref={(el) => {
-                                    if (el) textareaRefs.current[item.id] = el;
-                                  }}
-                                  placeholder="Add notes or @mention to assign..."
-                                  value={itemNotes[item.id] || ""}
-                                  onChange={(e) => updateItemNote(item.id, e.target.value)}
-                                  className="text-sm min-h-[50px]"
-                                />
-                                {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
-                                  <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
-                                    {filteredMentionUsers.map((user) => (
-                                      <div
-                                        key={user.id}
-                                        className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
-                                        onClick={() => handleMentionSelect(item.id, user)}
-                                      >
-                                        {user.full_name || user.email}
+                      </button>
+                      {!isCollapsed && (
+                        <div className="space-y-2">
+                          {items.map((item) => {
+                            const status = itemStatus[item.id] || 'pending';
+                            const isExpanded = expandedNotes.has(item.id);
+                            const assignedUsers = itemAssignments[item.id] || [];
+                            return (
+                              <div
+                                key={item.id}
+                                className={`p-2 border rounded-lg transition-colors space-y-2 ${
+                                  status === 'good' ? 'border-green-500 bg-green-50' :
+                                  status === 'bad' ? 'border-destructive bg-destructive/5' :
+                                  'hover:bg-accent/50'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2">
+                                  <div className="flex gap-1 shrink-0">
+                                    <Button
+                                      size="sm"
+                                      variant={status === 'good' ? 'default' : 'outline'}
+                                      onClick={() => setItemAsGood(item.id)}
+                                      className={`h-8 px-2 ${status === 'good' ? 'bg-green-600 hover:bg-green-700 text-white' : 'border-green-600 text-green-600 hover:bg-green-50'}`}
+                                    >
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={status === 'bad' ? 'default' : 'outline'}
+                                      onClick={() => setItemAsBad(item.id)}
+                                      className={`h-8 px-2 ${status === 'bad' ? 'bg-destructive hover:bg-destructive/90 text-white' : 'border-destructive text-destructive hover:bg-destructive/5'}`}
+                                    >
+                                      <XCircle className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">{item.description}</p>
+                                    {(item.inventory_quantity && item.inventory_quantity > 0) || item.inventory_quantity === -1 ? (
+                                      <p className="text-xs text-primary font-medium mt-1">
+                                        Items: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
+                                        {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
+                                          <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
+                                        )}
+                                      </p>
+                                    ) : null}
+                                    {assignedUsers.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {assignedUsers.map(userId => {
+                                          const user = users.find(u => u.id === userId);
+                                          return user ? (
+                                            <span key={userId} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
+                                              {user.full_name || user.email}
+                                              <X 
+                                                className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                                                onClick={() => removeAssignment(item.id, userId)}
+                                              />
+                                            </span>
+                                          ) : null;
+                                        })}
                                       </div>
-                                    ))}
+                                    )}
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => toggleNoteExpanded(item.id)}
+                                    className="h-8 w-8 p-0 shrink-0"
+                                  >
+                                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  </Button>
+                                </div>
+                                {isExpanded && (
+                                  <div className="relative pl-20">
+                                    <Textarea
+                                      ref={(el) => {
+                                        if (el) textareaRefs.current[item.id] = el;
+                                      }}
+                                      placeholder="Add notes or @mention to assign..."
+                                      value={itemNotes[item.id] || ""}
+                                      onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                      className="text-sm min-h-[50px]"
+                                    />
+                                    {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
+                                      <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
+                                        {filteredMentionUsers.map((user) => (
+                                          <div
+                                            key={user.id}
+                                            className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
+                                            onClick={() => handleMentionSelect(item.id, user)}
+                                          >
+                                            {user.full_name || user.email}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -637,25 +723,39 @@ export function StartInspectionDialog({
                     </h3>
                     <div className="space-y-2">
                       {customItems.map((item) => {
+                        const status = itemStatus[item.id] || 'pending';
+                        const isExpanded = expandedNotes.has(item.id);
                         const assignedUsers = itemAssignments[item.id] || [];
                         return (
                           <div
                             key={item.id}
-                            className="p-2 border-2 border-dashed border-primary/30 rounded-lg hover:bg-accent/50 transition-colors space-y-2"
+                            className={`p-2 border-2 border-dashed rounded-lg transition-colors space-y-2 ${
+                              status === 'good' ? 'border-green-500 bg-green-50' :
+                              status === 'bad' ? 'border-destructive bg-destructive/5' :
+                              'border-primary/30 hover:bg-accent/50'
+                            }`}
                           >
                             <div className="flex items-start gap-2">
-                              <Checkbox
-                                checked={checkedItems.has(item.id)}
-                                onCheckedChange={() => toggleItem(item.id)}
-                                className="mt-0.5"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <label
-                                  className="text-sm cursor-pointer block font-medium"
-                                  onClick={() => toggleItem(item.id)}
+                              <div className="flex gap-1 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant={status === 'good' ? 'default' : 'outline'}
+                                  onClick={() => setItemAsGood(item.id)}
+                                  className={`h-8 px-2 ${status === 'good' ? 'bg-green-600 hover:bg-green-700 text-white' : 'border-green-600 text-green-600 hover:bg-green-50'}`}
                                 >
-                                  {item.description}
-                                </label>
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={status === 'bad' ? 'default' : 'outline'}
+                                  onClick={() => setItemAsBad(item.id)}
+                                  className={`h-8 px-2 ${status === 'bad' ? 'bg-destructive hover:bg-destructive/90 text-white' : 'border-destructive text-destructive hover:bg-destructive/5'}`}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium">{item.description}</p>
                                 {item.inventory_quantity > 0 || item.inventory_quantity === -1 ? (
                                   <p className="text-xs text-primary font-medium mt-1">
                                     Items: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
@@ -682,6 +782,14 @@ export function StartInspectionDialog({
                                 )}
                               </div>
                               <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => toggleNoteExpanded(item.id)}
+                                className="h-8 w-8 p-0 shrink-0"
+                              >
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </Button>
+                              <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => removeCustomItem(item.id)}
@@ -691,30 +799,32 @@ export function StartInspectionDialog({
                                 <X className="h-4 w-4" />
                               </Button>
                             </div>
-                            <div className="relative">
-                              <Textarea
-                                ref={(el) => {
-                                  if (el) textareaRefs.current[item.id] = el;
-                                }}
-                                placeholder="Add notes or @mention to assign..."
-                                value={itemNotes[item.id] || ""}
-                                onChange={(e) => updateItemNote(item.id, e.target.value)}
-                                className="text-sm min-h-[50px]"
-                              />
-                              {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
-                                <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
-                                  {filteredMentionUsers.map((user) => (
-                                    <div
-                                      key={user.id}
-                                      className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
-                                      onClick={() => handleMentionSelect(item.id, user)}
-                                    >
-                                      {user.full_name || user.email}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            {isExpanded && (
+                              <div className="relative pl-20">
+                                <Textarea
+                                  ref={(el) => {
+                                    if (el) textareaRefs.current[item.id] = el;
+                                  }}
+                                  placeholder="Add notes or @mention to assign..."
+                                  value={itemNotes[item.id] || ""}
+                                  onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                  className="text-sm min-h-[50px]"
+                                />
+                                {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
+                                  <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
+                                    {filteredMentionUsers.map((user) => (
+                                      <div
+                                        key={user.id}
+                                        className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
+                                        onClick={() => handleMentionSelect(item.id, user)}
+                                      >
+                                        {user.full_name || user.email}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -737,36 +847,55 @@ export function StartInspectionDialog({
               </Button>
             </div>
           ) : (
-            <div className="w-full space-y-3">
-              {unassignedCount > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs">Assign unassigned issues ({unassignedCount})</Label>
-                  <Select value={assignToUser} onValueChange={setAssignToUser}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.full_name || user.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep("select")} size="sm">
-                  Back
-                </Button>
-                <Button onClick={submitInspection} disabled={loading} className="flex-1" size="sm">
-                  {loading ? "Submitting..." : `Complete (${issuesCount} issue${issuesCount !== 1 ? 's' : ''})`}
-                </Button>
-              </div>
+            <div className="w-full flex gap-2">
+              <Button variant="outline" onClick={() => setStep("select")} size="sm">
+                Back
+              </Button>
+              <Button onClick={handleComplete} disabled={loading} className="flex-1" size="sm">
+                {loading ? "Submitting..." : `Complete (${badCount} issue${badCount !== 1 ? 's' : ''})`}
+              </Button>
             </div>
           )}
         </DialogFooter>
       </DialogContent>
+
+      {/* Assign Unassigned Issues Dialog */}
+      <AlertDialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Assign Unassigned Issues</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {allItems.filter(item => itemStatus[item.id] === 'bad' && !itemAssignments[item.id]?.length).length} unassigned issues. Would you like to assign them to a user?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label className="text-sm">Assign to</Label>
+            <Select value={assignToUser} onValueChange={setAssignToUser}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Select user" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name || user.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowAssignDialog(false);
+              setAssignToUser("");
+            }}>
+              Skip
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={submitInspection} disabled={!assignToUser || loading}>
+              {loading ? "Submitting..." : "Assign & Complete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Add Custom Item Dialog */}
       <Dialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog}>
