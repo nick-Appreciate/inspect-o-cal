@@ -39,6 +39,11 @@ interface Unit {
   floorplan?: { name: string } | null;
 }
 
+interface Template {
+  id: string;
+  name: string;
+}
+
 interface AddInspectionDialogProps {
   properties: Property[];
   onAddInspection: (inspection: Omit<Inspection, "id">) => void;
@@ -72,16 +77,60 @@ export default function AddInspectionDialog({
   const [selectedUnit, setSelectedUnit] = useState<string>();
   const [showAddUnit, setShowAddUnit] = useState(false);
   const [newUnitName, setNewUnitName] = useState("");
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
 
-  // Fetch units when property is selected
+  // Fetch units and templates when property is selected
   useEffect(() => {
     if (selectedProperty?.id) {
       fetchUnits(selectedProperty.id);
+      fetchTemplates();
     } else {
       setUnits([]);
       setSelectedUnit(undefined);
+      setTemplates([]);
+      setSelectedTemplate("");
     }
   }, [selectedProperty]);
+
+  const fetchTemplates = async () => {
+    if (!selectedProperty?.id) return;
+    
+    try {
+      let query = supabase
+        .from("inspection_templates")
+        .select("id, name, floorplan_id, template_properties(property_id)");
+
+      // If unit is selected, filter by floorplan
+      if (selectedUnit && selectedUnit !== "none") {
+        const { data: unitData } = await supabase
+          .from("units")
+          .select("floorplan_id")
+          .eq("id", selectedUnit)
+          .single();
+
+        if (unitData?.floorplan_id) {
+          query = query.eq("floorplan_id", unitData.floorplan_id);
+        }
+      } else {
+        // Filter by property associations
+        const { data: propertyTemplates } = await supabase
+          .from("template_properties")
+          .select("template_id")
+          .eq("property_id", selectedProperty.id);
+
+        if (propertyTemplates && propertyTemplates.length > 0) {
+          const templateIds = propertyTemplates.map(pt => pt.template_id);
+          query = query.in("id", templateIds);
+        }
+      }
+
+      const { data } = await query.order("name");
+      setTemplates(data || []);
+    } catch (error) {
+      console.error("Error fetching templates:", error);
+    }
+  };
 
   const fetchUnits = async (propertyId: string) => {
     const { data, error } = await supabase
@@ -138,24 +187,96 @@ export default function AddInspectionDialog({
     toast.success("Unit added successfully");
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!type || !date || !time || !selectedProperty) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    onAddInspection({
-      type,
-      date,
-      time,
-      property: selectedProperty,
-      attachment,
-      unitId: selectedUnit,
-    });
+    if (!selectedTemplate) {
+      toast.error("Please select an inspection template");
+      return;
+    }
 
-    toast.success("Inspection added successfully");
-    setOpen(false);
-    resetForm();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    try {
+      // Create the inspection
+      const { data: inspection, error: inspectionError } = await supabase
+        .from("inspections")
+        .insert({
+          type,
+          date: date.toISOString().split('T')[0],
+          time,
+          property_id: selectedProperty.id,
+          unit_id: selectedUnit && selectedUnit !== "none" ? selectedUnit : null,
+          created_by: user.id,
+          inspection_template_id: selectedTemplate,
+        })
+        .select()
+        .single();
+
+      if (inspectionError) throw inspectionError;
+
+      // Fetch template rooms and items
+      const { data: rooms } = await supabase
+        .from("template_rooms")
+        .select("*")
+        .eq("template_id", selectedTemplate)
+        .order("order_index");
+
+      if (rooms) {
+        for (const room of rooms) {
+          // Fetch items for this room
+          const { data: items } = await supabase
+            .from("template_items")
+            .select("*")
+            .eq("room_id", room.id)
+            .order("order_index");
+
+          if (items && items.length > 0) {
+            // Create subtasks for each item
+            const subtasks = items.map(item => ({
+              inspection_id: inspection.id,
+              original_inspection_id: inspection.id,
+              description: item.description,
+              room_name: room.name,
+              inventory_type_id: item.inventory_type_id,
+              inventory_quantity: item.inventory_quantity || 0,
+              status: 'pending',
+              completed: false,
+              created_by: user.id,
+            }));
+
+            const { error: subtasksError } = await supabase
+              .from("subtasks")
+              .insert(subtasks);
+
+            if (subtasksError) throw subtasksError;
+          }
+        }
+      }
+
+      onAddInspection({
+        type,
+        date,
+        time,
+        property: selectedProperty,
+        attachment,
+        unitId: selectedUnit && selectedUnit !== "none" ? selectedUnit : null,
+      });
+
+      toast.success("Inspection created with checklist items");
+      setOpen(false);
+      resetForm();
+    } catch (error: any) {
+      console.error("Error creating inspection:", error);
+      toast.error("Failed to create inspection");
+    }
   };
 
   const handleAddProperty = () => {
@@ -334,18 +455,19 @@ export default function AddInspectionDialog({
           )}
 
           {selectedProperty && !showAddProperty && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Unit (Optional)</Label>
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => setShowAddUnit(!showAddUnit)}
-                  className="h-auto p-0 text-primary"
-                >
-                  {showAddUnit ? "Cancel" : "+ Add New Unit"}
-                </Button>
-              </div>
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Unit (Optional)</Label>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowAddUnit(!showAddUnit)}
+                    className="h-auto p-0 text-primary"
+                  >
+                    {showAddUnit ? "Cancel" : "+ Add New Unit"}
+                  </Button>
+                </div>
               
               {!showAddUnit ? (
                 <Select value={selectedUnit} onValueChange={setSelectedUnit}>
@@ -383,7 +505,24 @@ export default function AddInspectionDialog({
                   </Button>
                 </div>
               )}
-            </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Inspection Template</Label>
+                <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
           )}
 
           <div className="space-y-2">

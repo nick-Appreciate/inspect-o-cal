@@ -177,7 +177,7 @@ export default function InspectionDetailsDialog({
     type: string;
     subtaskCount: number;
   }>>([]);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showCompleted, setShowCompleted] = useState<'all' | 'problems' | 'unchecked'>('all');
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [inspectionRuns, setInspectionRuns] = useState<InspectionRun[]>([]);
 
@@ -946,16 +946,31 @@ export default function InspectionDetailsDialog({
               </div>
             )}
 
-            {/* Show All Toggle */}
-            <div className="flex items-center justify-between mb-3 p-2 bg-muted/30 rounded">
-              <span className="text-sm font-medium">Show Completed Items</span>
+            {/* Filter Buttons */}
+            <div className="flex gap-2 mb-3">
               <Button
-                variant={showCompleted ? "default" : "outline"}
+                variant={showCompleted === 'all' ? "default" : "outline"}
                 size="sm"
-                onClick={() => setShowCompleted(!showCompleted)}
-                className="h-7 text-xs"
+                onClick={() => setShowCompleted('all')}
+                className="flex-1 h-8 text-xs"
               >
-                {showCompleted ? "Hide Completed" : "Show All"}
+                Show All
+              </Button>
+              <Button
+                variant={showCompleted === 'problems' ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowCompleted('problems')}
+                className="flex-1 h-8 text-xs"
+              >
+                Problems Only
+              </Button>
+              <Button
+                variant={showCompleted === 'unchecked' ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowCompleted('unchecked')}
+                className="flex-1 h-8 text-xs"
+              >
+                Unchecked Only
               </Button>
             </div>
 
@@ -963,10 +978,13 @@ export default function InspectionDetailsDialog({
             {/* Tasks grouped by room */}
             <div className="space-y-3">
               {(() => {
-                // Filter subtasks: show only bad items OR manually created items (no inspection_run_id)
-                const filteredSubtasks = showCompleted 
-                  ? subtasks 
-                  : subtasks.filter(s => s.status === 'bad' || !s.inspection_run_id);
+                // Filter subtasks based on mode
+                const filteredSubtasks = subtasks.filter(s => {
+                  if (showCompleted === 'all') return true;
+                  if (showCompleted === 'problems') return s.status === 'bad';
+                  if (showCompleted === 'unchecked') return s.status === 'pending' || !s.status;
+                  return true;
+                });
 
                 // Group subtasks by room
                 const groupedByRoom = filteredSubtasks.reduce((acc, subtask) => {
