@@ -58,6 +58,8 @@ export default function Tasks() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [addTaskDialogOpen, setAddTaskDialogOpen] = useState(false);
+  const [inventoryTypes, setInventoryTypes] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     const {
@@ -86,8 +88,40 @@ export default function Tasks() {
   useEffect(() => {
     if (user) {
       fetchTasks();
+      fetchInventoryTypes();
     }
   }, [user, showAllTasks, showCompleted]);
+
+  const fetchInventoryTypes = async () => {
+    const { data } = await supabase
+      .from("inventory_types")
+      .select("id, name")
+      .order("name");
+    setInventoryTypes(data || []);
+  };
+
+  const handleCreateInventoryType = async (name: string) => {
+    const { error } = await supabase
+      .from("inventory_types")
+      .insert({ name, created_by: user!.id });
+    
+    if (error) {
+      toast.error("Failed to create inventory type");
+    } else {
+      toast.success("Inventory type created");
+      fetchInventoryTypes();
+    }
+  };
+
+  const handleAddTask = async (task: {
+    description: string;
+    inventory_quantity: number;
+    inventory_type_id: string | null;
+  }) => {
+    // For manually added tasks without inspection context, we need to handle this appropriately
+    // For now, we'll show an error since tasks should be added in context of an inspection
+    toast.error("Please add tasks from the inspection details view");
+  };
 
   const fetchTasks = async () => {
     if (!user) return;
@@ -244,7 +278,11 @@ export default function Tasks() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <AddTaskDialog onTaskAdded={fetchTasks} />
+              <Button
+                onClick={() => setAddTaskDialogOpen(true)}
+              >
+                Add Task
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => navigate("/")}
@@ -495,6 +533,14 @@ export default function Tasks() {
           onSaved={fetchTasks}
         />
       )}
+
+      <AddTaskDialog
+        open={addTaskDialogOpen}
+        onOpenChange={setAddTaskDialogOpen}
+        onAdd={handleAddTask}
+        inventoryTypes={inventoryTypes}
+        onCreateInventoryType={handleCreateInventoryType}
+      />
     </div>
   );
 }
