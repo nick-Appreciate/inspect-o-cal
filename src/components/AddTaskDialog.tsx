@@ -114,17 +114,6 @@ export function AddTaskDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="quantity">Quantity (Optional)</Label>
-            <Input
-              id="quantity"
-              type="number"
-              min="0"
-              placeholder="0"
-              value={quantity || ""}
-              onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
-            />
-          </div>
-          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="type">Inventory Type (Optional)</Label>
               <Button
@@ -190,6 +179,17 @@ export function AddTaskDialog({
                 </SelectContent>
               </Select>
             )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="quantity">Inventory Quantity (Optional)</Label>
+            <Input
+              id="quantity"
+              type="number"
+              min="0"
+              placeholder="0"
+              value={quantity || ""}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+            />
           </div>
           {vendorTypes.length > 0 && (
             <div className="space-y-2">

@@ -904,11 +904,6 @@ export function StartInspectionDialog({
                                 </div>
                                 {isExpanded && (
                                   <div className="relative mt-2 ml-[84px]">
-                                    {isPendingBad && (
-                                      <p className="text-xs text-destructive font-medium mb-1">
-                                        ⚠️ Notes required to mark as bad
-                                      </p>
-                                    )}
                                     <Textarea
                                       ref={(el) => {
                                         if (el) textareaRefs.current[item.id] = el;
@@ -936,20 +931,6 @@ export function StartInspectionDialog({
                                       }}
                                       className="text-sm min-h-[60px]"
                                       onClick={(e) => e.stopPropagation()}
-                                      onBlur={() => {
-                                        // Close notes on blur only if notes are filled and not pending bad
-                                        const note = itemNotes[item.id];
-                                        const isPending = pendingBadItems.has(item.id);
-                                        if (note?.trim() && !isPending) {
-                                          setTimeout(() => {
-                                            setExpandedNotes(prev => {
-                                              const next = new Set(prev);
-                                              next.delete(item.id);
-                                              return next;
-                                            });
-                                          }, 200);
-                                        }
-                                      }}
                                     />
                                     {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
                                       <div 
@@ -1109,11 +1090,6 @@ export function StartInspectionDialog({
                               </div>
                               {isExpanded && (
                                 <div className="relative mt-2 ml-[84px]">
-                                  {isPendingBad && (
-                                    <p className="text-xs text-destructive font-medium mb-1">
-                                      ⚠️ Notes required to mark as bad
-                                    </p>
-                                  )}
                                   <Textarea
                                     ref={(el) => {
                                       if (el) textareaRefs.current[item.id] = el;
@@ -1141,20 +1117,6 @@ export function StartInspectionDialog({
                                     }}
                                     className="text-sm min-h-[60px]"
                                     onClick={(e) => e.stopPropagation()}
-                                    onBlur={() => {
-                                      // Close notes on blur only if notes are filled and not pending bad
-                                      const note = itemNotes[item.id];
-                                      const isPending = pendingBadItems.has(item.id);
-                                      if (note?.trim() && !isPending) {
-                                        setTimeout(() => {
-                                          setExpandedNotes(prev => {
-                                            const next = new Set(prev);
-                                            next.delete(item.id);
-                                            return next;
-                                          });
-                                        }, 200);
-                                      }
-                                    }}
                                   />
                                   {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
                                     <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
