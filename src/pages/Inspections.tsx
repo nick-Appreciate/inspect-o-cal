@@ -60,6 +60,7 @@ const Inspections = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [showCompleted, setShowCompleted] = useState(false);
 
   useEffect(() => {
     fetchInspections();
@@ -138,6 +139,44 @@ const Inspections = () => {
 
   const handleToggleComplete = async (inspectionId: string, currentCompleted: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // If marking as complete, check for connected inspections
+    if (!currentCompleted) {
+      const connectedInspections = inspections.filter(i => 
+        (i.parent_inspection_id === inspectionId || i.id === inspectionId) && !i.completed
+      );
+      
+      if (connectedInspections.length > 1) {
+        const shouldCompleteAll = window.confirm(
+          `This inspection has ${connectedInspections.length - 1} connected follow-up inspection(s). Would you like to mark all of them as complete?`
+        );
+        
+        if (shouldCompleteAll) {
+          try {
+            const { error } = await supabase
+              .from("inspections")
+              .update({ completed: true })
+              .in("id", connectedInspections.map(i => i.id));
+
+            if (error) {
+              toast.error("Failed to update inspections");
+              return;
+            }
+
+            setInspections(prev => 
+              prev.map(i => connectedInspections.some(ci => ci.id === i.id) ? { ...i, completed: true } : i)
+            );
+            toast.success("All connected inspections marked as complete");
+            return;
+          } catch (err) {
+            console.error("Error updating inspections:", err);
+            toast.error("An error occurred");
+            return;
+          }
+        }
+      }
+    }
+    
     try {
       const { error } = await supabase
         .from("inspections")
@@ -203,6 +242,9 @@ const Inspections = () => {
   };
 
   const filteredInspections = inspections.filter((inspection) => {
+    // Filter by completed status
+    if (!showCompleted && inspection.completed) return false;
+    
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
 
@@ -350,14 +392,22 @@ const Inspections = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by type, date, property, unit..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by type, date, property, unit..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Button
+                variant={showCompleted ? "default" : "outline"}
+                onClick={() => setShowCompleted(!showCompleted)}
+              >
+                {showCompleted ? "Hide" : "Show"} Completed
+              </Button>
             </div>
 
             {sortedChains.length === 0 ? (
