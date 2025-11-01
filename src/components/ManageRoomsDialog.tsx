@@ -37,6 +37,7 @@ interface RoomTemplateItem {
   order_index: number;
   inventory_type_id: string | null;
   inventory_quantity: number;
+  vendor_type_id: string | null;
 }
 
 interface InventoryType {
@@ -44,11 +45,18 @@ interface InventoryType {
   name: string;
 }
 
+interface VendorType {
+  id: string;
+  name: string;
+  default_assigned_user_id: string | null;
+}
+
 interface DefaultTask {
   id: string;
   description: string;
   inventory_type_id: string | null;
   inventory_quantity: number;
+  vendor_type_id: string | null;
 }
 
 interface ManageRoomsDialogProps {
@@ -63,9 +71,11 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
   const [roomItems, setRoomItems] = useState<Record<string, RoomTemplateItem[]>>({});
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemInventoryType, setNewItemInventoryType] = useState<string>("");
   const [newItemQuantity, setNewItemQuantity] = useState<string>("");
+  const [newItemVendorType, setNewItemVendorType] = useState<string>("");
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
   const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
@@ -74,12 +84,14 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [defaultTaskDescription, setDefaultTaskDescription] = useState("");
   const [defaultTaskInventoryType, setDefaultTaskInventoryType] = useState<string>("");
   const [defaultTaskQuantity, setDefaultTaskQuantity] = useState<string>("");
+  const [defaultTaskVendorType, setDefaultTaskVendorType] = useState<string>("");
   const [deleteDefaultTaskId, setDeleteDefaultTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       fetchRooms();
       fetchInventoryTypes();
+      fetchVendorTypes();
       fetchDefaultTasks();
     }
   }, [open]);
@@ -152,6 +164,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
           order_index: index,
           inventory_type_id: task.inventory_type_id,
           inventory_quantity: task.inventory_quantity,
+          vendor_type_id: task.vendor_type_id,
         });
       });
     }
@@ -172,6 +185,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
             order_index: defaultTasks.length + index,
             inventory_type_id: item.inventory_type_id,
             inventory_quantity: item.inventory_quantity,
+            vendor_type_id: item.vendor_type_id,
           });
         });
       }
@@ -222,6 +236,20 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setInventoryTypes(data || []);
   };
 
+  const fetchVendorTypes = async () => {
+    const { data, error } = await supabase
+      .from("vendor_types")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      toast.error("Failed to load vendor types");
+      return;
+    }
+
+    setVendorTypes(data || []);
+  };
+
   const fetchRoomItems = async (roomId: string) => {
     const { data, error } = await supabase
       .from("room_template_items" as any)
@@ -254,6 +282,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         order_index: maxOrder + 1,
         inventory_type_id: newItemInventoryType || null,
         inventory_quantity: parseInt(newItemQuantity) || 0,
+        vendor_type_id: newItemVendorType || null,
       });
 
     if (error) {
@@ -264,6 +293,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setNewItemDescription("");
     setNewItemInventoryType("");
     setNewItemQuantity("");
+    setNewItemVendorType("");
     fetchRoomItems(roomId);
     toast.success("Task added");
   };
@@ -347,6 +377,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         description: defaultTaskDescription.trim(),
         inventory_type_id: defaultTaskInventoryType || null,
         inventory_quantity: parseInt(defaultTaskQuantity) || 0,
+        vendor_type_id: defaultTaskVendorType || null,
         created_by: user.id,
       })
       .select()
@@ -370,6 +401,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
           order_index: maxOrder + 1,
           inventory_type_id: defaultTaskInventoryType || null,
           inventory_quantity: parseInt(defaultTaskQuantity) || 0,
+          vendor_type_id: defaultTaskVendorType || null,
         });
       }
 
@@ -392,6 +424,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setDefaultTaskDescription("");
     setDefaultTaskInventoryType("");
     setDefaultTaskQuantity("");
+    setDefaultTaskVendorType("");
     fetchDefaultTasks();
   };
 
@@ -516,6 +549,22 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                       disabled={!defaultTaskInventoryType}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs">Vendor Needed (Optional)</Label>
+                  <select
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={defaultTaskVendorType}
+                    onChange={(e) => setDefaultTaskVendorType(e.target.value)}
+                  >
+                    <option value="">None</option>
+                    {vendorTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <Button onClick={addDefaultTask} className="w-full">
@@ -689,6 +738,23 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                   />
                                 </div>
                               </div>
+
+                              <div>
+                                <Label className="text-xs">Vendor Needed</Label>
+                                <select
+                                  className="flex-1 h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                                  value={newItemVendorType}
+                                  onChange={(e) => setNewItemVendorType(e.target.value)}
+                                >
+                                  <option value="">None</option>
+                                  {vendorTypes.map((type) => (
+                                    <option key={type.id} value={type.id}>
+                                      {type.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
                               <Button onClick={() => addRoomItem(room.id)} size="sm" className="w-full">
                                 <Plus className="mr-2 h-4 w-4" />
                                 Add Task
