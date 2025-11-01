@@ -40,6 +40,12 @@ interface Profile {
   avatar_url?: string | null;
 }
 
+interface VendorType {
+  id: string;
+  name: string;
+  default_assigned_user_id: string | null;
+}
+
 interface AddTaskDialogProps {
   onTaskAdded: () => void;
 }
@@ -51,12 +57,15 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
+  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
+  const [selectedVendorType, setSelectedVendorType] = useState<string>("none");
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     if (open) {
       fetchInspections();
       fetchUsers();
+      fetchVendorTypes();
     }
   }, [open]);
 
@@ -91,6 +100,17 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
     }
   };
 
+  const fetchVendorTypes = async () => {
+    const { data, error } = await supabase
+      .from("vendor_types")
+      .select("*")
+      .order("name");
+
+    if (!error && data) {
+      setVendorTypes(data);
+    }
+  };
+
   const handleCreate = async () => {
     if (!description.trim() || !selectedInspectionId) {
       toast.error("Please enter a description and select an inspection");
@@ -112,6 +132,7 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
         assigned_users: selectedUsers.length > 0 ? selectedUsers : [user.id],
         inventory_quantity: null,
         inventory_type_id: null,
+        vendor_type_id: selectedVendorType && selectedVendorType !== "none" ? selectedVendorType : null,
         created_by: user.id,
       });
 
@@ -132,6 +153,7 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
     setDescription("");
     setSelectedInspectionId("");
     setSelectedUsers([]);
+    setSelectedVendorType("none");
   };
 
   const toggleUser = (userId: string) => {
@@ -223,6 +245,26 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
             <p className="text-xs text-muted-foreground">
               Leave empty to assign to yourself
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="vendorType">Vendor Needed (Optional)</Label>
+            <Select
+              value={selectedVendorType}
+              onValueChange={setSelectedVendorType}
+            >
+              <SelectTrigger id="vendorType">
+                <SelectValue placeholder="Select vendor type" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="none">None</SelectItem>
+                {vendorTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
