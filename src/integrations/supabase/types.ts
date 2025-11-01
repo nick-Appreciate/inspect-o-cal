@@ -179,6 +179,7 @@ export type Database = {
         Row: {
           attachment_url: string | null
           completed: boolean | null
+          completed_by: string | null
           created_at: string
           created_by: string
           date: string
@@ -194,6 +195,7 @@ export type Database = {
         Insert: {
           attachment_url?: string | null
           completed?: boolean | null
+          completed_by?: string | null
           created_at?: string
           created_by: string
           date: string
@@ -209,6 +211,7 @@ export type Database = {
         Update: {
           attachment_url?: string | null
           completed?: boolean | null
+          completed_by?: string | null
           created_at?: string
           created_by?: string
           date?: string

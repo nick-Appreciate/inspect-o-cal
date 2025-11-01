@@ -248,9 +248,19 @@ const Inspections = () => {
 
   const handleToggleComplete = async (inspectionId: string, currentCompleted: boolean) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Not authenticated");
+        return;
+      }
+
+      const updateData = currentCompleted 
+        ? { completed: false, completed_by: null }
+        : { completed: true, completed_by: user.id };
+
       const { data, error } = await supabase
         .from("inspections")
-        .update({ completed: !currentCompleted })
+        .update(updateData)
         .eq("id", inspectionId)
         .select("id, completed");
 
@@ -274,9 +284,15 @@ const Inspections = () => {
   const handleCompleteConfirm = async (inspectionIdsToComplete: string[]) => {
     console.log('handleCompleteConfirm - IDs to complete:', inspectionIdsToComplete);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Not authenticated");
+        return;
+      }
+
       const { data, error } = await supabase
         .from("inspections")
-        .update({ completed: true })
+        .update({ completed: true, completed_by: user.id })
         .in("id", inspectionIdsToComplete)
         .select("id");
 
@@ -316,7 +332,7 @@ const Inspections = () => {
     try {
       const { data, error } = await supabase
         .from("inspections")
-        .update({ completed: false })
+        .update({ completed: false, completed_by: null })
         .in("id", inspectionIdsToUncomplete)
         .select("id");
 
