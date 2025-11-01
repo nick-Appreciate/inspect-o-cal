@@ -17,7 +17,7 @@ export type Database = {
       inspection_templates: {
         Row: {
           created_at: string
-          created_by: string | null
+          created_by: string
           description: string | null
           id: string
           name: string
@@ -25,7 +25,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          created_by?: string | null
+          created_by: string
           description?: string | null
           id?: string
           name: string
@@ -33,7 +33,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          created_by?: string | null
+          created_by?: string
           description?: string | null
           id?: string
           name?: string
@@ -44,19 +44,19 @@ export type Database = {
       inspection_types: {
         Row: {
           created_at: string
-          created_by: string | null
+          created_by: string
           id: string
           name: string
         }
         Insert: {
           created_at?: string
-          created_by?: string | null
+          created_by: string
           id?: string
           name: string
         }
         Update: {
           created_at?: string
-          created_by?: string | null
+          created_by?: string
           id?: string
           name?: string
         }
@@ -66,7 +66,7 @@ export type Database = {
         Row: {
           attachment_url: string | null
           created_at: string
-          created_by: string | null
+          created_by: string
           date: string
           duration: number | null
           id: string
@@ -78,7 +78,7 @@ export type Database = {
         Insert: {
           attachment_url?: string | null
           created_at?: string
-          created_by?: string | null
+          created_by: string
           date: string
           duration?: number | null
           id?: string
@@ -90,7 +90,7 @@ export type Database = {
         Update: {
           attachment_url?: string | null
           created_at?: string
-          created_by?: string | null
+          created_by?: string
           date?: string
           duration?: number | null
           id?: string
@@ -119,19 +119,19 @@ export type Database = {
       inventory_types: {
         Row: {
           created_at: string
-          created_by: string | null
+          created_by: string
           id: string
           name: string
         }
         Insert: {
           created_at?: string
-          created_by?: string | null
+          created_by: string
           id?: string
           name: string
         }
         Update: {
           created_at?: string
-          created_by?: string | null
+          created_by?: string
           id?: string
           name?: string
         }
@@ -165,21 +165,21 @@ export type Database = {
         Row: {
           address: string
           created_at: string
-          created_by: string | null
+          created_by: string
           id: string
           name: string
         }
         Insert: {
           address: string
           created_at?: string
-          created_by?: string | null
+          created_by: string
           id?: string
           name: string
         }
         Update: {
           address?: string
           created_at?: string
-          created_by?: string | null
+          created_by?: string
           id?: string
           name?: string
         }
@@ -191,7 +191,7 @@ export type Database = {
           attachment_url: string | null
           completed: boolean | null
           created_at: string
-          created_by: string | null
+          created_by: string
           description: string
           id: string
           inspection_id: string
@@ -204,7 +204,7 @@ export type Database = {
           attachment_url?: string | null
           completed?: boolean | null
           created_at?: string
-          created_by?: string | null
+          created_by: string
           description: string
           id?: string
           inspection_id: string
@@ -217,7 +217,7 @@ export type Database = {
           attachment_url?: string | null
           completed?: boolean | null
           created_at?: string
-          created_by?: string | null
+          created_by?: string
           description?: string
           id?: string
           inspection_id?: string
