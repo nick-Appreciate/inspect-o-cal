@@ -119,6 +119,8 @@ export function StartInspectionDialog({
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set());
   const [showCompleted, setShowCompleted] = useState(false);
   const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
+  const [showPendingWarning, setShowPendingWarning] = useState(false);
+  const [pendingToConfirm, setPendingToConfirm] = useState(0);
   const [pendingBadItems, setPendingBadItems] = useState<Set<string>>(new Set());
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement>>({});
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
@@ -355,37 +357,25 @@ export function StartInspectionDialog({
   };
 
   const setItemAsBad = (itemId: string, roomId?: string) => {
-    // Mark item as bad and expand notes for user to add details
+    // Mark item as bad and require notes before closing
     setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
     setPendingBadItems(prev => {
       const next = new Set(prev);
-      next.delete(itemId);
+      next.add(itemId);
       return next;
     });
-    
     // Always expand notes for bad items
     setExpandedNotes(prev => new Set(prev).add(itemId));
     
-    // Focus the textarea if notes are empty
-    if (!itemNotes[itemId]?.trim()) {
-      setTimeout(() => {
-        const textarea = textareaRefs.current[itemId];
-        if (textarea) {
-          textarea.focus();
-        }
-      }, 100);
-    }
+    // Focus the textarea to prompt note entry
+    setTimeout(() => {
+      const textarea = textareaRefs.current[itemId];
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 100);
     
-    // Auto-collapse room if all items have status
-    if (roomId) {
-      setTimeout(() => {
-        const items = itemsByRoom[roomId] || [];
-        const allHaveStatus = items.every(item => itemStatus[item.id] && itemStatus[item.id] !== 'pending');
-        if (allHaveStatus) {
-          setCollapsedRooms(prev => new Set(prev).add(roomId));
-        }
-      }, 100);
-    }
+    // Do NOT auto-collapse the room when marking as bad
   };
 
   const toggleNoteExpanded = (itemId: string) => {
@@ -553,16 +543,26 @@ export function StartInspectionDialog({
     const itemsWithoutStatus = allItems.filter(item => !itemStatus[item.id] || itemStatus[item.id] === 'pending');
     
     if (itemsWithoutStatus.length > 0) {
-      // Show warning but allow proceeding
-      const proceed = window.confirm(
-        `${itemsWithoutStatus.length} item${itemsWithoutStatus.length !== 1 ? 's' : ''} still pending. Do you want to complete anyway?`
-      );
-      if (!proceed) return;
+      setPendingToConfirm(itemsWithoutStatus.length);
+      setShowPendingWarning(true);
+      return;
     }
 
     const badItems = allItems.filter(item => itemStatus[item.id] === 'bad');
     const unassignedBadItems = badItems.filter(item => !itemAssignments[item.id]?.length);
 
+    if (unassignedBadItems.length > 0) {
+      setShowAssignDialog(true);
+    } else {
+      submitInspection();
+    }
+  };
+
+  const proceedAfterPendingWarning = () => {
+    setShowPendingWarning(false);
+    const allItems = [...Object.values(itemsByRoom).flat(), ...customItems];
+    const badItems = allItems.filter(item => itemStatus[item.id] === 'bad');
+    const unassignedBadItems = badItems.filter(item => !itemAssignments[item.id]?.length);
     if (unassignedBadItems.length > 0) {
       setShowAssignDialog(true);
     } else {
@@ -935,6 +935,11 @@ export function StartInspectionDialog({
                                             toast.error("Please add notes for this issue");
                                             return;
                                           }
+                                          setPendingBadItems(prev => {
+                                            const next = new Set(prev);
+                                            next.delete(item.id);
+                                            return next;
+                                          });
                                           setExpandedNotes(prev => {
                                             const next = new Set(prev);
                                             next.delete(item.id);
@@ -1132,6 +1137,11 @@ export function StartInspectionDialog({
                                           toast.error("Please add notes for this issue");
                                           return;
                                         }
+                                        setPendingBadItems(prev => {
+                                          const next = new Set(prev);
+                                          next.delete(item.id);
+                                          return next;
+                                        });
                                         setExpandedNotes(prev => {
                                           const next = new Set(prev);
                                           next.delete(item.id);
@@ -1182,8 +1192,28 @@ export function StartInspectionDialog({
       </DialogContent>
     </Dialog>
 
-      {/* Assign Unassigned Issues Dialog */}
-      <AlertDialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+    {/* Pending Items Warning */}
+    <AlertDialog open={showPendingWarning} onOpenChange={setShowPendingWarning}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Complete with Pending Items?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {pendingToConfirm} item{pendingToConfirm !== 1 ? 's' : ''} still pending. Do you want to complete anyway?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setShowPendingWarning(false)}>
+            Keep Reviewing
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={proceedAfterPendingWarning}>
+            Complete Anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    {/* Assign Unassigned Issues Dialog */}
+    <AlertDialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Assign Unassigned Issues</AlertDialogTitle>
