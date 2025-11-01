@@ -540,7 +540,12 @@ export function StartInspectionDialog({
 
   const handleComplete = () => {
     const allItems = [...Object.values(itemsByRoom).flat(), ...customItems];
-    const itemsWithoutStatus = allItems.filter(item => !itemStatus[item.id] || itemStatus[item.id] === 'pending');
+    const itemsWithoutStatus = allItems.filter(item => {
+      const status = itemStatus[item.id];
+      if (!status || status === 'pending') return true;
+      if (status === 'bad' && pendingBadItems.has(item.id)) return true;
+      return false;
+    });
     
     if (itemsWithoutStatus.length > 0) {
       setPendingToConfirm(itemsWithoutStatus.length);
@@ -750,7 +755,12 @@ export function StartInspectionDialog({
 
                   const visibleItems = showCompleted 
                     ? items 
-                    : items.filter(item => !itemStatus[item.id] || itemStatus[item.id] === 'pending');
+                    : items.filter(item => {
+                        const status = itemStatus[item.id];
+                        if (!status || status === 'pending') return true;
+                        if (status === 'bad' && pendingBadItems.has(item.id)) return true;
+                        return false;
+                      });
                   
                   if (visibleItems.length === 0 && !showCompleted) return null;
 
@@ -967,7 +977,12 @@ export function StartInspectionDialog({
                 {customItems.length > 0 && (() => {
                   const visibleCustomItems = showCompleted
                     ? customItems
-                    : customItems.filter(item => !itemStatus[item.id] || itemStatus[item.id] === 'pending');
+                    : customItems.filter(item => {
+                        const status = itemStatus[item.id];
+                        if (!status || status === 'pending') return true;
+                        if (status === 'bad' && pendingBadItems.has(item.id)) return true;
+                        return false;
+                      });
                   
                   if (visibleCustomItems.length === 0) return null;
 
