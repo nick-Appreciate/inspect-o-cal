@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 interface UserAvatarProps {
   avatarUrl?: string | null;
   name?: string | null;
-  email: string;
+  email?: string | null;
   size?: "sm" | "md" | "lg";
 }
 
@@ -29,12 +29,15 @@ export function UserAvatar({ avatarUrl, name, email, size = "sm" }: UserAvatarPr
       }
       return name.substring(0, 2).toUpperCase();
     }
-    return email.substring(0, 2).toUpperCase();
+    if (email) {
+      return email.substring(0, 2).toUpperCase();
+    }
+    return "??";
   };
 
   return (
     <Avatar className={sizeClasses[size]}>
-      <AvatarImage src={avatarUrl || undefined} alt={name || email} />
+      <AvatarImage src={avatarUrl || undefined} alt={name || email || "User"} />
       <AvatarFallback className={textSizeClasses[size]}>
         {getInitials()}
       </AvatarFallback>

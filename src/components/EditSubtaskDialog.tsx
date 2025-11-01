@@ -25,7 +25,6 @@ import { UserAvatar } from "./UserAvatar";
 interface Profile {
   id: string;
   full_name: string | null;
-  email: string;
   avatar_url?: string | null;
 }
 
@@ -82,8 +81,8 @@ export default function EditSubtaskDialog({
 
   const fetchUsers = async () => {
     const { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, avatar_url")
+      .from("public_profiles")
+      .select("id, full_name, avatar_url")
       .order("full_name", { ascending: true });
 
     if (!error && data) {
@@ -190,11 +189,10 @@ export default function EditSubtaskDialog({
                     <UserAvatar
                       avatarUrl={user.avatar_url}
                       name={user.full_name}
-                      email={user.email}
                       size="sm"
                     />
                     <span className="text-sm flex-1">
-                      {user.full_name || user.email}
+                      {user.full_name || "Unknown User"}
                     </span>
                     {selectedUsers.includes(user.id) && (
                       <Badge variant="secondary" className="text-xs">
