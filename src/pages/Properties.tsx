@@ -98,13 +98,9 @@ export default function Properties() {
   }, []);
 
   const fetchProperties = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
     const { data, error } = await supabase
       .from("properties")
       .select("*")
-      .eq("created_by", user.id)
       .order("name");
 
     if (error) {
