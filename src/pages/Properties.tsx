@@ -206,13 +206,44 @@ export default function Properties() {
   const deleteProperty = async () => {
     if (!deletePropertyId) return;
 
+    // Check for related records
+    const { data: units } = await supabase
+      .from("units")
+      .select("id")
+      .eq("property_id", deletePropertyId);
+
+    const { data: inspections } = await supabase
+      .from("inspections")
+      .select("id")
+      .eq("property_id", deletePropertyId);
+
+    if (units && units.length > 0) {
+      toast.error(`Cannot delete property. Please delete all ${units.length} unit(s) first.`);
+      setDeletePropertyId(null);
+      return;
+    }
+
+    if (inspections && inspections.length > 0) {
+      toast.error(`Cannot delete property. It has ${inspections.length} associated inspection(s).`);
+      setDeletePropertyId(null);
+      return;
+    }
+
+    // Delete template associations first
+    await supabase
+      .from("template_properties")
+      .delete()
+      .eq("property_id", deletePropertyId);
+
+    // Now delete the property
     const { error } = await supabase
       .from("properties")
       .delete()
       .eq("id", deletePropertyId);
 
     if (error) {
-      toast.error("Failed to delete property");
+      console.error("Delete error:", error);
+      toast.error("Failed to delete property: " + error.message);
       return;
     }
 
@@ -312,13 +343,26 @@ export default function Properties() {
   const deleteUnit = async () => {
     if (!deleteUnitId) return;
 
+    // Check for related inspections
+    const { data: inspections } = await supabase
+      .from("inspections")
+      .select("id")
+      .eq("unit_id", deleteUnitId);
+
+    if (inspections && inspections.length > 0) {
+      toast.error(`Cannot delete unit. It has ${inspections.length} associated inspection(s).`);
+      setDeleteUnitId(null);
+      return;
+    }
+
     const { error } = await supabase
       .from("units")
       .delete()
       .eq("id", deleteUnitId);
 
     if (error) {
-      toast.error("Failed to delete unit");
+      console.error("Delete error:", error);
+      toast.error("Failed to delete unit: " + error.message);
       return;
     }
 
