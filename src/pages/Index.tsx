@@ -69,14 +69,23 @@ const Index = () => {
   }, []);
 
   const fetchInspections = async () => {
-    const { data, error } = await supabase
-      .from("inspections")
-      .select("*, properties(id, name, address), units(id, name)")
-      .order("date", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("inspections")
+        .select("*, properties(id, name, address), units(id, name)")
+        .order("date", { ascending: true });
 
-    if (error) {
-      console.error("Failed to load inspections:", error);
-    } else {
+      if (error) {
+        console.error("Failed to load inspections:", error);
+        toast.error("Failed to load inspections");
+        return;
+      }
+
+      if (!data) {
+        setInspections([]);
+        return;
+      }
+
       const transformedData: Inspection[] = data.map((item: any) => {
         // Parse date string as local date to avoid timezone shifts
         const [year, month, day] = item.date.split('-').map(Number);
@@ -97,6 +106,9 @@ const Index = () => {
         };
       });
       setInspections(transformedData);
+    } catch (err) {
+      console.error("Error in fetchInspections:", err);
+      toast.error("An error occurred while loading inspections");
     }
   };
 
@@ -116,42 +128,50 @@ const Index = () => {
   const handleAddInspection = async (newInspection: Omit<Inspection, "id">) => {
     if (!user) return;
 
-    // Upload attachment if provided
-    let attachmentUrl: string | undefined;
-    if (newInspection.attachment) {
-      const fileExt = newInspection.attachment.name.split(".").pop();
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("attachments")
-        .upload(fileName, newInspection.attachment);
+    try {
+      // Upload attachment if provided
+      let attachmentUrl: string | undefined;
+      if (newInspection.attachment) {
+        const fileExt = newInspection.attachment.name.split(".").pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(fileName, newInspection.attachment);
 
-      if (uploadError) {
-        toast.error("Failed to upload attachment");
+        if (uploadError) {
+          console.error("Attachment upload error:", uploadError);
+          toast.error("Failed to upload attachment");
+          return;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+          .from("attachments")
+          .getPublicUrl(fileName);
+
+        attachmentUrl = publicUrl;
+      }
+
+      const { error } = await supabase.from("inspections").insert({
+        type: newInspection.type,
+        date: format(newInspection.date, 'yyyy-MM-dd'),
+        time: newInspection.time,
+        property_id: newInspection.property.id,
+        unit_id: newInspection.unitId && newInspection.unitId !== "none" ? newInspection.unitId : null,
+        attachment_url: attachmentUrl,
+        created_by: user.id,
+      });
+
+      if (error) {
+        console.error("Insert inspection error:", error);
+        toast.error(`Failed to add inspection: ${error.message}`);
         return;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("attachments")
-        .getPublicUrl(fileName);
-
-      attachmentUrl = publicUrl;
-    }
-
-    const { error } = await supabase.from("inspections").insert({
-      type: newInspection.type,
-      date: format(newInspection.date, 'yyyy-MM-dd'),
-      time: newInspection.time,
-      property_id: newInspection.property.id,
-      unit_id: newInspection.unitId && newInspection.unitId !== "none" ? newInspection.unitId : null,
-      attachment_url: attachmentUrl,
-      created_by: user.id,
-    });
-
-    if (error) {
-      toast.error("Failed to add inspection");
-    } else {
       toast.success("Inspection added successfully");
-      fetchInspections();
+      await fetchInspections();
+    } catch (err: any) {
+      console.error("Error in handleAddInspection:", err);
+      toast.error(`An error occurred: ${err.message || "Unknown error"}`);
     }
   };
 
