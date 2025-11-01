@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, ChevronDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -276,7 +276,14 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                           className="flex items-center justify-between p-3 hover:bg-accent/50 transition-colors cursor-pointer"
                           onClick={() => toggleRoomExpansion(room.id)}
                         >
-                          <span className="font-medium">{room.name}</span>
+                          <div className="flex items-center gap-2">
+                            <ChevronDown 
+                              className={`h-4 w-4 transition-transform ${
+                                expandedRoomId === room.id ? 'rotate-180' : ''
+                              }`}
+                            />
+                            <span className="font-medium">{room.name}</span>
+                          </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">
                               {roomItems[room.id]?.length || 0} tasks
