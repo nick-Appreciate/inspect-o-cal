@@ -55,6 +55,7 @@ interface Subtask {
   inspection_id: string;
   inventory_quantity?: number;
   inventory_type_id?: string | null;
+  vendor_type_id?: string | null;
   created_at: string;
   created_by: string;
   assignedProfiles?: Array<{
@@ -79,6 +80,12 @@ interface Profile {
 interface InventoryType {
   id: string;
   name: string;
+}
+
+interface VendorType {
+  id: string;
+  name: string;
+  default_assigned_user_id: string | null;
 }
 
 interface InspectionDetailsDialogProps {
@@ -113,6 +120,7 @@ export default function InspectionDetailsDialog({
   const [childInspections, setChildInspections] = useState<Inspection[]>([]);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
@@ -127,6 +135,7 @@ export default function InspectionDetailsDialog({
       fetchSubtasks();
       fetchUsers();
       fetchInventoryTypes();
+      fetchVendorTypes();
     }
   }, [inspectionId, open]);
 
@@ -286,6 +295,19 @@ export default function InspectionDetailsDialog({
       console.error("Failed to load inventory types:", error);
     } else {
       setInventoryTypes(data || []);
+    }
+  };
+
+  const fetchVendorTypes = async () => {
+    const { data, error } = await supabase
+      .from("vendor_types")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      console.error("Failed to load vendor types:", error);
+    } else {
+      setVendorTypes(data || []);
     }
   };
 
@@ -665,6 +687,13 @@ export default function InspectionDetailsDialog({
                             {subtask.inventory_type_id && inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name && (
                               <> {inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name}</>
                             )}
+                          </p>
+                        )}
+                        {subtask.vendor_type_id && (
+                          <p className={`text-xs mt-1 ${
+                            subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"
+                          }`}>
+                            Vendor needed: {vendorTypes.find(t => t.id === subtask.vendor_type_id)?.name}
                           </p>
                         )}
                         {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (

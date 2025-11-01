@@ -589,6 +589,11 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                 {invType.name} × {task.inventory_quantity}
                               </div>
                             )}
+                            {task.vendor_type_id && (
+                              <div className="text-xs text-muted-foreground">
+                                Vendor: {vendorTypes.find(t => t.id === task.vendor_type_id)?.name}
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
@@ -776,6 +781,11 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                         {invType && (
                                           <div className="text-xs text-muted-foreground">
                                             {invType.name} × {item.inventory_quantity}
+                                          </div>
+                                        )}
+                                        {item.vendor_type_id && (
+                                          <div className="text-xs text-muted-foreground">
+                                            Vendor: {vendorTypes.find(t => t.id === item.vendor_type_id)?.name}
                                           </div>
                                         )}
                                       </div>
