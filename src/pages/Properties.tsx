@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Plus, Building2, Home, Edit2, Trash2 } from "lucide-react";
+import { Plus, Building2, Home, Edit2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ interface Floorplan {
 }
 
 export default function Properties() {
+  const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
   const [unitsByProperty, setUnitsByProperty] = useState<Record<string, Unit[]>>({});
   const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
@@ -333,10 +335,16 @@ export default function Properties() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Property & Unit Management</h1>
-        <Button onClick={() => openPropertyDialog()}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Property
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/import-properties')}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import Data
+          </Button>
+          <Button onClick={() => openPropertyDialog()}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Property
+          </Button>
+        </div>
       </div>
 
       {properties.length === 0 ? (

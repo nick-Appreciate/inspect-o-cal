@@ -14,6 +14,7 @@ import Tasks from "./pages/Tasks";
 import Templates from "./pages/Templates";
 import Inspections from "./pages/Inspections";
 import Properties from "./pages/Properties";
+import ImportProperties from "./pages/ImportProperties";
 import NotFound from "./pages/NotFound";
 
 
@@ -69,6 +70,7 @@ function AppContent() {
               <Route path="/" element={<Index />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/properties" element={<Properties />} />
+              <Route path="/import-properties" element={<ImportProperties />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/inspections" element={<Inspections />} />
               <Route path="*" element={<NotFound />} />
