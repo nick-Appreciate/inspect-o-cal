@@ -119,7 +119,9 @@ export function StartInspectionDialog({
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set());
   const [showCompleted, setShowCompleted] = useState(false);
   const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
+  const [pendingBadItems, setPendingBadItems] = useState<Set<string>>(new Set());
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement>>({});
+  const mentionDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -327,6 +329,12 @@ export function StartInspectionDialog({
 
   const setItemAsGood = (itemId: string, roomId?: string) => {
     setItemStatus(prev => ({ ...prev, [itemId]: 'good' }));
+    // Remove from pending bad items
+    setPendingBadItems(prev => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
     // Collapse notes when marked good
     setExpandedNotes(prev => {
       const next = new Set(prev);
@@ -347,10 +355,12 @@ export function StartInspectionDialog({
   };
 
   const setItemAsBad = (itemId: string, roomId?: string) => {
-    // Check if notes exist, if not, show warning
+    // Check if notes exist, if not, mark as pending bad and show warning
     const currentNote = itemNotes[itemId];
     if (!currentNote || currentNote.trim() === '') {
-      toast.error("Please add notes explaining the issue before marking as bad");
+      // Mark as pending bad - user wants to select bad but hasn't filled notes yet
+      setPendingBadItems(prev => new Set(prev).add(itemId));
+      toast.error("Please add notes explaining the issue");
       // Expand notes to prompt user
       setExpandedNotes(prev => new Set(prev).add(itemId));
       // Focus the textarea
@@ -364,6 +374,12 @@ export function StartInspectionDialog({
     }
 
     setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
+    // Remove from pending bad items since notes are now filled
+    setPendingBadItems(prev => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
     // Keep notes expanded when marked bad
     setExpandedNotes(prev => new Set(prev).add(itemId));
     
@@ -397,6 +413,22 @@ export function StartInspectionDialog({
       [itemId]: note,
     }));
 
+    // If item is marked as pending bad and notes are now filled, try to complete the bad marking
+    if (pendingBadItems.has(itemId) && note.trim()) {
+      const roomId = Object.entries(itemsByRoom).find(([_, items]) => 
+        items.some(item => item.id === itemId)
+      )?.[0];
+      
+      // Automatically mark as bad now that notes are filled
+      setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
+      setPendingBadItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
+      toast.success("Marked as bad with notes");
+    }
+
     // Check for @mentions
     const lastAtSymbol = note.lastIndexOf('@');
     if (lastAtSymbol !== -1) {
@@ -427,7 +459,7 @@ export function StartInspectionDialog({
   const handleMentionSelect = (itemId: string, user: Profile) => {
     const currentNote = itemNotes[itemId] || "";
     const lastAtSymbol = currentNote.lastIndexOf('@');
-    const newNote = currentNote.substring(0, lastAtSymbol);
+    const newNote = currentNote.substring(0, lastAtSymbol) + `@${user.full_name || user.email} `;
     
     setItemNotes((prev) => ({
       ...prev,
@@ -450,6 +482,14 @@ export function StartInspectionDialog({
     setMentionSearch("");
 
     toast.success(`Assigned to ${user.full_name || user.email}`);
+    
+    // Focus back on textarea
+    setTimeout(() => {
+      const textarea = textareaRefs.current[itemId];
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 0);
   };
 
   const removeAssignment = (itemId: string, userId: string) => {
@@ -767,6 +807,7 @@ export function StartInspectionDialog({
                         <div className="space-y-3 pt-1">
                           {visibleItems.map((item) => {
                             const status = itemStatus[item.id] || 'pending';
+                            const isPendingBad = pendingBadItems.has(item.id);
                             const isExpanded = expandedNotes.has(item.id);
                             const assignedUsers = itemAssignments[item.id] || [];
                             return (
@@ -775,11 +816,15 @@ export function StartInspectionDialog({
                                 className={`p-3 border rounded-lg transition-all space-y-2 cursor-pointer ${
                                   status === 'good' ? 'border-green-500/50 bg-green-50/50' :
                                   status === 'bad' ? 'border-destructive/50 bg-destructive/5' :
+                                  isPendingBad ? 'border-destructive border-2 bg-destructive/10' :
                                   'border-border hover:border-accent-foreground/20 hover:bg-accent/30'
                                 }`}
                                 onClick={(e) => {
+                                  // Prevent collapsing if pending bad (waiting for notes)
+                                  if (isPendingBad) return;
+                                  
                                   // Only expand if not clicking on buttons or interactive elements
-                                  if (!(e.target as HTMLElement).closest('button')) {
+                                  if (!(e.target as HTMLElement).closest('button') && !(e.target as HTMLElement).closest('textarea')) {
                                     setExpandedNotes(prev => {
                                       const next = new Set(prev);
                                       if (next.has(item.id)) {
@@ -858,6 +903,11 @@ export function StartInspectionDialog({
                                 </div>
                                 {isExpanded && (
                                   <div className="relative mt-2 ml-[84px]">
+                                    {isPendingBad && (
+                                      <p className="text-xs text-destructive font-medium mb-1">
+                                        ⚠️ Notes required to mark as bad
+                                      </p>
+                                    )}
                                     <Textarea
                                       ref={(el) => {
                                         if (el) textareaRefs.current[item.id] = el;
@@ -865,17 +915,35 @@ export function StartInspectionDialog({
                                       placeholder="Add notes or @mention to assign..."
                                       value={itemNotes[item.id] || ""}
                                       onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (showMentionDropdown === item.id && filteredMentionUsers.length > 0) {
+                                          if (e.key === 'Tab' || e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleMentionSelect(item.id, filteredMentionUsers[0]);
+                                          } else if (e.key === 'Escape') {
+                                            setShowMentionDropdown(null);
+                                          }
+                                        }
+                                      }}
                                       className="text-sm min-h-[60px]"
+                                      onClick={(e) => e.stopPropagation()}
                                     />
                                     {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
-                                      <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
-                                        {filteredMentionUsers.map((user) => (
+                                      <div 
+                                        ref={mentionDropdownRef}
+                                        className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg"
+                                      >
+                                        {filteredMentionUsers.map((user, index) => (
                                           <div
                                             key={user.id}
-                                            className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
-                                            onClick={() => handleMentionSelect(item.id, user)}
+                                            className={`px-3 py-2 text-sm cursor-pointer hover:bg-accent ${index === 0 ? 'bg-accent/50' : ''}`}
+                                            onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              handleMentionSelect(item.id, user);
+                                            }}
                                           >
                                             {user.full_name || user.email}
+                                            {index === 0 && <span className="text-xs text-muted-foreground ml-2">(Tab/Enter)</span>}
                                           </div>
                                         ))}
                                       </div>
@@ -908,6 +976,7 @@ export function StartInspectionDialog({
                       <div className="space-y-3 pt-1">
                         {visibleCustomItems.map((item) => {
                           const status = itemStatus[item.id] || 'pending';
+                          const isPendingBad = pendingBadItems.has(item.id);
                           const isExpanded = expandedNotes.has(item.id);
                           const assignedUsers = itemAssignments[item.id] || [];
                           return (
@@ -916,11 +985,15 @@ export function StartInspectionDialog({
                               className={`p-3 border-2 border-dashed rounded-lg transition-all space-y-2 cursor-pointer ${
                                 status === 'good' ? 'border-green-500/50 bg-green-50/50' :
                                 status === 'bad' ? 'border-destructive/50 bg-destructive/5' :
+                                isPendingBad ? 'border-destructive border-2 bg-destructive/10' :
                                 'border-primary/30 hover:border-primary/50 hover:bg-accent/30'
                               }`}
                               onClick={(e) => {
+                                // Prevent collapsing if pending bad
+                                if (isPendingBad) return;
+                                
                                 // Only expand if not clicking on buttons or interactive elements
-                                if (!(e.target as HTMLElement).closest('button')) {
+                                if (!(e.target as HTMLElement).closest('button') && !(e.target as HTMLElement).closest('textarea')) {
                                   setExpandedNotes(prev => {
                                     const next = new Set(prev);
                                     if (next.has(item.id)) {
@@ -1013,6 +1086,11 @@ export function StartInspectionDialog({
                               </div>
                               {isExpanded && (
                                 <div className="relative mt-2 ml-[84px]">
+                                  {isPendingBad && (
+                                    <p className="text-xs text-destructive font-medium mb-1">
+                                      ⚠️ Notes required to mark as bad
+                                    </p>
+                                  )}
                                   <Textarea
                                     ref={(el) => {
                                       if (el) textareaRefs.current[item.id] = el;
@@ -1020,17 +1098,32 @@ export function StartInspectionDialog({
                                     placeholder="Add notes or @mention to assign..."
                                     value={itemNotes[item.id] || ""}
                                     onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (showMentionDropdown === item.id && filteredMentionUsers.length > 0) {
+                                        if (e.key === 'Tab' || e.key === 'Enter') {
+                                          e.preventDefault();
+                                          handleMentionSelect(item.id, filteredMentionUsers[0]);
+                                        } else if (e.key === 'Escape') {
+                                          setShowMentionDropdown(null);
+                                        }
+                                      }
+                                    }}
                                     className="text-sm min-h-[60px]"
+                                    onClick={(e) => e.stopPropagation()}
                                   />
                                   {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
                                     <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
-                                      {filteredMentionUsers.map((user) => (
+                                      {filteredMentionUsers.map((user, index) => (
                                         <div
                                           key={user.id}
-                                          className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
-                                          onClick={() => handleMentionSelect(item.id, user)}
+                                          className={`px-3 py-2 text-sm cursor-pointer hover:bg-accent ${index === 0 ? 'bg-accent/50' : ''}`}
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleMentionSelect(item.id, user);
+                                          }}
                                         >
                                           {user.full_name || user.email}
+                                          {index === 0 && <span className="text-xs text-muted-foreground ml-2">(Tab/Enter)</span>}
                                         </div>
                                       ))}
                                     </div>
