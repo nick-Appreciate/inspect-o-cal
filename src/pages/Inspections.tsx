@@ -356,140 +356,148 @@ const Inspections = () => {
                 <p className="text-muted-foreground">No inspections match your search</p>
               </div>
             ) : (
-              <div className="space-y-6">
-                {Object.entries(groupedByProperty).map(([propertyId, { property, chains }]) => {
-                  return (
-                    <div key={propertyId} className="rounded-lg border bg-card">
-                      <div className="p-4 border-b bg-muted/30">
-                        <h2 className="font-semibold text-lg">{property.name}</h2>
-                        <p className="text-sm text-muted-foreground">{property.address}</p>
-                      </div>
-                      
-                      <div className="space-y-4 p-4">
-                        {chains.map((chain, chainIndex) => (
-                          <div key={chainIndex} className="space-y-2">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="w-12">
-                                    <Checkbox 
-                                      checked={chain.every(i => i.completed)}
-                                      onCheckedChange={(checked) => {
-                                        chain.forEach(i => {
-                                          if (i.completed !== checked) {
-                                            handleToggleComplete(i.id, i.completed, { stopPropagation: () => {} } as any);
-                                          }
-                                        });
-                                      }}
-                                    />
-                                  </TableHead>
-                                  <TableHead 
-                                    className="cursor-pointer select-none"
-                                    onClick={() => handleSort("type")}
+              <div className="rounded-lg border bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox 
+                          checked={inspections.every(i => i.completed)}
+                          onCheckedChange={(checked) => {
+                            inspections.forEach(i => {
+                              if (i.completed !== checked) {
+                                handleToggleComplete(i.id, i.completed, { stopPropagation: () => {} } as any);
+                              }
+                            });
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort("type")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Type
+                          <ArrowUpDown className="h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort("date")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Date
+                          <ArrowUpDown className="h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort("time")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Time
+                          <ArrowUpDown className="h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort("property")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Property
+                          <ArrowUpDown className="h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer select-none"
+                        onClick={() => handleSort("unit")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Unit
+                          <ArrowUpDown className="h-4 w-4" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(groupedByProperty).map(([propertyId, { property, chains }]) => (
+                      <>
+                        <TableRow key={`${propertyId}-separator`} className="bg-muted/30 hover:bg-muted/30">
+                          <TableCell colSpan={7} className="font-semibold">
+                            <div>
+                              <div className="text-base">{property.name}</div>
+                              <div className="text-sm text-muted-foreground font-normal">{property.address}</div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {chains.map((chain, chainIndex) => 
+                          chain.map((inspection, idx) => {
+                            const isPast = isInspectionPast(inspection.date, inspection.id);
+                            return (
+                              <TableRow 
+                                key={inspection.id}
+                                className={`cursor-pointer hover:bg-muted/50 ${
+                                  isPast ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30" : ""
+                                } ${inspection.completed ? "opacity-60" : ""} ${
+                                  idx > 0 ? "border-l-4 border-l-primary/30" : ""
+                                }`}
+                                onClick={() => {
+                                  setSelectedInspectionId(inspection.id);
+                                  setDetailsDialogOpen(true);
+                                }}
+                              >
+                                <TableCell>
+                                  <Checkbox 
+                                    checked={inspection.completed}
+                                    onCheckedChange={(checked) => handleToggleComplete(inspection.id, inspection.completed, { stopPropagation: () => {} } as any)}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {idx > 0 && (
+                                      <span className="text-xs text-muted-foreground">└─</span>
+                                    )}
+                                    <Badge className={getInspectionColor(inspection.type)}>
+                                      {inspection.type}
+                                    </Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  {format(new Date(inspection.date), "MMM d, yyyy")}
+                                </TableCell>
+                                <TableCell>{inspection.time}</TableCell>
+                                <TableCell>
+                                  {inspection.property.name}
+                                </TableCell>
+                                <TableCell>
+                                  {inspection.unit ? (
+                                    <span className="text-sm">{inspection.unit.name}</span>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteId(inspection.id);
+                                    }}
                                   >
-                                    <div className="flex items-center gap-2">
-                                      Type
-                                      <ArrowUpDown className="h-4 w-4" />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead 
-                                    className="cursor-pointer select-none"
-                                    onClick={() => handleSort("date")}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      Date
-                                      <ArrowUpDown className="h-4 w-4" />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead 
-                                    className="cursor-pointer select-none"
-                                    onClick={() => handleSort("time")}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      Time
-                                      <ArrowUpDown className="h-4 w-4" />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead 
-                                    className="cursor-pointer select-none"
-                                    onClick={() => handleSort("unit")}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      Unit
-                                      <ArrowUpDown className="h-4 w-4" />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {chain.map((inspection, idx) => {
-                                  const isPast = isInspectionPast(inspection.date, inspection.id);
-                                  return (
-                                    <TableRow 
-                                      key={inspection.id}
-                                      className={`cursor-pointer hover:bg-muted/50 ${
-                                        isPast ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30" : ""
-                                      } ${inspection.completed ? "opacity-60" : ""} ${
-                                        idx > 0 ? "border-l-4 border-l-primary/30" : ""
-                                      }`}
-                                      onClick={() => {
-                                        setSelectedInspectionId(inspection.id);
-                                        setDetailsDialogOpen(true);
-                                      }}
-                                    >
-                                      <TableCell>
-                                        <Checkbox 
-                                          checked={inspection.completed}
-                                          onCheckedChange={(checked) => handleToggleComplete(inspection.id, inspection.completed, { stopPropagation: () => {} } as any)}
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
-                                      </TableCell>
-                                      <TableCell>
-                                        <div className="flex items-center gap-2">
-                                          {idx > 0 && (
-                                            <span className="text-xs text-muted-foreground">└─</span>
-                                          )}
-                                          <Badge className={getInspectionColor(inspection.type)}>
-                                            {inspection.type}
-                                          </Badge>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell>
-                                        {format(new Date(inspection.date), "MMM d, yyyy")}
-                                      </TableCell>
-                                      <TableCell>{inspection.time}</TableCell>
-                                      <TableCell>
-                                        {inspection.unit ? (
-                                          <span className="text-sm">{inspection.unit.name}</span>
-                                        ) : (
-                                          <span className="text-sm text-muted-foreground">—</span>
-                                        )}
-                                      </TableCell>
-                                      <TableCell className="text-right">
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setDeleteId(inspection.id);
-                                          }}
-                                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>
