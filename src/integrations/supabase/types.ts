@@ -22,6 +22,7 @@ export type Database = {
           id: string
           inventory_quantity: number
           inventory_type_id: string | null
+          vendor_type_id: string | null
         }
         Insert: {
           created_at?: string
@@ -30,6 +31,7 @@ export type Database = {
           id?: string
           inventory_quantity?: number
           inventory_type_id?: string | null
+          vendor_type_id?: string | null
         }
         Update: {
           created_at?: string
@@ -38,6 +40,7 @@ export type Database = {
           id?: string
           inventory_quantity?: number
           inventory_type_id?: string | null
+          vendor_type_id?: string | null
         }
         Relationships: [
           {
@@ -45,6 +48,13 @@ export type Database = {
             columns: ["inventory_type_id"]
             isOneToOne: false
             referencedRelation: "inventory_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "default_room_tasks_vendor_type_id_fkey"
+            columns: ["vendor_type_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_types"
             referencedColumns: ["id"]
           },
         ]
