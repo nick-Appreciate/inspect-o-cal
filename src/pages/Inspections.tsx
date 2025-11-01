@@ -159,12 +159,25 @@ const Inspections = () => {
       const completingInspection = inspections.find(i => i.id === inspectionId);
       if (!completingInspection) return;
 
+      console.log('Completing inspection:', {
+        id: inspectionId,
+        type: completingInspection.type,
+        parentId: completingInspection.parent_inspection_id
+      });
+
       const connectedInspections = inspections.filter(i => 
         ((i.parent_inspection_id === inspectionId) || // Children
         (completingInspection.parent_inspection_id && i.id === completingInspection.parent_inspection_id) || // Parent
         (completingInspection.parent_inspection_id && i.parent_inspection_id === completingInspection.parent_inspection_id && i.id !== inspectionId)) // Siblings
         && !i.completed // Only incomplete ones
       );
+
+      console.log('Found connected inspections:', connectedInspections.map(i => ({
+        id: i.id,
+        type: i.type,
+        date: i.date,
+        parentId: i.parent_inspection_id
+      })));
 
       if (connectedInspections.length > 0) {
         // Show dialog with checkboxes
@@ -199,6 +212,7 @@ const Inspections = () => {
   };
 
   const handleCompleteConfirm = async (inspectionIdsToComplete: string[]) => {
+    console.log('handleCompleteConfirm - IDs to complete:', inspectionIdsToComplete);
     try {
       const { error } = await supabase
         .from("inspections")
@@ -206,10 +220,12 @@ const Inspections = () => {
         .in("id", inspectionIdsToComplete);
 
       if (error) {
+        console.error('Update error:', error);
         toast.error("Failed to update inspections");
         return;
       }
 
+      console.log('Successfully updated inspections');
       setInspections(prev => 
         prev.map(i => inspectionIdsToComplete.includes(i.id) ? { ...i, completed: true } : i)
       );

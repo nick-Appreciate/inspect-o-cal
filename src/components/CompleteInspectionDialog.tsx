@@ -78,6 +78,14 @@ export function CompleteInspectionDialog({
   const handleConfirm = () => {
     if (!mainInspection) return;
     const idsToComplete = [mainInspection.id, ...Array.from(selectedIds)];
+    console.log('CompleteInspectionDialog - Main Inspection:', {
+      id: mainInspection.id,
+      type: mainInspection.type,
+      date: mainInspection.date,
+      parentId: mainInspection.parent_inspection_id
+    });
+    console.log('CompleteInspectionDialog - Selected IDs:', Array.from(selectedIds));
+    console.log('CompleteInspectionDialog - All IDs to complete:', idsToComplete);
     onConfirm(idsToComplete);
     onOpenChange(false);
   };
