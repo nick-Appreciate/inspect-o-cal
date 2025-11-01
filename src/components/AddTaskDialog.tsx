@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { UserAvatar } from "./UserAvatar";
 
 interface Inspection {
   id: string;
@@ -37,6 +38,7 @@ interface Profile {
   id: string;
   full_name: string | null;
   email: string;
+  avatar_url?: string | null;
 }
 
 interface AddTaskDialogProps {
@@ -82,7 +84,7 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
   const fetchUsers = async () => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name")
+      .select("id, email, full_name, avatar_url")
       .order("full_name", { ascending: true });
 
     if (!error && data) {
@@ -207,6 +209,12 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
                     checked={selectedUsers.includes(user.id)}
                     onChange={() => toggleUser(user.id)}
                     className="rounded"
+                  />
+                  <UserAvatar
+                    avatarUrl={user.avatar_url}
+                    name={user.full_name}
+                    email={user.email}
+                    size="sm"
                   />
                   <span className="text-sm">
                     {user.full_name || user.email}

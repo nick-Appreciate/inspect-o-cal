@@ -20,11 +20,13 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { UserAvatar } from "./UserAvatar";
 
 interface Profile {
   id: string;
   full_name: string | null;
   email: string;
+  avatar_url?: string | null;
 }
 
 interface InventoryType {
@@ -81,7 +83,7 @@ export default function EditSubtaskDialog({
   const fetchUsers = async () => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name")
+      .select("id, email, full_name, avatar_url")
       .order("full_name", { ascending: true });
 
     if (!error && data) {
@@ -184,6 +186,12 @@ export default function EditSubtaskDialog({
                       checked={selectedUsers.includes(user.id)}
                       onChange={() => toggleUser(user.id)}
                       className="rounded border-input"
+                    />
+                    <UserAvatar
+                      avatarUrl={user.avatar_url}
+                      name={user.full_name}
+                      email={user.email}
+                      size="sm"
                     />
                     <span className="text-sm flex-1">
                       {user.full_name || user.email}

@@ -11,6 +11,7 @@ import { format, isPast, parseISO } from "date-fns";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import AddTaskDialog from "@/components/AddTaskDialog";
 import EditSubtaskDialog from "@/components/EditSubtaskDialog";
+import { UserAvatar } from "@/components/UserAvatar";
 
 interface SubtaskWithInspection {
   id: string;
@@ -32,6 +33,7 @@ interface SubtaskWithInspection {
   assignedProfiles?: Array<{
     full_name: string;
     email: string;
+    avatar_url?: string | null;
   }>;
 }
 
@@ -127,7 +129,7 @@ export default function Tasks() {
         if (task.assigned_users && task.assigned_users.length > 0) {
           const { data: profiles } = await supabase
             .from("profiles")
-            .select("full_name, email")
+            .select("full_name, email, avatar_url")
             .in("id", task.assigned_users);
 
           return { ...task, assignedProfiles: profiles || [] };
@@ -334,8 +336,18 @@ export default function Tasks() {
                                 <p className="text-sm font-medium">{task.description}</p>
 
                                 {task.assignedProfiles && task.assignedProfiles.length > 0 && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <User className="h-3 w-3" />
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-1">
+                                      {task.assignedProfiles.map((profile, idx) => (
+                                        <UserAvatar
+                                          key={idx}
+                                          avatarUrl={profile.avatar_url}
+                                          name={profile.full_name}
+                                          email={profile.email}
+                                          size="sm"
+                                        />
+                                      ))}
+                                    </div>
                                     <span>
                                       {task.assignedProfiles
                                         .map((p) => p.full_name || p.email)
@@ -420,8 +432,18 @@ export default function Tasks() {
                                 </p>
 
                                 {task.assignedProfiles && task.assignedProfiles.length > 0 && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <User className="h-3 w-3" />
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <div className="flex items-center gap-1">
+                                      {task.assignedProfiles.map((profile, idx) => (
+                                        <UserAvatar
+                                          key={idx}
+                                          avatarUrl={profile.avatar_url}
+                                          name={profile.full_name}
+                                          email={profile.email}
+                                          size="sm"
+                                        />
+                                      ))}
+                                    </div>
                                     <span>
                                       {task.assignedProfiles
                                         .map((p) => p.full_name || p.email)

@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
 import { StartInspectionDialog } from "./StartInspectionDialog";
+import { UserAvatar } from "./UserAvatar";
 
 interface Inspection {
   id: string;
@@ -52,6 +53,7 @@ interface Subtask {
   assignedProfiles?: Array<{
     full_name: string;
     email: string;
+    avatar_url?: string | null;
   }>;
 }
 
@@ -59,6 +61,7 @@ interface Profile {
   id: string;
   email: string;
   full_name: string | null;
+  avatar_url?: string | null;
 }
 
 interface InventoryType {
@@ -171,7 +174,7 @@ export default function InspectionDetailsDialog({
         if (subtask.assigned_users && subtask.assigned_users.length > 0) {
           const { data: profiles } = await supabase
             .from("profiles")
-            .select("full_name, email")
+            .select("full_name, email, avatar_url")
             .in("id", subtask.assigned_users);
 
           return { ...subtask, assignedProfiles: profiles || [] };
@@ -231,7 +234,7 @@ export default function InspectionDetailsDialog({
   const fetchUsers = async () => {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, full_name")
+      .select("id, email, full_name, avatar_url")
       .order("full_name");
 
     if (error) {
@@ -570,13 +573,26 @@ export default function InspectionDetailsDialog({
                           </p>
                         )}
                         {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
-                          <p className={`text-xs mt-1 ${
+                          <div className={`flex items-center gap-2 mt-1 ${
                             subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"
                           }`}>
-                            Assigned to: {subtask.assignedProfiles
-                              .map((p) => p.full_name || p.email)
-                              .join(", ")}
-                          </p>
+                            <div className="flex items-center gap-1">
+                              {subtask.assignedProfiles.map((profile, idx) => (
+                                <UserAvatar
+                                  key={idx}
+                                  avatarUrl={profile.avatar_url}
+                                  name={profile.full_name}
+                                  email={profile.email}
+                                  size="sm"
+                                />
+                              ))}
+                            </div>
+                            <p className="text-xs">
+                              {subtask.assignedProfiles
+                                .map((p) => p.full_name || p.email)
+                                .join(", ")}
+                            </p>
+                          </div>
                         )}
                       {subtask.attachment_url && (
                         <a
