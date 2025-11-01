@@ -21,7 +21,7 @@ export function AppSidebar() {
   return (
     <Sidebar 
       collapsible="none" 
-      className="border-r w-16"
+      className="border-r w-16 sticky top-0 h-screen"
     >
       <SidebarContent>
         <SidebarGroup>

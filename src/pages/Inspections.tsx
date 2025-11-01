@@ -234,6 +234,9 @@ const Inspections = () => {
           ? `${inspectionIdsToComplete.length} inspections marked as complete` 
           : "Inspection marked as complete"
       );
+      if (!showCompleted) {
+        toast("Completed inspections are hidden. Use 'Show Completed' to view them.");
+      }
       fetchInspections(); // Refresh the list
     } catch (err) {
       console.error("Error updating inspections:", err);
@@ -405,7 +408,7 @@ const Inspections = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-10">
+      <header className="border-b bg-card sticky top-0 z-20">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
             <Button
