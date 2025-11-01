@@ -127,7 +127,7 @@ export function TemplateBuilder({
     });
   }, [rooms]);
 
-  // Realtime subscription for template items updates
+  // Realtime subscription for template items and room templates updates
   useEffect(() => {
     const channel = supabase
       .channel('template-items-changes')
@@ -145,6 +145,18 @@ export function TemplateBuilder({
           } else if (payload.old && 'room_id' in payload.old) {
             fetchItems(payload.old.room_id as string);
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'room_templates',
+        },
+        () => {
+          // Refresh room templates when any room template changes
+          fetchRoomTemplates();
         }
       )
       .subscribe();
