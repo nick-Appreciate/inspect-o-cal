@@ -5,9 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Plus, ChevronDown, Copy, Lock, ArrowRight, Check, X, Edit2 } from "lucide-react";
+import { Trash2, Plus, ChevronDown, Copy, ArrowRight, Check, X, Edit2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -88,11 +87,8 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [defaultTaskInventoryType, setDefaultTaskInventoryType] = useState<string>("");
   const [defaultTaskQuantity, setDefaultTaskQuantity] = useState<string>("");
   const [defaultTaskVendorType, setDefaultTaskVendorType] = useState<string>("");
-  const [defaultTaskRooms, setDefaultTaskRooms] = useState<string[]>([]);
-  const [defaultTaskAppliesToAll, setDefaultTaskAppliesToAll] = useState(true);
   const [defaultTaskRoomAssociations, setDefaultTaskRoomAssociations] = useState<Record<string, string[]>>({});
   const [deleteDefaultTaskId, setDeleteDefaultTaskId] = useState<string | null>(null);
-  const [editingDefaultTaskId, setEditingDefaultTaskId] = useState<string | null>(null);
   const [editRoomName, setEditRoomName] = useState<string>("");
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [newVendorName, setNewVendorName] = useState("");
@@ -188,43 +184,16 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
     const itemsToInsert: any[] = [];
 
-    // Add default tasks to the new room (only those that apply to all or are specifically associated)
+    // Add default tasks to the new room via associations
     if (defaultTasks.length > 0) {
-      // Fetch room associations for tasks that don't apply to all
-      const tasksNotApplyingToAll = defaultTasks.filter(t => !t.applies_to_all_rooms);
-      let taskRoomAssociations: Record<string, string[]> = {};
-      
-      if (tasksNotApplyingToAll.length > 0) {
-        const { data: associations } = await supabase
-          .from("default_task_room_templates" as any)
-          .select("default_task_id, room_template_id")
-          .in("default_task_id", tasksNotApplyingToAll.map(t => t.id));
-        
-        if (associations) {
-          taskRoomAssociations = (associations as any[]).reduce((acc: Record<string, string[]>, assoc: any) => {
-            if (!acc[assoc.default_task_id]) acc[assoc.default_task_id] = [];
-            acc[assoc.default_task_id].push(assoc.room_template_id);
-            return acc;
-          }, {} as Record<string, string[]>);
-        }
-      }
-      
-      defaultTasks.forEach((task, index) => {
-        // Add task if it applies to all rooms OR if this room is in its associations
-        const shouldAdd = task.applies_to_all_rooms || 
-          (taskRoomAssociations[task.id]?.includes((newRoom as any).id));
-        
-        if (shouldAdd) {
-          itemsToInsert.push({
-            room_template_id: (newRoom as any).id,
-            description: task.description,
-            order_index: index,
-            inventory_type_id: task.inventory_type_id,
-            inventory_quantity: task.inventory_quantity,
-            vendor_type_id: task.vendor_type_id,
-          });
-        }
-      });
+      const associations = defaultTasks.map(task => ({
+        default_task_id: task.id,
+        room_template_id: (newRoom as any).id,
+      }));
+
+      await supabase
+        .from("default_task_room_templates" as any)
+        .insert(associations);
     }
 
     // If duplicating from another room, add its items after default tasks
@@ -428,7 +397,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Insert into default_room_tasks
+    // Insert into default_room_tasks (applies_to_all_rooms = false, use associations)
     const { data: newDefaultTask, error: defaultError } = await supabase
       .from("default_room_tasks" as any)
       .insert({
@@ -436,7 +405,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         inventory_type_id: defaultTaskInventoryType || null,
         inventory_quantity: parseInt(defaultTaskQuantity) || 0,
         vendor_type_id: defaultTaskVendorType || null,
-        applies_to_all_rooms: defaultTaskAppliesToAll,
+        applies_to_all_rooms: false,
         created_by: user.id,
       })
       .select()
@@ -447,52 +416,18 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
       return;
     }
 
-    // If not applying to all rooms, create associations
-    if (!defaultTaskAppliesToAll && defaultTaskRooms.length > 0) {
-      const associations = defaultTaskRooms.map(roomId => ({
+    // Create associations for ALL existing room templates
+    if (rooms.length > 0) {
+      const associations = rooms.map(room => ({
         default_task_id: (newDefaultTask as any).id,
-        room_template_id: roomId,
+        room_template_id: room.id,
       }));
 
       await supabase
         .from("default_task_room_templates" as any)
         .insert(associations);
-    }
 
-    // Add this task to existing room templates (only those selected or if applies to all)
-    if (rooms.length > 0) {
-      const roomsToAddTo = defaultTaskAppliesToAll ? rooms : rooms.filter(r => defaultTaskRooms.includes(r.id));
-      
-      if (roomsToAddTo.length > 0) {
-        const itemsToInsert = [];
-        for (const room of roomsToAddTo) {
-          const items = roomItems[room.id] || [];
-          const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order_index)) : -1;
-          
-          itemsToInsert.push({
-            room_template_id: room.id,
-            description: defaultTaskDescription.trim(),
-            order_index: maxOrder + 1,
-            inventory_type_id: defaultTaskInventoryType || null,
-            inventory_quantity: parseInt(defaultTaskQuantity) || 0,
-            vendor_type_id: defaultTaskVendorType || null,
-          });
-        }
-
-        const { error: insertError } = await supabase
-          .from("room_template_items" as any)
-          .insert(itemsToInsert);
-
-        if (insertError) {
-          toast.error("Default task created but failed to add to existing rooms");
-        } else {
-          // Refresh items for affected rooms
-          roomsToAddTo.forEach(room => fetchRoomItems(room.id));
-          toast.success(`Default task added to ${roomsToAddTo.length} room template${roomsToAddTo.length > 1 ? 's' : ''}`);
-        }
-      } else {
-        toast.success("Default task created (will be added to selected rooms)");
-      }
+      toast.success(`Default task added to ${rooms.length} room template${rooms.length > 1 ? 's' : ''}`);
     } else {
       toast.success("Default task created (will be added to future rooms)");
     }
@@ -502,8 +437,6 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setDefaultTaskInventoryType("");
     setDefaultTaskQuantity("");
     setDefaultTaskVendorType("");
-    setDefaultTaskRooms([]);
-    setDefaultTaskAppliesToAll(true);
     fetchDefaultTasks();
   };
 
@@ -522,54 +455,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
     setDefaultTasks(defaultTasks.filter(t => t.id !== deleteDefaultTaskId));
     setDeleteDefaultTaskId(null);
-    toast.success("Default task deleted (existing tasks in rooms remain)");
-  };
-
-  const startEditingDefaultTask = (task: DefaultTask) => {
-    setEditingDefaultTaskId(task.id);
-    setDefaultTaskAppliesToAll(task.applies_to_all_rooms);
-    setDefaultTaskRooms(defaultTaskRoomAssociations[task.id] || []);
-  };
-
-  const updateDefaultTaskAssociations = async (taskId: string) => {
-    try {
-      // Update applies_to_all_rooms
-      const { error: updateError } = await supabase
-        .from("default_room_tasks" as any)
-        .update({ applies_to_all_rooms: defaultTaskAppliesToAll })
-        .eq("id", taskId);
-
-      if (updateError) throw updateError;
-
-      // Delete existing associations
-      await supabase
-        .from("default_task_room_templates" as any)
-        .delete()
-        .eq("default_task_id", taskId);
-
-      // If not applying to all rooms, create new associations
-      if (!defaultTaskAppliesToAll && defaultTaskRooms.length > 0) {
-        const associations = defaultTaskRooms.map(roomId => ({
-          default_task_id: taskId,
-          room_template_id: roomId,
-        }));
-
-        const { error: insertError } = await supabase
-          .from("default_task_room_templates" as any)
-          .insert(associations);
-
-        if (insertError) throw insertError;
-      }
-
-      toast.success("Default task updated successfully");
-      setEditingDefaultTaskId(null);
-      setDefaultTaskRooms([]);
-      setDefaultTaskAppliesToAll(true);
-      fetchDefaultTasks();
-    } catch (error: any) {
-      console.error("Error updating default task:", error);
-      toast.error(error.message || "Failed to update default task");
-    }
+    toast.success("Default task deleted");
   };
 
   const startEditingRoom = (roomId: string, currentName: string) => {
@@ -836,52 +722,6 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="appliesToAll"
-                      checked={defaultTaskAppliesToAll}
-                      onChange={(e) => {
-                        setDefaultTaskAppliesToAll(e.target.checked);
-                        if (e.target.checked) {
-                          setDefaultTaskRooms([]);
-                        }
-                      }}
-                      className="rounded"
-                    />
-                    <Label htmlFor="appliesToAll" className="text-xs font-normal cursor-pointer">
-                      Apply to all room templates
-                    </Label>
-                  </div>
-
-                  {!defaultTaskAppliesToAll && rooms.length > 0 && (
-                    <div className="border rounded-md p-3 max-h-32 overflow-y-auto space-y-2">
-                      <Label className="text-xs">Select Room Templates</Label>
-                      {rooms.map((room) => (
-                        <label
-                          key={room.id}
-                          className="flex items-center gap-2 cursor-pointer hover:bg-accent p-1 rounded"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={defaultTaskRooms.includes(room.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setDefaultTaskRooms([...defaultTaskRooms, room.id]);
-                              } else {
-                                setDefaultTaskRooms(defaultTaskRooms.filter(id => id !== room.id));
-                              }
-                            }}
-                            className="rounded"
-                          />
-                          <span className="text-sm">{room.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
                 <Button onClick={addDefaultTask} className="w-full">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Default Task
@@ -890,127 +730,42 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                 {defaultTasks.length > 0 && (
                   <div className="space-y-2 pt-2">
                     <Label className="text-xs">Current Default Tasks</Label>
-                                 {defaultTasks.map((task) => {
-                                      const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
-                                      const associatedRooms = task.applies_to_all_rooms 
-                                        ? rooms 
-                                        : rooms.filter(r => defaultTaskRoomAssociations[task.id]?.includes(r.id));
-                                      const isEditing = editingDefaultTaskId === task.id;
-                                      
-                                      return (
-                                        <div
-                                          key={task.id}
-                                          className="bg-background rounded border"
-                                        >
-                                          <div
-                                            className="flex items-center justify-between p-2 text-sm cursor-pointer hover:bg-accent/50"
-                                            onClick={() => !isEditing && startEditingDefaultTask(task)}
-                                          >
-                                            <div className="flex-1">
-                                              <div>{task.description}</div>
-                                              {invType && (
-                                                <div className="text-xs text-muted-foreground">
-                                                  {invType.name} × {task.inventory_quantity === -1 ? "User Selected" : task.inventory_quantity}
-                                                </div>
-                                              )}
-                                              {task.vendor_type_id && (
-                                                <div className="text-xs text-muted-foreground">
-                                                  Vendor: {vendorTypes.find(t => t.id === task.vendor_type_id)?.name}
-                                                </div>
-                                              )}
-                                              <div className="text-xs text-muted-foreground mt-1">
-                                                {task.applies_to_all_rooms ? (
-                                                  "Applies to all room templates"
-                                                ) : (
-                                                  <>Applies to: {associatedRooms.map(r => r.name).join(", ") || "No rooms"}</>
-                                                )}
-                                              </div>
-                                            </div>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeleteDefaultTaskId(task.id);
-                                              }}
-                                            >
-                                              <Trash2 className="h-3 w-3 text-destructive" />
-                                            </Button>
-                                          </div>
-                                          
-                                          {isEditing && (
-                                            <div className="p-3 border-t bg-accent/20 space-y-2">
-                                              <Label className="text-xs">Edit Room Associations</Label>
-                                              <div className="flex items-center gap-2">
-                                                <input
-                                                  type="checkbox"
-                                                  id={`edit-applies-all-${task.id}`}
-                                                  checked={defaultTaskAppliesToAll}
-                                                  onChange={(e) => {
-                                                    setDefaultTaskAppliesToAll(e.target.checked);
-                                                    if (e.target.checked) {
-                                                      setDefaultTaskRooms([]);
-                                                    }
-                                                  }}
-                                                  className="rounded"
-                                                />
-                                                <Label htmlFor={`edit-applies-all-${task.id}`} className="text-xs font-normal cursor-pointer">
-                                                  Apply to all room templates
-                                                </Label>
-                                              </div>
-                                              
-                                              {!defaultTaskAppliesToAll && rooms.length > 0 && (
-                                                <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1">
-                                                  {rooms.map((room) => (
-                                                    <label
-                                                      key={room.id}
-                                                      className="flex items-center gap-2 cursor-pointer hover:bg-accent p-1 rounded"
-                                                    >
-                                                      <input
-                                                        type="checkbox"
-                                                        checked={defaultTaskRooms.includes(room.id)}
-                                                        onChange={(e) => {
-                                                          if (e.target.checked) {
-                                                            setDefaultTaskRooms([...defaultTaskRooms, room.id]);
-                                                          } else {
-                                                            setDefaultTaskRooms(defaultTaskRooms.filter(id => id !== room.id));
-                                                          }
-                                                        }}
-                                                        className="rounded"
-                                                      />
-                                                      <span className="text-xs">{room.name}</span>
-                                                    </label>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              
-                                              <div className="flex gap-2">
-                                                <Button 
-                                                  onClick={() => updateDefaultTaskAssociations(task.id)}
-                                                  size="sm"
-                                                  className="flex-1"
-                                                >
-                                                  Save
-                                                </Button>
-                                                <Button 
-                                                  onClick={() => {
-                                                    setEditingDefaultTaskId(null);
-                                                    setDefaultTaskRooms([]);
-                                                    setDefaultTaskAppliesToAll(true);
-                                                  }}
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="flex-1"
-                                                >
-                                                  Cancel
-                                                </Button>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
+                    {defaultTasks.map((task) => {
+                      const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
+                      const associatedRooms = rooms.filter(r => defaultTaskRoomAssociations[task.id]?.includes(r.id));
+                      
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center justify-between p-2 bg-background rounded border text-sm"
+                        >
+                          <div className="flex-1">
+                            <div>{task.description}</div>
+                            {invType && (
+                              <div className="text-xs text-muted-foreground">
+                                {invType.name} × {task.inventory_quantity === -1 ? "User Selected" : task.inventory_quantity}
+                              </div>
+                            )}
+                            {task.vendor_type_id && (
+                              <div className="text-xs text-muted-foreground">
+                                Vendor: {vendorTypes.find(t => t.id === task.vendor_type_id)?.name}
+                              </div>
+                            )}
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Enabled in: {associatedRooms.length} room{associatedRooms.length !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setDeleteDefaultTaskId(task.id)}
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -1287,7 +1042,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                 <Label className="text-xs">Default Tasks</Label>
                                 {defaultTasks.map((task) => {
                                   const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
-                                  const isEnabled = task.applies_to_all_rooms || defaultTaskRoomAssociations[task.id]?.includes(room.id);
+                                  const isEnabled = defaultTaskRoomAssociations[task.id]?.includes(room.id);
                                   
                                   return (
                                     <div
@@ -1297,18 +1052,6 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">
                                           <span>{task.description}</span>
-                                          {task.applies_to_all_rooms && (
-                                            <TooltipProvider>
-                                              <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                  <Lock className="h-3 w-3 text-primary" />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                  <p className="text-xs">Applies to all rooms</p>
-                                                </TooltipContent>
-                                              </Tooltip>
-                                            </TooltipProvider>
-                                          )}
                                         </div>
                                         {invType && (
                                           <div className="text-xs text-muted-foreground">
@@ -1323,7 +1066,6 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                       </div>
                                       <Switch
                                         checked={isEnabled}
-                                        disabled={task.applies_to_all_rooms}
                                         onCheckedChange={(checked) => toggleDefaultTaskForRoom(task.id, room.id, checked)}
                                       />
                                     </div>
