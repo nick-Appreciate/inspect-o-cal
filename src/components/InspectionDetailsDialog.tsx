@@ -374,6 +374,24 @@ export default function InspectionDetailsDialog({
       return acc;
     }, {} as Record<string, number>);
 
+  // Calculate completed items by type
+  const completedItemsByType = subtasks
+    .filter(s => s.completed && s.inventory_quantity && s.inventory_quantity > 0 && s.inventory_type_id)
+    .reduce((acc, s) => {
+      const typeId = s.inventory_type_id!;
+      if (!acc[typeId]) {
+        acc[typeId] = 0;
+      }
+      acc[typeId] += s.inventory_quantity || 0;
+      return acc;
+    }, {} as Record<string, number>);
+
+  // Get all unique inventory types used
+  const allInventoryTypeIds = new Set([
+    ...Object.keys(itemsByType),
+    ...Object.keys(completedItemsByType)
+  ]);
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -416,23 +434,61 @@ export default function InspectionDetailsDialog({
                 </div>
               </div>
 
-              {totalItemsNeeded > 0 && (
-                <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">Total Items Needed:</span>
-                    <span className="font-bold text-lg text-primary">{totalItemsNeeded}</span>
-                  </div>
-                  {Object.keys(itemsByType).length > 0 && (
-                    <div className="mt-2 text-sm text-muted-foreground space-y-1">
-                      {Object.entries(itemsByType).map(([typeId, qty]) => {
-                        const type = inventoryTypes.find(t => t.id === typeId);
-                        return type ? (
-                          <div key={typeId} className="flex justify-between">
-                            <span>{type.name}:</span>
-                            <span className="font-medium">{qty}</span>
-                          </div>
-                        ) : null;
-                      })}
+              {(totalItemsNeeded > 0 || Object.keys(completedItemsByType).length > 0) && (
+                <div className="mb-4 p-4 bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/30 rounded-lg shadow-sm">
+                  <h3 className="font-bold text-base mb-3 flex items-center gap-2">
+                    <ClipboardList className="h-5 w-5 text-primary" />
+                    Inventory Items Summary
+                  </h3>
+                  
+                  {totalItemsNeeded > 0 && (
+                    <div className="mb-3 pb-3 border-b border-primary/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold text-sm">Items Still Needed:</span>
+                        <span className="font-bold text-xl text-primary">{totalItemsNeeded}</span>
+                      </div>
+                      {Object.keys(itemsByType).length > 0 && (
+                        <div className="mt-2 space-y-1.5">
+                          {Array.from(allInventoryTypeIds).map((typeId) => {
+                            const type = inventoryTypes.find(t => t.id === typeId);
+                            const neededQty = itemsByType[typeId] || 0;
+                            const completedQty = completedItemsByType[typeId] || 0;
+                            const totalQty = neededQty + completedQty;
+                            
+                            if (!type || totalQty === 0) return null;
+                            
+                            return (
+                              <div key={typeId} className="flex items-center justify-between text-sm bg-background/50 rounded px-3 py-2">
+                                <div className="flex-1">
+                                  <span className="font-medium">{type.name}</span>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs">
+                                  {neededQty > 0 && (
+                                    <span className="text-primary font-semibold">
+                                      {neededQty} needed
+                                    </span>
+                                  )}
+                                  {completedQty > 0 && (
+                                    <span className="text-green-600 font-semibold">
+                                      {completedQty} completed
+                                    </span>
+                                  )}
+                                  <span className="text-muted-foreground">
+                                    (Total: {totalQty})
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {Object.keys(completedItemsByType).length > 0 && totalItemsNeeded === 0 && (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <Check className="h-5 w-5" />
+                      <span className="font-semibold">All inventory items completed!</span>
                     </div>
                   )}
                 </div>
