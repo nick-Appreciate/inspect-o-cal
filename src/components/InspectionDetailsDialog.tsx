@@ -326,6 +326,8 @@ export default function InspectionDetailsDialog({
         description: newDescription.trim(),
         assigned_users: newAssignedUsers.length > 0 ? newAssignedUsers : null,
         attachment_url: attachmentUrl,
+        inventory_quantity: null,
+        inventory_type_id: null,
         created_by: user.id,
       });
 

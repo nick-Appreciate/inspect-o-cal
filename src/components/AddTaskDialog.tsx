@@ -109,6 +109,8 @@ export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
         original_inspection_id: selectedInspectionId,
         description: description.trim(),
         assigned_users: selectedUsers.length > 0 ? selectedUsers : [user.id],
+        inventory_quantity: null,
+        inventory_type_id: null,
         created_by: user.id,
       });
 

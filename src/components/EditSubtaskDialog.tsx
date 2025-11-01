@@ -114,7 +114,7 @@ export default function EditSubtaskDialog({
         .update({
           description: description.trim(),
           assigned_users: selectedUsers.length > 0 ? selectedUsers : null,
-          inventory_quantity: inventoryQuantity,
+          inventory_quantity: inventoryQuantity > 0 ? inventoryQuantity : null,
           inventory_type_id: inventoryTypeId && inventoryTypeId !== "none" ? inventoryTypeId : null,
         })
         .eq("id", subtaskId);
