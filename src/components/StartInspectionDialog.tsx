@@ -580,6 +580,7 @@ export function StartInspectionDialog({
               assigned_users: assignments,
               created_by: user.id,
               room_name: room.name,
+              status: 'bad',
             });
           }
         });
@@ -605,6 +606,7 @@ export function StartInspectionDialog({
             assigned_users: assignments,
             created_by: user.id,
             room_name: "Custom Items",
+            status: 'bad',
           });
         }
       });

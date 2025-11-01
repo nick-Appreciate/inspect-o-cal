@@ -1,16 +1,13 @@
-import { useState, useEffect } from "react";
-import { Plus } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -18,268 +15,180 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { format } from "date-fns";
-import { UserAvatar } from "./UserAvatar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus } from "lucide-react";
 
-interface Inspection {
-  id: string;
-  type: string;
-  date: string;
-  time: string;
-  properties: {
-    name: string;
-    address: string;
-  };
-}
-
-interface Profile {
-  id: string;
-  full_name: string | null;
-  avatar_url?: string | null;
-}
-
-interface VendorType {
+interface InventoryType {
   id: string;
   name: string;
-  default_assigned_user_id: string | null;
 }
 
 interface AddTaskDialogProps {
-  onTaskAdded: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdd: (task: {
+    description: string;
+    inventory_quantity: number;
+    inventory_type_id: string | null;
+  }) => void;
+  inventoryTypes: InventoryType[];
+  onCreateInventoryType: (name: string) => Promise<void>;
+  title?: string;
+  description?: string;
 }
 
-export default function AddTaskDialog({ onTaskAdded }: AddTaskDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [description, setDescription] = useState("");
-  const [selectedInspectionId, setSelectedInspectionId] = useState<string>("");
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [inspections, setInspections] = useState<Inspection[]>([]);
-  const [users, setUsers] = useState<Profile[]>([]);
-  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
-  const [selectedVendorType, setSelectedVendorType] = useState<string>("none");
-  const [isCreating, setIsCreating] = useState(false);
+export function AddTaskDialog({
+  open,
+  onOpenChange,
+  onAdd,
+  inventoryTypes,
+  onCreateInventoryType,
+  title = "Add Task",
+  description = "Add a new task to the checklist",
+}: AddTaskDialogProps) {
+  const [taskDescription, setTaskDescription] = useState("");
+  const [quantity, setQuantity] = useState(0);
+  const [typeId, setTypeId] = useState("");
+  const [showAddInventoryType, setShowAddInventoryType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
 
-  useEffect(() => {
-    if (open) {
-      fetchInspections();
-      fetchUsers();
-      fetchVendorTypes();
-    }
-  }, [open]);
-
-  const fetchInspections = async () => {
-    const { data, error } = await supabase
-      .from("inspections")
-      .select(`
-        id,
-        type,
-        date,
-        time,
-        properties (
-          name,
-          address
-        )
-      `)
-      .order("date", { ascending: true });
-
-    if (!error && data) {
-      setInspections(data);
-    }
-  };
-
-  const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from("public_profiles")
-      .select("id, full_name, avatar_url")
-      .order("full_name", { ascending: true });
-
-    if (!error && data) {
-      setUsers(data);
-    }
-  };
-
-  const fetchVendorTypes = async () => {
-    const { data, error } = await supabase
-      .from("vendor_types")
-      .select("*")
-      .order("name");
-
-    if (!error && data) {
-      setVendorTypes(data);
-    }
-  };
-
-  const handleCreate = async () => {
-    if (!description.trim() || !selectedInspectionId) {
-      toast.error("Please enter a description and select an inspection");
+  const handleAdd = () => {
+    if (!taskDescription.trim()) {
       return;
     }
 
-    setIsCreating(true);
+    onAdd({
+      description: taskDescription,
+      inventory_quantity: quantity,
+      inventory_type_id: typeId && typeId !== "none" ? typeId : null,
+    });
 
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const { error } = await supabase.from("subtasks").insert({
-        inspection_id: selectedInspectionId,
-        original_inspection_id: selectedInspectionId,
-        description: description.trim(),
-        assigned_users: selectedUsers.length > 0 ? selectedUsers : [user.id],
-        inventory_quantity: null,
-        inventory_type_id: null,
-        vendor_type_id: selectedVendorType && selectedVendorType !== "none" ? selectedVendorType : null,
-        created_by: user.id,
-      });
-
-      if (error) throw error;
-
-      toast.success("Task added successfully");
-      setOpen(false);
-      resetForm();
-      onTaskAdded();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to add task");
-    } finally {
-      setIsCreating(false);
-    }
+    // Reset form
+    setTaskDescription("");
+    setQuantity(0);
+    setTypeId("");
+    onOpenChange(false);
   };
 
-  const resetForm = () => {
-    setDescription("");
-    setSelectedInspectionId("");
-    setSelectedUsers([]);
-    setSelectedVendorType("none");
-  };
-
-  const toggleUser = (userId: string) => {
-    setSelectedUsers((prev) =>
-      prev.includes(userId)
-        ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
-    );
+  const handleCreateType = async () => {
+    if (!newTypeName.trim()) return;
+    await onCreateInventoryType(newTypeName.trim());
+    setNewTypeName("");
+    setShowAddInventoryType(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Task
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add New Task</DialogTitle>
-          <DialogDescription>
-            Create a new subtask and assign it to an inspection
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="description">Task Description</Label>
-            <Input
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter task description..."
+            <Label htmlFor="task-description">Description</Label>
+            <Textarea
+              id="task-description"
+              placeholder="Task description..."
+              value={taskDescription}
+              onChange={(e) => setTaskDescription(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && taskDescription.trim()) {
+                  e.preventDefault();
+                  handleAdd();
+                }
+              }}
             />
           </div>
-
           <div className="space-y-2">
-            <Label htmlFor="inspection">Associated Inspection</Label>
-            <Select
-              value={selectedInspectionId}
-              onValueChange={setSelectedInspectionId}
-            >
-              <SelectTrigger id="inspection">
-                <SelectValue placeholder="Select inspection" />
-              </SelectTrigger>
-              <SelectContent>
-                {inspections.map((inspection) => (
-                  <SelectItem key={inspection.id} value={inspection.id}>
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">{inspection.type}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {inspection.properties.name} -{" "}
-                        {format(new Date(inspection.date), "MMM d, yyyy")} at{" "}
-                        {inspection.time}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="quantity">Quantity (Optional)</Label>
+            <Input
+              id="quantity"
+              type="number"
+              min="0"
+              placeholder="0"
+              value={quantity || ""}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+            />
           </div>
-
           <div className="space-y-2">
-            <Label>Assign Users (Optional)</Label>
-            <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2">
-              {users.map((user) => (
-                <label
-                  key={user.id}
-                  className="flex items-center gap-2 cursor-pointer hover:bg-accent p-2 rounded"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedUsers.includes(user.id)}
-                    onChange={() => toggleUser(user.id)}
-                    className="rounded"
-                  />
-                  <UserAvatar
-                    avatarUrl={user.avatar_url}
-                    name={user.full_name}
-                    size="sm"
-                  />
-                  <span className="text-sm">
-                    {user.full_name || "Unknown User"}
-                  </span>
-                </label>
-              ))}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="type">Inventory Type (Optional)</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAddInventoryType(!showAddInventoryType)}
+                className="h-auto py-1 px-2 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                New Type
+              </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Leave empty to assign to yourself
-            </p>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="vendorType">Vendor Needed (Optional)</Label>
-            <Select
-              value={selectedVendorType}
-              onValueChange={setSelectedVendorType}
-            >
-              <SelectTrigger id="vendorType">
-                <SelectValue placeholder="Select vendor type" />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                <SelectItem value="none">None</SelectItem>
-                {vendorTypes.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {showAddInventoryType ? (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Type name..."
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newTypeName.trim()) {
+                      handleCreateType();
+                    } else if (e.key === "Escape") {
+                      setShowAddInventoryType(false);
+                      setNewTypeName("");
+                    }
+                  }}
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCreateType}
+                  disabled={!newTypeName.trim()}
+                >
+                  Add
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowAddInventoryType(false);
+                    setNewTypeName("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Select value={typeId} onValueChange={setTypeId}>
+                <SelectTrigger id="type">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="none">None</SelectItem>
+                  {inventoryTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
-
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setOpen(false)}
-            disabled={isCreating}
-          >
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={isCreating}>
-            {isCreating ? "Adding..." : "Add Task"}
+          <Button onClick={handleAdd} disabled={!taskDescription.trim()}>
+            Add Task
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

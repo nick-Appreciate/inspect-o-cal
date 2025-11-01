@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, isPast, parseISO } from "date-fns";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
-import AddTaskDialog from "@/components/AddTaskDialog";
+import { AddTaskDialog } from "@/components/AddTaskDialog";
 import EditSubtaskDialog from "@/components/EditSubtaskDialog";
 import { UserAvatar } from "@/components/UserAvatar";
 
