@@ -327,9 +327,12 @@ export default function Templates() {
             <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
             <span className="hidden sm:inline">Vendor </span>Types
           </Button>
-          <Button onClick={() => setShowNewTemplate(true)} size="sm" className="w-full sm:w-auto">
-            <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
-            New Template
+          <Button 
+            onClick={() => setShowNewTemplate(true)} 
+            size="icon"
+            className="flex-shrink-0"
+          >
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>

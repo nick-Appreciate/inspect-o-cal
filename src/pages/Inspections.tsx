@@ -71,7 +71,23 @@ const Inspections = () => {
 
   useEffect(() => {
     fetchInspections();
-  }, []);
+    
+    // Listen for history dialog open events from InspectionDetailsDialog
+    const handleOpenHistoryDialog = (event: any) => {
+      const { inspectionId, propertyId, unitId } = event.detail;
+      const inspection = inspections.find(i => i.id === inspectionId);
+      if (inspection) {
+        setHistoryInspection(inspection);
+        setHistoryDialogOpen(true);
+      }
+    };
+    
+    window.addEventListener('openHistoryDialog', handleOpenHistoryDialog);
+    
+    return () => {
+      window.removeEventListener('openHistoryDialog', handleOpenHistoryDialog);
+    };
+  }, [inspections]);
 
   const fetchInspections = async () => {
     try {

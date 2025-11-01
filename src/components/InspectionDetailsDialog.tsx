@@ -755,6 +755,26 @@ export default function InspectionDetailsDialog({
                   <Plus className="h-3 w-3 mr-1" />
                   <span>Follow-up</span>
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('openHistoryDialog', { 
+                        detail: { 
+                          inspectionId: inspection.id,
+                          propertyId: inspection.property_id,
+                          unitId: inspection.unit_id
+                        } 
+                      }));
+                    }, 100);
+                  }}
+                  className="h-7 text-xs px-2"
+                >
+                  <FileText className="h-3 w-3 mr-1" />
+                  <span>History</span>
+                </Button>
               </div>
             </div>
             <div className="flex items-start gap-1 text-xs mt-2">
