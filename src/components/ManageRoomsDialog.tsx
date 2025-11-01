@@ -136,14 +136,13 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
     setDefaultTasks(data as any || []);
     
-    // Fetch room associations for tasks that don't apply to all
-    const tasksNotApplyingToAll = (data as any[])?.filter(t => !t.applies_to_all_rooms) || [];
-    
-    if (tasksNotApplyingToAll.length > 0) {
+    // Fetch room associations for all tasks to compute enabled counts and toggles
+    const taskIds = (data as any[])?.map((t: any) => t.id) || [];
+    if (taskIds.length > 0) {
       const { data: associations } = await supabase
         .from("default_task_room_templates" as any)
         .select("default_task_id, room_template_id")
-        .in("default_task_id", tasksNotApplyingToAll.map(t => t.id));
+        .in("default_task_id", taskIds);
       
       if (associations) {
         const assocMap = (associations as any[]).reduce((acc: Record<string, string[]>, assoc: any) => {
@@ -153,6 +152,8 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         }, {} as Record<string, string[]>);
         
         setDefaultTaskRoomAssociations(assocMap);
+      } else {
+        setDefaultTaskRoomAssociations({});
       }
     } else {
       setDefaultTaskRoomAssociations({});
