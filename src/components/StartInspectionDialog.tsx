@@ -246,9 +246,11 @@ export function StartInspectionDialog({
 
       setRooms(roomsData || []);
 
-      // Fetch items for all rooms (with fallback to room_template_items)
+      // Fetch items for all rooms (with fallback to room_template_items + default tasks)
       const itemsMap: Record<string, Item[]> = {};
       for (const room of roomsData || []) {
+        const allItems: Item[] = [];
+
         // First try template_items bound to this template_room
         const { data: items, error: itemsError } = await supabase
           .from("template_items")
@@ -257,7 +259,7 @@ export function StartInspectionDialog({
           .order("order_index");
 
         if (!itemsError && items && items.length > 0) {
-          itemsMap[room.id] = items;
+          allItems.push(...items);
         } else {
           // Fallback: derive from the reusable room_template definition
           if (room.room_template_id) {
@@ -268,20 +270,48 @@ export function StartInspectionDialog({
               .order("order_index");
 
             if (!rtError && rtItems) {
-              itemsMap[room.id] = rtItems.map((rt) => ({
+              allItems.push(...rtItems.map((rt) => ({
                 id: `rt-${rt.id}`,
                 description: rt.description,
                 room_id: room.id,
                 inventory_quantity: rt.inventory_quantity ?? 0,
                 inventory_type_id: rt.inventory_type_id,
-              }));
-            } else {
-              itemsMap[room.id] = [];
+              })));
             }
-          } else {
-            itemsMap[room.id] = [];
           }
         }
+
+        // Add default tasks for this room template
+        if (room.room_template_id) {
+          const { data: defaultTasks, error: defaultError } = await supabase
+            .from("default_task_room_templates")
+            .select(`
+              default_task_id,
+              default_room_tasks (
+                id,
+                description,
+                inventory_quantity,
+                inventory_type_id
+              )
+            `)
+            .eq("room_template_id", room.room_template_id);
+
+          if (!defaultError && defaultTasks) {
+            for (const dt of defaultTasks) {
+              if (dt.default_room_tasks) {
+                allItems.push({
+                  id: `default-${dt.default_room_tasks.id}`,
+                  description: dt.default_room_tasks.description,
+                  room_id: room.id,
+                  inventory_quantity: dt.default_room_tasks.inventory_quantity ?? 0,
+                  inventory_type_id: dt.default_room_tasks.inventory_type_id,
+                });
+              }
+            }
+          }
+        }
+
+        itemsMap[room.id] = allItems;
       }
 
       setItemsByRoom(itemsMap);
@@ -586,6 +616,17 @@ export function StartInspectionDialog({
 
         if (insertError) throw insertError;
       }
+
+      // Update the inspection to mark it as completed and link to template
+      const { error: updateError } = await supabase
+        .from("inspections")
+        .update({
+          completed: true,
+          inspection_template_id: selectedTemplate
+        })
+        .eq("id", inspectionId);
+
+      if (updateError) throw updateError;
 
       toast.success(`Inspection complete! ${subtasks.length} issue${subtasks.length !== 1 ? 's' : ''} recorded.`);
       onInspectionStarted?.();

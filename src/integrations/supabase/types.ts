@@ -184,6 +184,7 @@ export type Database = {
           date: string
           duration: number | null
           id: string
+          inspection_template_id: string | null
           parent_inspection_id: string | null
           property_id: string
           time: string
@@ -198,6 +199,7 @@ export type Database = {
           date: string
           duration?: number | null
           id?: string
+          inspection_template_id?: string | null
           parent_inspection_id?: string | null
           property_id: string
           time: string
@@ -212,6 +214,7 @@ export type Database = {
           date?: string
           duration?: number | null
           id?: string
+          inspection_template_id?: string | null
           parent_inspection_id?: string | null
           property_id?: string
           time?: string
@@ -219,6 +222,13 @@ export type Database = {
           unit_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "inspections_inspection_template_id_fkey"
+            columns: ["inspection_template_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inspections_parent_inspection_id_fkey"
             columns: ["parent_inspection_id"]
@@ -401,6 +411,7 @@ export type Database = {
           inventory_type_id: string | null
           original_inspection_id: string
           room_name: string | null
+          status: string | null
           vendor_type_id: string | null
         }
         Insert: {
@@ -416,6 +427,7 @@ export type Database = {
           inventory_type_id?: string | null
           original_inspection_id: string
           room_name?: string | null
+          status?: string | null
           vendor_type_id?: string | null
         }
         Update: {
@@ -431,6 +443,7 @@ export type Database = {
           inventory_type_id?: string | null
           original_inspection_id?: string
           room_name?: string | null
+          status?: string | null
           vendor_type_id?: string | null
         }
         Relationships: [
