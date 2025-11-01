@@ -1,4 +1,4 @@
-import { Calendar, CheckSquare, FileText, List } from "lucide-react";
+import { Calendar, CheckSquare, FileText, List, Building2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -13,6 +13,7 @@ import {
 const menuItems = [
   { title: "Calendar", url: "/", icon: Calendar },
   { title: "My Tasks", url: "/tasks", icon: CheckSquare },
+  { title: "Properties", url: "/properties", icon: Building2 },
   { title: "Templates", url: "/templates", icon: FileText },
   { title: "Inspections", url: "/inspections", icon: List },
 ];

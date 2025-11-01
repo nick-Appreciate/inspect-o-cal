@@ -13,6 +13,7 @@ import Auth from "./pages/Auth";
 import Tasks from "./pages/Tasks";
 import Templates from "./pages/Templates";
 import Inspections from "./pages/Inspections";
+import Properties from "./pages/Properties";
 import NotFound from "./pages/NotFound";
 
 
@@ -67,6 +68,7 @@ function AppContent() {
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/tasks" element={<Tasks />} />
+              <Route path="/properties" element={<Properties />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/inspections" element={<Inspections />} />
               <Route path="*" element={<NotFound />} />
