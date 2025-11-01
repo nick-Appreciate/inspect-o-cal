@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,6 +100,11 @@ export function StartInspectionDialog({
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
   const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
+  const [itemAssignments, setItemAssignments] = useState<Record<string, string[]>>({});
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [showMentionDropdown, setShowMentionDropdown] = useState<string | null>(null);
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement>>({});
 
   useEffect(() => {
     if (open) {
@@ -117,6 +122,9 @@ export function StartInspectionDialog({
       setNewItemDescription("");
       setNewItemQuantity(0);
       setNewItemType("");
+      setItemAssignments({});
+      setMentionSearch("");
+      setShowMentionDropdown(null);
     }
   }, [open]);
 
@@ -256,7 +264,76 @@ export function StartInspectionDialog({
       ...prev,
       [itemId]: note,
     }));
+
+    // Check for @mentions
+    const lastAtSymbol = note.lastIndexOf('@');
+    if (lastAtSymbol !== -1) {
+      const textAfterAt = note.substring(lastAtSymbol + 1);
+      const hasSpaceAfter = textAfterAt.includes(' ') || textAfterAt.includes('\n');
+      
+      if (!hasSpaceAfter) {
+        setMentionSearch(textAfterAt.toLowerCase());
+        setShowMentionDropdown(itemId);
+        
+        // Calculate dropdown position
+        const textarea = textareaRefs.current[itemId];
+        if (textarea) {
+          const rect = textarea.getBoundingClientRect();
+          setMentionPosition({
+            top: rect.bottom + window.scrollY,
+            left: rect.left + window.scrollX,
+          });
+        }
+      } else {
+        setShowMentionDropdown(null);
+      }
+    } else {
+      setShowMentionDropdown(null);
+    }
   };
+
+  const handleMentionSelect = (itemId: string, user: Profile) => {
+    const currentNote = itemNotes[itemId] || "";
+    const lastAtSymbol = currentNote.lastIndexOf('@');
+    const newNote = currentNote.substring(0, lastAtSymbol);
+    
+    setItemNotes((prev) => ({
+      ...prev,
+      [itemId]: newNote,
+    }));
+
+    // Add user to assignments
+    setItemAssignments((prev) => {
+      const current = prev[itemId] || [];
+      if (!current.includes(user.id)) {
+        return {
+          ...prev,
+          [itemId]: [...current, user.id],
+        };
+      }
+      return prev;
+    });
+
+    setShowMentionDropdown(null);
+    setMentionSearch("");
+
+    toast.success(`Assigned to ${user.full_name || user.email}`);
+  };
+
+  const removeAssignment = (itemId: string, userId: string) => {
+    setItemAssignments((prev) => {
+      const current = prev[itemId] || [];
+      return {
+        ...prev,
+        [itemId]: current.filter(id => id !== userId),
+      };
+    });
+  };
+
+  const filteredMentionUsers = users.filter(user =>
+    (user.full_name?.toLowerCase().includes(mentionSearch) ||
+     user.email.toLowerCase().includes(mentionSearch))
+  );
 
   const addCustomItem = () => {
     if (!newItemDescription.trim()) {
@@ -338,15 +415,18 @@ export function StartInspectionDialog({
               ? `${item.description}\n\nNotes: ${note}`
               : item.description;
             
+            // Use individual assignments if available, otherwise use global assignment
+            const assignments = itemAssignments[item.id] || (assignToUser ? [assignToUser] : null);
+            
             subtasks.push({
               inspection_id: inspectionId,
               original_inspection_id: inspectionId,
               description: description,
               inventory_quantity: item.inventory_quantity > 0 ? item.inventory_quantity : null,
               inventory_type_id: item.inventory_type_id,
-              assigned_users: assignToUser ? [assignToUser] : null,
+              assigned_users: assignments,
               created_by: user.id,
-              room_name: room.name, // Add room name for grouping
+              room_name: room.name,
             });
           }
         });
@@ -360,15 +440,18 @@ export function StartInspectionDialog({
             ? `${item.description}\n\nNotes: ${note}`
             : item.description;
           
+          // Use individual assignments if available, otherwise use global assignment
+          const assignments = itemAssignments[item.id] || (assignToUser ? [assignToUser] : null);
+          
           subtasks.push({
             inspection_id: inspectionId,
             original_inspection_id: inspectionId,
             description: description,
             inventory_quantity: item.inventory_quantity > 0 ? item.inventory_quantity : null,
             inventory_type_id: item.inventory_type_id,
-            assigned_users: assignToUser ? [assignToUser] : null,
+            assigned_users: assignments,
             created_by: user.id,
-            room_name: "Custom Items", // Group custom items separately
+            room_name: "Custom Items",
           });
         }
       });
@@ -394,35 +477,40 @@ export function StartInspectionDialog({
   const totalItems = Object.values(itemsByRoom).flat().length + customItems.length;
   const checkedCount = checkedItems.size;
   const issuesCount = totalItems - checkedCount;
+  
+  // Count unassigned issues
+  const unassignedCount = [...Object.values(itemsByRoom).flat(), ...customItems]
+    .filter(item => !checkedItems.has(item.id) && !itemAssignments[item.id]?.length)
+    .length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ClipboardCheck className="h-5 w-5" />
+      <DialogContent className="max-w-2xl max-h-[90vh] h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <ClipboardCheck className="h-4 w-4" />
             {step === "select" ? "Start Inspection" : "Inspection Checklist"}
           </DialogTitle>
-          <DialogDescription>
-            {step === "select"
-              ? unitId 
-                ? "Select a template matching this unit's floorplan to start the inspection"
-                : "Select a template for this property-level inspection"
-              : `Check items that pass inspection. Unchecked items will become subtasks.`}
-          </DialogDescription>
+          {step === "select" && (
+            <DialogDescription className="text-xs">
+              {unitId 
+                ? "Select a template matching this unit's floorplan"
+                : "Select a template for this property"}
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         {step === "select" ? (
-          <div className="space-y-4 py-4">
+          <div className="px-6 py-4 space-y-4">
             {templates.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 {unitId 
-                  ? "No templates found matching this unit's floorplan. Create a template with the matching floorplan to use it here."
-                  : "No templates found for this property. Associate templates with this property to use them here."}
+                  ? "No templates found matching this unit's floorplan."
+                  : "No templates found for this property."}
               </p>
             ) : (
               <div>
-                <Label>Template</Label>
+                <Label className="text-sm">Template</Label>
                 <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a template" />
@@ -440,22 +528,16 @@ export function StartInspectionDialog({
           </div>
         ) : (
           <>
-            <div className="mb-3 p-3 bg-muted rounded-lg space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Progress:</span>
-                <span className="font-medium">
-                  {checkedCount} / {totalItems} items checked
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Issues to track:</span>
+            <div className="px-6 py-2 bg-muted shrink-0">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Progress: {checkedCount}/{totalItems}</span>
                 <span className="font-medium text-destructive">
-                  {issuesCount} item{issuesCount !== 1 ? 's' : ''}
+                  {issuesCount} issue{issuesCount !== 1 ? 's' : ''}
                 </span>
               </div>
             </div>
 
-            <ScrollArea className="flex-1 max-h-[45vh] pr-4">
+            <ScrollArea className="flex-1 px-6 py-4">
               <div className="space-y-6">
                 {/* Template Rooms */}
                 {rooms.map((room) => {
@@ -463,56 +545,84 @@ export function StartInspectionDialog({
                   if (items.length === 0) return null;
 
                   return (
-                    <div key={room.id} className="space-y-3">
-                      <h3 className="font-semibold text-lg sticky top-0 bg-background py-2 border-b">
+                    <div key={room.id} className="space-y-2">
+                      <h3 className="font-semibold text-base sticky top-0 bg-background py-1 border-b">
                         {room.name}
                       </h3>
                       <div className="space-y-2">
-                        {items.map((item) => (
-                          <div
-                            key={item.id}
-                            className="p-3 border rounded-lg hover:bg-accent/50 transition-colors space-y-2"
-                          >
-                            <div className="flex items-start gap-2">
-                              <Checkbox
-                                checked={checkedItems.has(item.id)}
-                                onCheckedChange={() => toggleItem(item.id)}
-                                className="mt-0.5"
-                              />
-                              <div className="flex-1">
-                                <label
-                                  className="text-sm cursor-pointer block"
-                                  onClick={() => toggleItem(item.id)}
-                                >
-                                  {item.description}
-                                </label>
-                                {(item.inventory_quantity && item.inventory_quantity > 0) || item.inventory_quantity === -1 ? (
-                                  <p className="text-xs text-primary font-medium mt-1">
-                                    Items needed: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
-                                    {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
-                                      <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
-                                    )}
-                                  </p>
-                                ) : null}
+                        {items.map((item) => {
+                          const assignedUsers = itemAssignments[item.id] || [];
+                          return (
+                            <div
+                              key={item.id}
+                              className="p-2 border rounded-lg hover:bg-accent/50 transition-colors space-y-2"
+                            >
+                              <div className="flex items-start gap-2">
+                                <Checkbox
+                                  checked={checkedItems.has(item.id)}
+                                  onCheckedChange={() => toggleItem(item.id)}
+                                  className="mt-0.5"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <label
+                                    className="text-sm cursor-pointer block"
+                                    onClick={() => toggleItem(item.id)}
+                                  >
+                                    {item.description}
+                                  </label>
+                                  {(item.inventory_quantity && item.inventory_quantity > 0) || item.inventory_quantity === -1 ? (
+                                    <p className="text-xs text-primary font-medium mt-1">
+                                      Items: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
+                                      {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
+                                        <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
+                                      )}
+                                    </p>
+                                  ) : null}
+                                  {assignedUsers.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {assignedUsers.map(userId => {
+                                        const user = users.find(u => u.id === userId);
+                                        return user ? (
+                                          <span key={userId} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
+                                            {user.full_name || user.email}
+                                            <X 
+                                              className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                                              onClick={() => removeAssignment(item.id, userId)}
+                                            />
+                                          </span>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setShowAddItemDialog(true)}
-                                className="h-6 w-6 shrink-0"
-                                title="Add custom item"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
+                              <div className="relative">
+                                <Textarea
+                                  ref={(el) => {
+                                    if (el) textareaRefs.current[item.id] = el;
+                                  }}
+                                  placeholder="Add notes or @mention to assign..."
+                                  value={itemNotes[item.id] || ""}
+                                  onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                  className="text-sm min-h-[50px]"
+                                />
+                                {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
+                                  <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
+                                    {filteredMentionUsers.map((user) => (
+                                      <div
+                                        key={user.id}
+                                        className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
+                                        onClick={() => handleMentionSelect(item.id, user)}
+                                      >
+                                        {user.full_name || user.email}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <Textarea
-                              placeholder="Add notes (optional)..."
-                              value={itemNotes[item.id] || ""}
-                              onChange={(e) => updateItemNote(item.id, e.target.value)}
-                              className="text-sm min-h-[60px]"
-                            />
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -520,105 +630,140 @@ export function StartInspectionDialog({
                 
                 {/* Custom Items Section */}
                 {customItems.length > 0 && (
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-lg border-b pb-2 flex items-center gap-2">
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-base border-b pb-1 flex items-center gap-2">
                       <span>Custom Items</span>
                       <span className="text-xs font-normal text-muted-foreground">({customItems.length})</span>
                     </h3>
                     <div className="space-y-2">
-                      {customItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3 border-2 border-dashed border-primary/30 rounded-lg hover:bg-accent/50 transition-colors space-y-2"
-                        >
-                          <div className="flex items-start gap-2">
-                            <Checkbox
-                              checked={checkedItems.has(item.id)}
-                              onCheckedChange={() => toggleItem(item.id)}
-                              className="mt-0.5"
-                            />
-                            <div className="flex-1">
-                              <label
-                                className="text-sm cursor-pointer block font-medium"
-                                onClick={() => toggleItem(item.id)}
+                      {customItems.map((item) => {
+                        const assignedUsers = itemAssignments[item.id] || [];
+                        return (
+                          <div
+                            key={item.id}
+                            className="p-2 border-2 border-dashed border-primary/30 rounded-lg hover:bg-accent/50 transition-colors space-y-2"
+                          >
+                            <div className="flex items-start gap-2">
+                              <Checkbox
+                                checked={checkedItems.has(item.id)}
+                                onCheckedChange={() => toggleItem(item.id)}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <label
+                                  className="text-sm cursor-pointer block font-medium"
+                                  onClick={() => toggleItem(item.id)}
+                                >
+                                  {item.description}
+                                </label>
+                                {item.inventory_quantity > 0 || item.inventory_quantity === -1 ? (
+                                  <p className="text-xs text-primary font-medium mt-1">
+                                    Items: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
+                                    {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
+                                      <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
+                                    )}
+                                  </p>
+                                ) : null}
+                                {assignedUsers.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {assignedUsers.map(userId => {
+                                      const user = users.find(u => u.id === userId);
+                                      return user ? (
+                                        <span key={userId} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
+                                          {user.full_name || user.email}
+                                          <X 
+                                            className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                                            onClick={() => removeAssignment(item.id, userId)}
+                                          />
+                                        </span>
+                                      ) : null;
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeCustomItem(item.id)}
+                                className="h-6 w-6 shrink-0"
+                                title="Remove custom item"
                               >
-                                {item.description}
-                              </label>
-                              {item.inventory_quantity > 0 || item.inventory_quantity === -1 ? (
-                                <p className="text-xs text-primary font-medium mt-1">
-                                  Items needed: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
-                                  {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
-                                    <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
-                                  )}
-                                </p>
-                              ) : null}
+                                <X className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeCustomItem(item.id)}
-                              className="h-6 w-6 shrink-0"
-                              title="Remove custom item"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                            <div className="relative">
+                              <Textarea
+                                ref={(el) => {
+                                  if (el) textareaRefs.current[item.id] = el;
+                                }}
+                                placeholder="Add notes or @mention to assign..."
+                                value={itemNotes[item.id] || ""}
+                                onChange={(e) => updateItemNote(item.id, e.target.value)}
+                                className="text-sm min-h-[50px]"
+                              />
+                              {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
+                                <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
+                                  {filteredMentionUsers.map((user) => (
+                                    <div
+                                      key={user.id}
+                                      className="px-3 py-2 text-sm cursor-pointer hover:bg-accent"
+                                      onClick={() => handleMentionSelect(item.id, user)}
+                                    >
+                                      {user.full_name || user.email}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <Textarea
-                            placeholder="Add notes (optional)..."
-                            value={itemNotes[item.id] || ""}
-                            onChange={(e) => updateItemNote(item.id, e.target.value)}
-                            className="text-sm min-h-[60px]"
-                          />
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
               </div>
             </ScrollArea>
-
-            {issuesCount > 0 && (
-              <div className="mt-3 pt-3 border-t space-y-2">
-                <Label>Assign all issues to (Optional)</Label>
-                <Select value={assignToUser} onValueChange={setAssignToUser}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select user to assign tasks" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.full_name || user.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  All {issuesCount} unchecked item{issuesCount !== 1 ? 's' : ''} will be assigned to this user
-                </p>
-              </div>
-            )}
           </>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-3 border-t shrink-0">
           {step === "select" ? (
-            <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <div className="flex gap-2 w-full">
+              <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
                 Cancel
               </Button>
-              <Button onClick={loadTemplate} disabled={!selectedTemplate || loading}>
-                {loading ? "Loading..." : "Start Inspection"}
+              <Button onClick={loadTemplate} disabled={!selectedTemplate || loading} className="flex-1">
+                {loading ? "Loading..." : "Start"}
               </Button>
-            </>
+            </div>
           ) : (
-            <>
-              <Button variant="outline" onClick={() => setStep("select")}>
-                Back
-              </Button>
-              <Button onClick={submitInspection} disabled={loading}>
-                {loading ? "Submitting..." : `Complete Inspection (${issuesCount} issue${issuesCount !== 1 ? 's' : ''})`}
-              </Button>
-            </>
+            <div className="w-full space-y-3">
+              {unassignedCount > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs">Assign unassigned issues ({unassignedCount})</Label>
+                  <Select value={assignToUser} onValueChange={setAssignToUser}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select user" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name || user.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep("select")} size="sm">
+                  Back
+                </Button>
+                <Button onClick={submitInspection} disabled={loading} className="flex-1" size="sm">
+                  {loading ? "Submitting..." : `Complete (${issuesCount} issue${issuesCount !== 1 ? 's' : ''})`}
+                </Button>
+              </div>
+            </div>
           )}
         </DialogFooter>
       </DialogContent>
