@@ -10,6 +10,8 @@ import { Inspection, Property } from "@/types/inspection";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz/formatInTimeZone";
+import { fromZonedTime } from "date-fns-tz/fromZonedTime";
 import type { User, Session } from "@supabase/supabase-js";
 
 const Index = () => {
@@ -153,7 +155,7 @@ const Index = () => {
 
       const { error } = await supabase.from("inspections").insert({
         type: newInspection.type,
-        date: format(newInspection.date, 'yyyy-MM-dd'),
+        date: formatInTimeZone(newInspection.date, 'America/Chicago', 'yyyy-MM-dd'),
         time: newInspection.time,
         property_id: newInspection.property.id,
         unit_id: newInspection.unitId && newInspection.unitId !== "none" ? newInspection.unitId : null,
@@ -202,9 +204,10 @@ const Index = () => {
   };
 
   const handleDateClick = (date: Date) => {
-    // Find inspections on this date and open the first one
+    // Compare dates in America/Chicago
+    const clicked = formatInTimeZone(date, 'America/Chicago', 'yyyy-MM-dd');
     const dayInspections = inspections.filter((inspection) =>
-      inspection.date.toDateString() === date.toDateString()
+      formatInTimeZone(inspection.date, 'America/Chicago', 'yyyy-MM-dd') === clicked
     );
 
     if (dayInspections.length > 0) {

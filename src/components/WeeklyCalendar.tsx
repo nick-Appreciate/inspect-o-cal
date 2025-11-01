@@ -11,11 +11,10 @@ import {
   startOfWeek,
   endOfWeek,
   eachDayOfInterval,
-  isSameDay,
   addWeeks,
   subWeeks,
-  isToday,
 } from "date-fns";
+import { formatInTimeZone } from 'date-fns-tz/formatInTimeZone';
 
 interface WeeklyCalendarProps {
   inspections: Inspection[];
@@ -75,7 +74,8 @@ export default function WeeklyCalendar({
   const goToToday = () => setCurrentWeek(new Date());
 
   const getInspectionsForDay = (day: Date) => {
-    return inspections.filter((inspection) => isSameDay(inspection.date, day));
+    const key = formatInTimeZone(day, 'America/Chicago', 'yyyy-MM-dd');
+    return inspections.filter((inspection) => formatInTimeZone(inspection.date, 'America/Chicago', 'yyyy-MM-dd') === key);
   };
 
   const handleDragStart = (
@@ -276,7 +276,7 @@ export default function WeeklyCalendar({
         {/* Days columns */}
         {daysInWeek.map((day) => {
           const dayInspections = getInspectionsForDay(day);
-          const isDayToday = isToday(day);
+          const isDayToday = formatInTimeZone(day, 'America/Chicago', 'yyyy-MM-dd') === formatInTimeZone(new Date(), 'America/Chicago', 'yyyy-MM-dd');
 
           return (
             <div
@@ -290,14 +290,14 @@ export default function WeeklyCalendar({
                 }`}
               >
                 <div className="text-xs font-semibold text-muted-foreground uppercase">
-                  {format(day, "EEE")}
+                  {formatInTimeZone(day, 'America/Chicago', 'EEE')}
                 </div>
                 <div
                   className={`text-2xl font-bold ${
                     isDayToday ? "text-primary" : ""
                   }`}
                 >
-                  {format(day, "d")}
+                  {formatInTimeZone(day, 'America/Chicago', 'd')}
                 </div>
               </div>
 

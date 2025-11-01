@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Inspection } from "@/types/inspection";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths } from "date-fns";
+import { formatInTimeZone } from 'date-fns-tz/formatInTimeZone';
 
 interface InspectionCalendarProps {
   inspections: Inspection[];
@@ -39,7 +40,8 @@ export default function InspectionCalendar({ inspections, onDateClick, onInspect
 
   const getInspectionsForDay = (day: Date | null) => {
     if (!day) return [];
-    return inspections.filter((inspection) => isSameDay(inspection.date, day));
+    const dayKey = formatInTimeZone(day, 'America/Chicago', 'yyyy-MM-dd');
+    return inspections.filter((inspection) => formatInTimeZone(inspection.date, 'America/Chicago', 'yyyy-MM-dd') === dayKey);
   };
 
   return (
@@ -47,7 +49,7 @@ export default function InspectionCalendar({ inspections, onDateClick, onInspect
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <CalendarIcon className="h-6 w-6 text-primary" />
-          {format(currentMonth, "MMMM yyyy")}
+          {formatInTimeZone(currentMonth, 'America/Chicago', 'MMMM yyyy')}
         </h2>
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={previousMonth}>
@@ -68,7 +70,7 @@ export default function InspectionCalendar({ inspections, onDateClick, onInspect
 
         {totalDays.map((day, index) => {
           const dayInspections = getInspectionsForDay(day);
-          const isToday = day && isSameDay(day, new Date());
+          const isToday = day && formatInTimeZone(day, 'America/Chicago', 'yyyy-MM-dd') === formatInTimeZone(new Date(), 'America/Chicago', 'yyyy-MM-dd');
 
           return (
             <div
@@ -82,7 +84,7 @@ export default function InspectionCalendar({ inspections, onDateClick, onInspect
               {day && (
                 <>
                   <div className={`text-sm font-medium mb-1 ${isToday ? "text-primary font-bold" : ""}`}>
-                    {format(day, "d")}
+                    {formatInTimeZone(day, 'America/Chicago', 'd')}
                   </div>
                   <div className="space-y-1">
                     {dayInspections.slice(0, 2).map((inspection) => (
