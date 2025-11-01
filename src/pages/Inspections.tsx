@@ -107,16 +107,37 @@ const Inspections = () => {
   const handleDelete = async () => {
     if (!deleteId) return;
 
+    // Find connected inspections (children and parent)
+    const deletingInspection = inspections.find(i => i.id === deleteId);
+    const connectedInspections = inspections.filter(i => 
+      (i.parent_inspection_id === deleteId) || // Children
+      (deletingInspection?.parent_inspection_id && i.id === deletingInspection.parent_inspection_id) || // Parent
+      (deletingInspection?.parent_inspection_id && i.parent_inspection_id === deletingInspection.parent_inspection_id && i.id !== deleteId) // Siblings
+    );
+
+    let inspectionIdsToDelete = [deleteId];
+
+    // If there are connected inspections, ask the user
+    if (connectedInspections.length > 0) {
+      const shouldDeleteAll = window.confirm(
+        `This inspection has ${connectedInspections.length} connected inspection(s). Would you like to delete all of them?`
+      );
+      
+      if (shouldDeleteAll) {
+        inspectionIdsToDelete = [deleteId, ...connectedInspections.map(i => i.id)];
+      }
+    }
+
     try {
-      const { data, error, count } = await supabase
+      const { data, error } = await supabase
         .from("inspections")
         .delete()
-        .eq("id", deleteId)
+        .in("id", inspectionIdsToDelete)
         .select();
 
       if (error) {
         console.error("Delete error:", error);
-        toast.error("Failed to delete inspection");
+        toast.error("Failed to delete inspection(s)");
         return;
       }
 
@@ -127,8 +148,12 @@ const Inspections = () => {
         return;
       }
 
-      toast.success("Inspection deleted successfully");
-      setInspections(inspections.filter((i) => i.id !== deleteId));
+      toast.success(
+        data.length > 1 
+          ? `${data.length} inspections deleted successfully` 
+          : "Inspection deleted successfully"
+      );
+      setInspections(inspections.filter((i) => !inspectionIdsToDelete.includes(i.id)));
       setDeleteId(null);
       fetchInspections(); // Refresh the list
     } catch (err) {
