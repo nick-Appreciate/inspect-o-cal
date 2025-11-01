@@ -388,7 +388,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => setShowAddInventoryType(true)}
+                                        onClick={() => setShowAddInventoryType(!showAddInventoryType)}
                                         className="h-9 px-2"
                                       >
                                         <Plus className="h-4 w-4" />
