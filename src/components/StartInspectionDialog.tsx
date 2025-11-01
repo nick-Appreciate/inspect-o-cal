@@ -457,6 +457,13 @@ export function StartInspectionDialog({
 
   const handleComplete = () => {
     const allItems = [...Object.values(itemsByRoom).flat(), ...customItems];
+    const itemsWithoutStatus = allItems.filter(item => !itemStatus[item.id] || itemStatus[item.id] === 'pending');
+    
+    if (itemsWithoutStatus.length > 0) {
+      toast.error(`Please review all items. ${itemsWithoutStatus.length} item${itemsWithoutStatus.length !== 1 ? 's' : ''} still pending.`);
+      return;
+    }
+
     const badItems = allItems.filter(item => itemStatus[item.id] === 'bad');
     const unassignedBadItems = badItems.filter(item => !itemAssignments[item.id]?.length);
 
@@ -658,39 +665,57 @@ export function StartInspectionDialog({
                             return (
                               <div
                                 key={item.id}
-                                className={`p-3 border rounded-lg transition-all space-y-2 ${
+                                className={`p-3 border rounded-lg transition-all space-y-2 cursor-pointer ${
                                   status === 'good' ? 'border-green-500/50 bg-green-50/50' :
                                   status === 'bad' ? 'border-destructive/50 bg-destructive/5' :
                                   'border-border hover:border-accent-foreground/20 hover:bg-accent/30'
                                 }`}
+                                onClick={(e) => {
+                                  // Only expand if not clicking on buttons or interactive elements
+                                  if (!(e.target as HTMLElement).closest('button')) {
+                                    setExpandedNotes(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(item.id)) {
+                                        next.delete(item.id);
+                                      } else {
+                                        next.add(item.id);
+                                      }
+                                      return next;
+                                    });
+                                  }
+                                }}
                               >
-                                <div className="flex items-start gap-3">
-                                  <div className="flex flex-col gap-1.5 shrink-0">
+                                <div className="flex items-start gap-2">
+                                  <div className="flex gap-1.5 shrink-0">
                                     <Button
                                       size="sm"
                                       variant={status === 'good' ? 'default' : 'outline'}
-                                      onClick={() => setItemAsGood(item.id, room.id)}
-                                      className={`h-9 w-16 text-xs font-medium ${
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setItemAsGood(item.id, room.id);
+                                      }}
+                                      className={`h-9 w-9 p-0 ${
                                         status === 'good' 
                                           ? 'bg-green-600 hover:bg-green-700 text-white border-green-600' 
                                           : 'border-green-600/60 text-green-700 hover:bg-green-50 hover:border-green-600'
                                       }`}
                                     >
-                                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                                      Good
+                                      <CheckCircle2 className="h-4 w-4" />
                                     </Button>
                                     <Button
                                       size="sm"
                                       variant={status === 'bad' ? 'default' : 'outline'}
-                                      onClick={() => setItemAsBad(item.id, room.id)}
-                                      className={`h-9 w-16 text-xs font-medium ${
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setItemAsBad(item.id, room.id);
+                                      }}
+                                      className={`h-9 w-9 p-0 ${
                                         status === 'bad' 
                                           ? 'bg-destructive hover:bg-destructive/90 text-white border-destructive' 
                                           : 'border-destructive/60 text-destructive hover:bg-destructive/5 hover:border-destructive'
                                       }`}
                                     >
-                                      <XCircle className="h-3.5 w-3.5 mr-1" />
-                                      Bad
+                                      <XCircle className="h-4 w-4" />
                                     </Button>
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -720,17 +745,12 @@ export function StartInspectionDialog({
                                       </div>
                                     )}
                                   </div>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => toggleNoteExpanded(item.id)}
-                                    className="h-8 w-8 p-0 shrink-0"
-                                  >
-                                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                  </Button>
+                                  <div className="shrink-0">
+                                    {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                                  </div>
                                 </div>
                                 {isExpanded && (
-                                  <div className="relative mt-2 ml-[76px]">
+                                  <div className="relative mt-2 ml-[84px]">
                                     <Textarea
                                       ref={(el) => {
                                         if (el) textareaRefs.current[item.id] = el;
@@ -786,39 +806,57 @@ export function StartInspectionDialog({
                           return (
                             <div
                               key={item.id}
-                              className={`p-3 border-2 border-dashed rounded-lg transition-all space-y-2 ${
+                              className={`p-3 border-2 border-dashed rounded-lg transition-all space-y-2 cursor-pointer ${
                                 status === 'good' ? 'border-green-500/50 bg-green-50/50' :
                                 status === 'bad' ? 'border-destructive/50 bg-destructive/5' :
                                 'border-primary/30 hover:border-primary/50 hover:bg-accent/30'
                               }`}
+                              onClick={(e) => {
+                                // Only expand if not clicking on buttons or interactive elements
+                                if (!(e.target as HTMLElement).closest('button')) {
+                                  setExpandedNotes(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(item.id)) {
+                                      next.delete(item.id);
+                                    } else {
+                                      next.add(item.id);
+                                    }
+                                    return next;
+                                  });
+                                }
+                              }}
                             >
-                              <div className="flex items-start gap-3">
-                                <div className="flex flex-col gap-1.5 shrink-0">
+                              <div className="flex items-start gap-2">
+                                <div className="flex gap-1.5 shrink-0">
                                   <Button
                                     size="sm"
                                     variant={status === 'good' ? 'default' : 'outline'}
-                                    onClick={() => setItemAsGood(item.id)}
-                                    className={`h-9 w-16 text-xs font-medium ${
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setItemAsGood(item.id);
+                                    }}
+                                    className={`h-9 w-9 p-0 ${
                                       status === 'good' 
                                         ? 'bg-green-600 hover:bg-green-700 text-white border-green-600' 
                                         : 'border-green-600/60 text-green-700 hover:bg-green-50 hover:border-green-600'
                                     }`}
                                   >
-                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                                    Good
+                                    <CheckCircle2 className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     size="sm"
                                     variant={status === 'bad' ? 'default' : 'outline'}
-                                    onClick={() => setItemAsBad(item.id)}
-                                    className={`h-9 w-16 text-xs font-medium ${
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setItemAsBad(item.id);
+                                    }}
+                                    className={`h-9 w-9 p-0 ${
                                       status === 'bad' 
                                         ? 'bg-destructive hover:bg-destructive/90 text-white border-destructive' 
                                         : 'border-destructive/60 text-destructive hover:bg-destructive/5 hover:border-destructive'
                                     }`}
                                   >
-                                    <XCircle className="h-3.5 w-3.5 mr-1" />
-                                    Bad
+                                    <XCircle className="h-4 w-4" />
                                   </Button>
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -848,26 +886,26 @@ export function StartInspectionDialog({
                                     </div>
                                   )}
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => toggleNoteExpanded(item.id)}
-                                  className="h-8 w-8 p-0 shrink-0"
-                                >
-                                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeCustomItem(item.id)}
-                                  className="h-8 w-8 shrink-0"
-                                  title="Remove custom item"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <div>
+                                    {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeCustomItem(item.id);
+                                    }}
+                                    className="h-8 w-8"
+                                    title="Remove custom item"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </div>
                               {isExpanded && (
-                                <div className="relative mt-2 ml-[76px]">
+                                <div className="relative mt-2 ml-[84px]">
                                   <Textarea
                                     ref={(el) => {
                                       if (el) textareaRefs.current[item.id] = el;
