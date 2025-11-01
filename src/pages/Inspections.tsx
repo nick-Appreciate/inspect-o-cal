@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Trash2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import {
   Table,
   TableBody,
@@ -45,6 +46,8 @@ const Inspections = () => {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchInspections();
@@ -103,6 +106,7 @@ const Inspections = () => {
       toast.success("Inspection deleted successfully");
       setInspections(inspections.filter((i) => i.id !== deleteId));
       setDeleteId(null);
+      fetchInspections(); // Refresh the list
     } catch (err) {
       console.error("Error deleting inspection:", err);
       toast.error("An error occurred while deleting");
@@ -174,7 +178,14 @@ const Inspections = () => {
               </TableHeader>
               <TableBody>
                 {inspections.map((inspection) => (
-                  <TableRow key={inspection.id}>
+                  <TableRow 
+                    key={inspection.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      setSelectedInspectionId(inspection.id);
+                      setDetailsDialogOpen(true);
+                    }}
+                  >
                     <TableCell>
                       <Badge className={getInspectionColor(inspection.type)}>
                         {inspection.type}
@@ -203,7 +214,10 @@ const Inspections = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setDeleteId(inspection.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteId(inspection.id);
+                        }}
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -216,6 +230,12 @@ const Inspections = () => {
           </div>
         )}
       </main>
+
+      <InspectionDetailsDialog
+        inspectionId={selectedInspectionId}
+        open={detailsDialogOpen}
+        onOpenChange={setDetailsDialogOpen}
+      />
 
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
