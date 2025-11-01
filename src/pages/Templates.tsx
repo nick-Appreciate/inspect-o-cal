@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TemplateBuilder } from "@/components/TemplateBuilder";
 import { InventoryTypesDialog } from "@/components/InventoryTypesDialog";
+import { ManageRoomsDialog } from "@/components/ManageRoomsDialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -57,6 +58,7 @@ export default function Templates() {
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [duplicateFromTemplate, setDuplicateFromTemplate] = useState("");
   const [showInventoryTypes, setShowInventoryTypes] = useState(false);
+  const [showManageRooms, setShowManageRooms] = useState(false);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -264,6 +266,13 @@ export default function Templates() {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            onClick={() => setShowManageRooms(true)}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Manage Rooms
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => setShowInventoryTypes(true)}
           >
             <Settings className="mr-2 h-4 w-4" />
@@ -434,6 +443,11 @@ export default function Templates() {
           onClose={() => setSelectedTemplate(null)}
         />
       )}
+
+      <ManageRoomsDialog
+        open={showManageRooms}
+        onOpenChange={setShowManageRooms}
+      />
 
       <InventoryTypesDialog
         open={showInventoryTypes}

@@ -18,6 +18,12 @@ interface Room {
   id: string;
   name: string;
   order_index: number;
+  room_template_id?: string | null;
+}
+
+interface RoomTemplate {
+  id: string;
+  name: string;
 }
 
 interface Item {
@@ -41,16 +47,18 @@ export function TemplateBuilder({
   onClose: () => void;
 }) {
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomTemplates, setRoomTemplates] = useState<RoomTemplate[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [itemsByRoom, setItemsByRoom] = useState<Record<string, Item[]>>({});
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
-  const [newRoomName, setNewRoomName] = useState("");
+  const [selectedRoomTemplate, setSelectedRoomTemplate] = useState("");
   const [newItemDescription, setNewItemDescription] = useState<Record<string, string>>({});
   const [newItemQuantity, setNewItemQuantity] = useState<Record<string, number>>({});
   const [newItemType, setNewItemType] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchRooms();
+    fetchRoomTemplates();
     fetchInventoryTypes();
   }, [templateId]);
 
@@ -107,31 +115,49 @@ export function TemplateBuilder({
     setInventoryTypes(data || []);
   };
 
-  const addRoom = async () => {
-    if (!newRoomName.trim()) {
-      toast.error("Please enter a room name");
+  const fetchRoomTemplates = async () => {
+    const { data, error } = await supabase
+      .from("room_templates" as any)
+      .select("*")
+      .order("name");
+
+    if (error) {
+      toast.error("Failed to load room templates");
       return;
     }
+
+    setRoomTemplates(data as any || []);
+  };
+
+  const addRoomFromTemplate = async () => {
+    if (!selectedRoomTemplate) {
+      toast.error("Please select a room template");
+      return;
+    }
+
+    const roomTemplate = roomTemplates.find(rt => rt.id === selectedRoomTemplate);
+    if (!roomTemplate) return;
 
     const { data, error } = await supabase
       .from("template_rooms")
       .insert({
         template_id: templateId,
-        name: newRoomName.trim(),
+        name: roomTemplate.name,
+        room_template_id: selectedRoomTemplate,
         order_index: rooms.length,
       })
       .select()
       .single();
 
     if (error) {
-      console.error("Failed to add template room:", error);
+      console.error("Failed to add room:", error);
       toast.error(error.message || "Failed to add room");
       return;
     }
 
     setRooms([...rooms, data]);
-    setNewRoomName("");
-    toast.success("Room added");
+    setSelectedRoomTemplate("");
+    toast.success("Room added from template");
   };
 
   const deleteRoom = async (roomId: string) => {
@@ -219,21 +245,35 @@ export function TemplateBuilder({
         </div>
       </CardHeader>
       <CardContent className="space-y-6 overflow-y-auto flex-1">
-        {/* Add New Room */}
+        {/* Add Room from Template */}
         <div className="space-y-2">
-          <Label>Add New Room</Label>
+          <Label>Add Room from Template</Label>
           <div className="flex gap-2">
-            <Input
-              placeholder="Room name..."
-              value={newRoomName}
-              onChange={(e) => setNewRoomName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addRoom()}
-              maxLength={100}
-            />
-            <Button onClick={addRoom} size="icon">
+            <Select value={selectedRoomTemplate} onValueChange={setSelectedRoomTemplate}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Select a room template" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                {roomTemplates.length === 0 ? (
+                  <div className="p-2 text-sm text-muted-foreground text-center">
+                    No room templates available. Create one in Manage Rooms.
+                  </div>
+                ) : (
+                  roomTemplates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            <Button onClick={addRoomFromTemplate} size="icon" disabled={!selectedRoomTemplate}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Only room templates created in "Manage Rooms" can be selected here
+          </p>
         </div>
 
         {/* Rooms with Items */}

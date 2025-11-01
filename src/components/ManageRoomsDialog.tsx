@@ -48,7 +48,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
   const fetchRooms = async () => {
     const { data, error } = await supabase
-      .from("room_templates")
+      .from("room_templates" as any)
       .select("*")
       .order("name");
 
@@ -57,7 +57,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
       return;
     }
 
-    setRooms(data || []);
+    setRooms(data as any || []);
   };
 
   const addRoom = async () => {
@@ -70,7 +70,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     if (!user) return;
 
     const { error } = await supabase
-      .from("room_templates")
+      .from("room_templates" as any)
       .insert({
         name: newRoomName.trim(),
         created_by: user.id,
@@ -90,7 +90,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     if (!deleteRoomId) return;
 
     const { error } = await supabase
-      .from("room_templates")
+      .from("room_templates" as any)
       .delete()
       .eq("id", deleteRoomId);
 

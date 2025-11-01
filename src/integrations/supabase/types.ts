@@ -227,6 +227,27 @@ export type Database = {
         }
         Relationships: []
       }
+      room_templates: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       subtasks: {
         Row: {
           assigned_users: string[] | null
@@ -378,6 +399,7 @@ export type Database = {
           id: string
           name: string
           order_index: number
+          room_template_id: string | null
           template_id: string
         }
         Insert: {
@@ -385,6 +407,7 @@ export type Database = {
           id?: string
           name: string
           order_index?: number
+          room_template_id?: string | null
           template_id: string
         }
         Update: {
@@ -392,9 +415,17 @@ export type Database = {
           id?: string
           name?: string
           order_index?: number
+          room_template_id?: string | null
           template_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "template_rooms_room_template_id_fkey"
+            columns: ["room_template_id"]
+            isOneToOne: false
+            referencedRelation: "room_templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "template_rooms_template_id_fkey"
             columns: ["template_id"]
