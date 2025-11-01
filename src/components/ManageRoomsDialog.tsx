@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Plus, ChevronDown } from "lucide-react";
+import { Trash2, Plus, ChevronDown, Copy } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
   const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
+  const [selectedDuplicateRoomId, setSelectedDuplicateRoomId] = useState<string>("");
 
   useEffect(() => {
     if (open) {
@@ -99,21 +100,49 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase
+    const { data: newRoom, error } = await supabase
       .from("room_templates" as any)
       .insert({
         name: newRoomName.trim(),
         created_by: user.id,
-      });
+      })
+      .select()
+      .single();
 
-    if (error) {
+    if (error || !newRoom) {
       toast.error("Failed to create room template");
       return;
     }
 
+    // If duplicating from another room, copy its items
+    if (selectedDuplicateRoomId) {
+      const { data: items, error: itemsError } = await supabase
+        .from("room_template_items" as any)
+        .select("*")
+        .eq("room_template_id", selectedDuplicateRoomId)
+        .order("order_index");
+
+      if (!itemsError && items && items.length > 0) {
+        const itemsToInsert = items.map((item: any) => ({
+          room_template_id: (newRoom as any).id,
+          description: item.description,
+          order_index: item.order_index,
+          inventory_type_id: item.inventory_type_id,
+          inventory_quantity: item.inventory_quantity,
+        }));
+
+        await supabase.from("room_template_items" as any).insert(itemsToInsert);
+        toast.success(`Room template created with ${items.length} tasks`);
+      } else {
+        toast.success("Room template created");
+      }
+    } else {
+      toast.success("Room template created");
+    }
+
     setNewRoomName("");
+    setSelectedDuplicateRoomId("");
     fetchRooms();
-    toast.success("Room template created");
   };
 
   const deleteRoom = async () => {
@@ -273,27 +302,44 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
               <CardHeader>
                 <CardTitle className="text-base">Create New Room Template</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Label htmlFor="room-name">Room Name</Label>
-                    <Input
-                      id="room-name"
-                      placeholder="e.g., Living Room, Kitchen, Bedroom"
-                      value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          addRoom();
-                        }
-                      }}
-                    />
-                  </div>
-                  <Button onClick={addRoom} className="mt-auto">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add
-                  </Button>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label htmlFor="room-name">Room Name</Label>
+                  <Input
+                    id="room-name"
+                    placeholder="e.g., Living Room, Kitchen, Bedroom"
+                    value={newRoomName}
+                    onChange={(e) => setNewRoomName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        addRoom();
+                      }
+                    }}
+                  />
                 </div>
+                <div>
+                  <Label htmlFor="duplicate-from">Copy Tasks From (Optional)</Label>
+                  <select
+                    id="duplicate-from"
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={selectedDuplicateRoomId}
+                    onChange={(e) => setSelectedDuplicateRoomId(e.target.value)}
+                  >
+                    <option value="">Start from scratch</option>
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.name} ({roomItems[room.id]?.length || 0} tasks)
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select a room to copy its tasks to the new room
+                  </p>
+                </div>
+                <Button onClick={addRoom} className="w-full">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Room Template
+                </Button>
               </CardContent>
             </Card>
 
