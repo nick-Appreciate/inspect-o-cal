@@ -59,6 +59,8 @@ interface Subtask {
   vendor_type_id?: string | null;
   created_at: string;
   created_by: string;
+  completed_at?: string | null;
+  completed_by?: string | null;
   room_name?: string;
   assignedProfiles?: Array<{
     full_name: string;
@@ -70,6 +72,11 @@ interface Subtask {
     email: string;
     avatar_url?: string | null;
   };
+  completedByProfile?: {
+    full_name: string;
+    email: string;
+    avatar_url?: string | null;
+  } | null;
 }
 
 interface Profile {
@@ -139,6 +146,13 @@ export default function InspectionDetailsDialog({
   const [showAssignAllButton, setShowAssignAllButton] = useState(false);
   const [assignAllUser, setAssignAllUser] = useState<string>("");
   const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
+  const [historicalInspections, setHistoricalInspections] = useState<Array<{
+    id: string;
+    date: string;
+    time: string;
+    type: string;
+    subtaskCount: number;
+  }>>([]);
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -147,6 +161,7 @@ export default function InspectionDetailsDialog({
       fetchUsers();
       fetchInventoryTypes();
       fetchVendorTypes();
+      fetchHistoricalInspections();
     }
   }, [inspectionId, open]);
 
@@ -205,6 +220,7 @@ export default function InspectionDetailsDialog({
       allSubtasks.map(async (subtask) => {
         let assignedProfiles = [];
         let creatorProfile = null;
+        let completedByProfile = null;
 
         // Fetch assigned user profiles
         if (subtask.assigned_users && subtask.assigned_users.length > 0) {
@@ -222,15 +238,27 @@ export default function InspectionDetailsDialog({
             .from("profiles")
             .select("full_name, email, avatar_url")
             .eq("id", subtask.created_by)
-            .single();
+            .maybeSingle();
 
           creatorProfile = profile;
+        }
+
+        // Fetch completed by profile
+        if (subtask.completed_by) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email, avatar_url")
+            .eq("id", subtask.completed_by)
+            .maybeSingle();
+
+          completedByProfile = profile;
         }
 
         return { 
           ...subtask, 
           assignedProfiles,
-          creatorProfile
+          creatorProfile,
+          completedByProfile
         };
       })
     );
@@ -322,6 +350,56 @@ export default function InspectionDetailsDialog({
     }
   };
 
+  const fetchHistoricalInspections = async () => {
+    if (!inspectionId) return;
+
+    // First get the current inspection to determine property/unit
+    const { data: currentInspection } = await supabase
+      .from("inspections")
+      .select("property_id, unit_id")
+      .eq("id", inspectionId)
+      .maybeSingle();
+
+    if (!currentInspection) return;
+
+    // Fetch all completed inspections for the same property/unit
+    let query = supabase
+      .from("inspections")
+      .select("id, date, time, type")
+      .eq("completed", true)
+      .eq("property_id", currentInspection.property_id)
+      .neq("id", inspectionId)
+      .order("date", { ascending: false })
+      .order("time", { ascending: false });
+
+    if (currentInspection.unit_id) {
+      query = query.eq("unit_id", currentInspection.unit_id);
+    } else {
+      query = query.is("unit_id", null);
+    }
+
+    const { data: inspections } = await query;
+
+    if (inspections) {
+      // Count subtasks for each inspection
+      const inspectionsWithCounts = await Promise.all(
+        inspections.map(async (insp) => {
+          const { count } = await supabase
+            .from("subtasks")
+            .select("*", { count: "exact", head: true })
+            .eq("inspection_id", insp.id);
+
+          return {
+            ...insp,
+            subtaskCount: count || 0
+          };
+        })
+      );
+
+      setHistoricalInspections(inspectionsWithCounts);
+    }
+  };
+
   const handleCreateInventoryType = async (name: string) => {
     const {
       data: { user },
@@ -377,9 +455,21 @@ export default function InspectionDetailsDialog({
   };
 
   const toggleSubtaskComplete = async (subtaskId: string, completed: boolean) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Not authenticated");
+      return;
+    }
+
+    const updateData = completed
+      ? { completed: false, completed_at: null, completed_by: null }
+      : { completed: true, completed_at: new Date().toISOString(), completed_by: user.id };
+
     const { error } = await supabase
       .from("subtasks")
-      .update({ completed: !completed })
+      .update(updateData)
       .eq("id", subtaskId);
 
     if (error) {
@@ -733,6 +823,35 @@ export default function InspectionDetailsDialog({
               </div>
             )}
 
+            {/* Historical Inspections */}
+            {historicalInspections.length > 0 && (
+              <div className="mb-3 p-2 bg-muted/30 rounded text-xs space-y-1.5">
+                <div className="font-medium text-muted-foreground mb-1.5">Previous Inspections at This Location:</div>
+                <div className="space-y-1">
+                  {historicalInspections.slice(0, 3).map((hist) => (
+                    <div key={hist.id} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] px-1.5">
+                          {hist.type}
+                        </Badge>
+                        <span className="text-muted-foreground">
+                          {format(new Date(hist.date), "MMM d, yyyy")}
+                        </span>
+                      </div>
+                      <span className="text-muted-foreground">
+                        {hist.subtaskCount} issue{hist.subtaskCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ))}
+                  {historicalInspections.length > 3 && (
+                    <div className="text-muted-foreground text-[10px] pt-0.5">
+                      +{historicalInspections.length - 3} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Subtasks Grouped by Room */}
             <div className="space-y-2">
               {Object.entries(groupedSubtasks).map(([roomName, roomSubtasks]) => {
@@ -805,6 +924,20 @@ export default function InspectionDetailsDialog({
                                     )}
                                   </div>
                                 )}
+
+                                {/* Creation and Completion Metadata */}
+                                <div className="mt-1 text-[10px] text-muted-foreground space-y-0.5">
+                                  {subtask.creatorProfile && (
+                                    <div>
+                                      Created by {subtask.creatorProfile.full_name || subtask.creatorProfile.email} • {formatDistanceToNow(new Date(subtask.created_at), { addSuffix: true })}
+                                    </div>
+                                  )}
+                                  {subtask.completed && subtask.completedByProfile && subtask.completed_at && (
+                                    <div className="text-green-600 dark:text-green-400">
+                                      Completed by {subtask.completedByProfile.full_name || subtask.completedByProfile.email} • {formatDistanceToNow(new Date(subtask.completed_at), { addSuffix: true })}
+                                    </div>
+                                  )}
+                                </div>
                                 
                                 {/* Quick Assign Dropdown */}
                                 {!subtask.completed && !isInherited && (

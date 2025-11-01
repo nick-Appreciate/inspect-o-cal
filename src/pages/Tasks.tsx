@@ -192,23 +192,36 @@ export default function Tasks() {
   };
 
   const handleToggleComplete = async (taskId: string, completed: boolean) => {
+    // Get current user
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Not authenticated");
+      return;
+    }
+
     // First, get the original_inspection_id of this subtask
     const { data: currentTask } = await supabase
       .from("subtasks")
       .select("original_inspection_id, description")
       .eq("id", taskId)
-      .single();
+      .maybeSingle();
 
     if (!currentTask) {
       toast.error("Failed to find task");
       return;
     }
 
+    const updateData = completed
+      ? { completed: false, completed_at: null, completed_by: null }
+      : { completed: true, completed_at: new Date().toISOString(), completed_by: user.id };
+
     // Update all subtasks with the same original_inspection_id
     // This keeps linked subtasks in sync across follow-up inspections
     const { error } = await supabase
       .from("subtasks")
-      .update({ completed: !completed })
+      .update(updateData)
       .eq("original_inspection_id", currentTask.original_inspection_id)
       .eq("description", currentTask.description);
 

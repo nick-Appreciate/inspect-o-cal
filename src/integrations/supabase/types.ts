@@ -402,6 +402,8 @@ export type Database = {
           assigned_users: string[] | null
           attachment_url: string | null
           completed: boolean | null
+          completed_at: string | null
+          completed_by: string | null
           created_at: string
           created_by: string
           description: string
@@ -418,6 +420,8 @@ export type Database = {
           assigned_users?: string[] | null
           attachment_url?: string | null
           completed?: boolean | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           created_by: string
           description: string
@@ -434,6 +438,8 @@ export type Database = {
           assigned_users?: string[] | null
           attachment_url?: string | null
           completed?: boolean | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string
           created_by?: string
           description?: string
