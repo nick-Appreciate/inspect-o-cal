@@ -14,7 +14,7 @@ import {
   addWeeks,
   subWeeks,
 } from "date-fns";
-import { formatInTimeZone } from 'date-fns-tz/formatInTimeZone';
+import { formatInTimeZone } from 'date-fns-tz';
 
 interface WeeklyCalendarProps {
   inspections: Inspection[];

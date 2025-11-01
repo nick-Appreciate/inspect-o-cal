@@ -10,8 +10,7 @@ import { Inspection, Property } from "@/types/inspection";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz/formatInTimeZone";
-import { fromZonedTime } from "date-fns-tz/fromZonedTime";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { User, Session } from "@supabase/supabase-js";
 
 const Index = () => {
@@ -89,12 +88,12 @@ const Index = () => {
       }
 
       const transformedData: Inspection[] = data.map((item: any) => {
-        // Parse date string as local date to avoid timezone shifts
-        const [year, month, day] = item.date.split('-').map(Number);
+        // Parse date string as midnight in America/Chicago timezone
+        const dateInChicago = toZonedTime(`${item.date}T00:00:00`, 'America/Chicago');
         return {
           id: item.id,
           type: item.type,
-          date: new Date(year, month - 1, day),
+          date: dateInChicago,
           time: item.time,
           duration: item.duration || 60,
           property: {
