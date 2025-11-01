@@ -194,12 +194,18 @@ const Inspections = () => {
 
   const handleToggleComplete = async (inspectionId: string, currentCompleted: boolean) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("inspections")
         .update({ completed: !currentCompleted })
-        .eq("id", inspectionId);
+        .eq("id", inspectionId)
+        .select("id, completed");
 
       if (error) throw error;
+
+      if (!data || data.length === 0) {
+        toast.error("Cannot update this inspection. You may not have permission.");
+        return;
+      }
 
       setInspections(prev =>
         prev.map(i => i.id === inspectionId ? { ...i, completed: !currentCompleted } : i)
@@ -214,10 +220,11 @@ const Inspections = () => {
   const handleCompleteConfirm = async (inspectionIdsToComplete: string[]) => {
     console.log('handleCompleteConfirm - IDs to complete:', inspectionIdsToComplete);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("inspections")
         .update({ completed: true })
-        .in("id", inspectionIdsToComplete);
+        .in("id", inspectionIdsToComplete)
+        .select("id");
 
       if (error) {
         console.error('Update error:', error);
@@ -225,13 +232,19 @@ const Inspections = () => {
         return;
       }
 
-      console.log('Successfully updated inspections');
+      const updatedIds = new Set((data || []).map((d: any) => d.id));
+      const notUpdated = inspectionIdsToComplete.filter(id => !updatedIds.has(id));
+
+      if (notUpdated.length > 0) {
+        toast.warning(`${notUpdated.length} inspection(s) could not be completed due to permissions`);
+      }
+
       setInspections(prev => 
-        prev.map(i => inspectionIdsToComplete.includes(i.id) ? { ...i, completed: true } : i)
+        prev.map(i => updatedIds.has(i.id) ? { ...i, completed: true } : i)
       );
       toast.success(
-        inspectionIdsToComplete.length > 1 
-          ? `${inspectionIdsToComplete.length} inspections marked as complete` 
+        (data?.length || 0) > 1 
+          ? `${data?.length} inspections marked as complete` 
           : "Inspection marked as complete"
       );
       if (!showCompleted) {
