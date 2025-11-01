@@ -346,6 +346,7 @@ export function StartInspectionDialog({
               inventory_type_id: item.inventory_type_id,
               assigned_users: assignToUser ? [assignToUser] : null,
               created_by: user.id,
+              room_name: room.name, // Add room name for grouping
             });
           }
         });
@@ -367,6 +368,7 @@ export function StartInspectionDialog({
             inventory_type_id: item.inventory_type_id,
             assigned_users: assignToUser ? [assignToUser] : null,
             created_by: user.id,
+            room_name: "Custom Items", // Group custom items separately
           });
         }
       });
