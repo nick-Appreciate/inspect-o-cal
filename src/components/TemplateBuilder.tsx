@@ -39,6 +39,25 @@ interface InventoryType {
   name: string;
 }
 
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+}
+
+interface Floorplan {
+  id: string;
+  name: string;
+}
+
+interface TemplateInfo {
+  id: string;
+  name: string;
+  floorplan_id: string | null;
+  floorplan?: { name: string } | null;
+  template_properties?: { property_id: string }[];
+}
+
 export function TemplateBuilder({
   templateId,
   onClose,
@@ -55,11 +74,18 @@ export function TemplateBuilder({
   const [newItemDescription, setNewItemDescription] = useState<Record<string, string>>({});
   const [newItemQuantity, setNewItemQuantity] = useState<Record<string, number>>({});
   const [newItemType, setNewItemType] = useState<Record<string, string>>({});
+  const [templateInfo, setTemplateInfo] = useState<TemplateInfo | null>(null);
+  const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
 
   useEffect(() => {
     fetchRooms();
     fetchRoomTemplates();
     fetchInventoryTypes();
+    fetchTemplateInfo();
+    fetchFloorplans();
+    fetchProperties();
   }, [templateId]);
 
   useEffect(() => {
@@ -127,6 +153,100 @@ export function TemplateBuilder({
     }
 
     setRoomTemplates(data as any || []);
+  };
+
+  const fetchTemplateInfo = async () => {
+    const { data, error } = await supabase
+      .from("inspection_templates")
+      .select(`
+        id,
+        name,
+        floorplan_id,
+        floorplan:floorplans(name),
+        template_properties(property_id)
+      `)
+      .eq("id", templateId)
+      .single();
+
+    if (error) {
+      toast.error("Failed to load template info");
+      return;
+    }
+
+    setTemplateInfo(data);
+    setSelectedPropertyIds(data.template_properties?.map(tp => tp.property_id) || []);
+  };
+
+  const fetchFloorplans = async () => {
+    const { data, error } = await supabase
+      .from("floorplans")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      toast.error("Failed to load floorplans");
+      return;
+    }
+
+    setFloorplans(data || []);
+  };
+
+  const fetchProperties = async () => {
+    const { data, error } = await supabase
+      .from("properties")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      toast.error("Failed to load properties");
+      return;
+    }
+
+    setProperties(data || []);
+  };
+
+  const updateFloorplan = async (floorplanId: string | null) => {
+    const { error } = await supabase
+      .from("inspection_templates")
+      .update({ floorplan_id: floorplanId })
+      .eq("id", templateId);
+
+    if (error) {
+      toast.error("Failed to update floorplan");
+      return;
+    }
+
+    fetchTemplateInfo();
+    toast.success("Floorplan updated");
+  };
+
+  const updateProperties = async (propertyIds: string[]) => {
+    // Delete existing associations
+    await supabase
+      .from("template_properties")
+      .delete()
+      .eq("template_id", templateId);
+
+    // Add new associations
+    if (propertyIds.length > 0) {
+      const associations = propertyIds.map(propertyId => ({
+        template_id: templateId,
+        property_id: propertyId,
+      }));
+
+      const { error } = await supabase
+        .from("template_properties")
+        .insert(associations);
+
+      if (error) {
+        toast.error("Failed to update properties");
+        return;
+      }
+    }
+
+    setSelectedPropertyIds(propertyIds);
+    fetchTemplateInfo();
+    toast.success("Properties updated");
   };
 
   const addRoomFromTemplate = async () => {
@@ -284,6 +404,68 @@ export function TemplateBuilder({
         </div>
       </CardHeader>
       <CardContent className="space-y-6 overflow-y-auto flex-1">
+        {/* Template Settings */}
+        {templateInfo && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Template Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Floorplan</Label>
+                <Select
+                  value={templateInfo.floorplan_id || "none"}
+                  onValueChange={(value) => updateFloorplan(value === "none" ? null : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select floorplan" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="none">No Floorplan</SelectItem>
+                    {floorplans.map((floorplan) => (
+                      <SelectItem key={floorplan.id} value={floorplan.id}>
+                        {floorplan.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Associated Properties</Label>
+                <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                  {properties.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No properties available</p>
+                  ) : (
+                    properties.map((property) => (
+                      <div key={property.id} className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id={`prop-${property.id}`}
+                          checked={selectedPropertyIds.includes(property.id)}
+                          onChange={(e) => {
+                            const newIds = e.target.checked
+                              ? [...selectedPropertyIds, property.id]
+                              : selectedPropertyIds.filter(id => id !== property.id);
+                            updateProperties(newIds);
+                          }}
+                          className="rounded border-input"
+                        />
+                        <label
+                          htmlFor={`prop-${property.id}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {property.name} - {property.address}
+                        </label>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Add Room from Template */}
         <div className="space-y-2">
           <Label>Add Room from Template</Label>
