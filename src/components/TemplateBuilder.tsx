@@ -361,12 +361,31 @@ export function TemplateBuilder({
     const roomTemplate = roomTemplates.find(rt => rt.id === selectedRoomTemplate);
     if (!roomTemplate) return;
 
+    // Check for existing rooms with the same name and append number if needed
+    const existingRoomsWithSameName = rooms.filter(r => 
+      r.name === roomTemplate.name || r.name.match(new RegExp(`^${roomTemplate.name} \\d+$`))
+    );
+    
+    let roomName = roomTemplate.name;
+    if (existingRoomsWithSameName.length > 0) {
+      // Find the highest number
+      const numbers = existingRoomsWithSameName
+        .map(r => {
+          const match = r.name.match(new RegExp(`^${roomTemplate.name} (\\d+)$`));
+          return match ? parseInt(match[1]) : (r.name === roomTemplate.name ? 1 : 0);
+        })
+        .filter(n => n > 0);
+      
+      const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 2;
+      roomName = `${roomTemplate.name} ${nextNumber}`;
+    }
+
     // Create the room
     const { data: newRoom, error: roomError } = await supabase
       .from("template_rooms")
       .insert({
         template_id: templateId,
-        name: roomTemplate.name,
+        name: roomName,
         room_template_id: selectedRoomTemplate,
         order_index: rooms.length,
       })
