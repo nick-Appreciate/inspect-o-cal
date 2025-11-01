@@ -64,6 +64,7 @@ interface Subtask {
   completed_at?: string | null;
   completed_by?: string | null;
   room_name?: string;
+  status?: 'good' | 'bad' | 'pending';
   assignedProfiles?: Array<{
     full_name: string;
     email: string;
@@ -176,7 +177,7 @@ export default function InspectionDetailsDialog({
     type: string;
     subtaskCount: number;
   }>>([]);
-  const [showCompleted, setShowCompleted] = useState(true);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [inspectionRuns, setInspectionRuns] = useState<InspectionRun[]>([]);
 
@@ -947,14 +948,14 @@ export default function InspectionDetailsDialog({
 
             {/* Show Completed Toggle */}
             <div className="flex items-center justify-between mb-3 p-2 bg-muted/30 rounded">
-              <span className="text-sm font-medium">Show Completed Tasks</span>
+              <span className="text-sm font-medium">Show All Tasks</span>
               <Button
                 variant={showCompleted ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowCompleted(!showCompleted)}
                 className="h-7 text-xs"
               >
-                {showCompleted ? "Hide" : "Show"}
+                {showCompleted ? "Hide Good" : "Show All"}
               </Button>
             </div>
 
@@ -965,7 +966,7 @@ export default function InspectionDetailsDialog({
                 // Filter subtasks based on showCompleted
                 const filteredSubtasks = showCompleted 
                   ? subtasks 
-                  : subtasks.filter(s => !s.completed);
+                  : subtasks.filter(s => s.status === 'bad' || !s.completed);
 
                 // Group subtasks by room
                 const groupedByRoom = filteredSubtasks.reduce((acc, subtask) => {
@@ -1015,12 +1016,16 @@ export default function InspectionDetailsDialog({
                         {roomSubtasks.map((subtask) => {
                           const isInherited = subtask.original_inspection_id !== inspectionId;
                           const run = inspectionRuns.find(r => r.id === subtask.inspection_run_id);
+                          const isGood = subtask.status === 'good';
+                          const isBad = subtask.status === 'bad';
 
                           return (
                             <div
                               key={subtask.id}
                               className={`flex items-start gap-2 p-2 border rounded transition-colors ${
-                                subtask.completed
+                                isGood
+                                  ? "bg-green-50 dark:bg-green-950/20 opacity-80"
+                                  : subtask.completed
                                   ? "bg-muted/30 opacity-60"
                                   : isInherited
                                   ? "bg-accent/20"
@@ -1028,15 +1033,26 @@ export default function InspectionDetailsDialog({
                               }`}
                             >
                               <Checkbox
-                                checked={subtask.completed}
-                                onCheckedChange={() => toggleSubtaskComplete(subtask.id, subtask.completed)}
+                                checked={subtask.completed || isGood}
+                                onCheckedChange={() => !isGood && toggleSubtaskComplete(subtask.id, subtask.completed)}
                                 className="mt-0.5 flex-shrink-0"
+                                disabled={isGood}
                               />
                               <div className="flex-1 min-w-0 text-xs">
                                 <div className="flex items-start gap-2 flex-wrap">
-                                  <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                                  <p className={`flex-1 ${subtask.completed || isGood ? "line-through text-muted-foreground" : ""}`}>
                                     {subtask.description}
                                   </p>
+                                  {isGood && (
+                                    <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">
+                                      Good
+                                    </Badge>
+                                  )}
+                                  {isBad && (
+                                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                      Issue
+                                    </Badge>
+                                  )}
                                   {/* Inspection Run Badge */}
                                   {run && (
                                     <Badge 
