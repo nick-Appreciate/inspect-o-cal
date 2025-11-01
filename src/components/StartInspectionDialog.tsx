@@ -597,48 +597,21 @@ export function StartInspectionDialog({
 
       if (runError) throw runError;
 
-      // Create subtasks for all BAD items (from template and custom)
+      // Create subtasks for ALL items (good, bad, and pending) to track complete inspection history
       const subtasks: any[] = [];
       
-      // Add template items marked as bad
+      // Add all template items with their status
       rooms.forEach((room) => {
         const items = itemsByRoom[room.id] || [];
         items.forEach((item) => {
-          if (itemStatus[item.id] === 'bad') {
-            const note = itemNotes[item.id];
-            const description = note 
-              ? `${item.description}\n\nNotes: ${note}`
-              : item.description;
-            
-            // Use individual assignments if available, otherwise use global assignment
-            const assignments = itemAssignments[item.id] || (assignToUser ? [assignToUser] : null);
-            
-            subtasks.push({
-              inspection_id: inspectionId,
-              inspection_run_id: inspectionRun.id,
-              original_inspection_id: inspectionId,
-              description: description,
-              inventory_quantity: item.inventory_quantity > 0 ? item.inventory_quantity : null,
-              inventory_type_id: item.inventory_type_id,
-              assigned_users: assignments,
-              created_by: user.id,
-              room_name: room.name,
-              status: 'bad',
-            });
-          }
-        });
-      });
-
-      // Add custom items marked as bad
-      customItems.forEach((item) => {
-        if (itemStatus[item.id] === 'bad') {
+          const status = itemStatus[item.id] || 'pending';
           const note = itemNotes[item.id];
           const description = note 
             ? `${item.description}\n\nNotes: ${note}`
             : item.description;
           
-          // Use individual assignments if available, otherwise use global assignment
-          const assignments = itemAssignments[item.id] || (assignToUser ? [assignToUser] : null);
+          // Use individual assignments if available, otherwise use global assignment for bad items
+          const assignments = itemAssignments[item.id] || (status === 'bad' && assignToUser ? [assignToUser] : null);
           
           subtasks.push({
             inspection_id: inspectionId,
@@ -649,10 +622,37 @@ export function StartInspectionDialog({
             inventory_type_id: item.inventory_type_id,
             assigned_users: assignments,
             created_by: user.id,
-            room_name: "Custom Items",
-            status: 'bad',
+            room_name: room.name,
+            status: status,
+            completed: status === 'good', // Mark as completed if status is good
           });
-        }
+        });
+      });
+
+      // Add all custom items with their status
+      customItems.forEach((item) => {
+        const status = itemStatus[item.id] || 'pending';
+        const note = itemNotes[item.id];
+        const description = note 
+          ? `${item.description}\n\nNotes: ${note}`
+          : item.description;
+        
+        // Use individual assignments if available, otherwise use global assignment for bad items
+        const assignments = itemAssignments[item.id] || (status === 'bad' && assignToUser ? [assignToUser] : null);
+        
+        subtasks.push({
+          inspection_id: inspectionId,
+          inspection_run_id: inspectionRun.id,
+          original_inspection_id: inspectionId,
+          description: description,
+          inventory_quantity: item.inventory_quantity > 0 ? item.inventory_quantity : null,
+          inventory_type_id: item.inventory_type_id,
+          assigned_users: assignments,
+          created_by: user.id,
+          room_name: "Custom Items",
+          status: status,
+          completed: status === 'good', // Mark as completed if status is good
+        });
       });
 
       if (subtasks.length > 0) {
@@ -675,7 +675,8 @@ export function StartInspectionDialog({
 
       if (updateError) throw updateError;
 
-      toast.success(`Inspection complete! ${subtasks.length} issue${subtasks.length !== 1 ? 's' : ''} recorded.`);
+      const badItemsCount = subtasks.filter(s => s.status === 'bad').length;
+      toast.success(`Inspection complete! ${subtasks.length} items checked, ${badItemsCount} issue${badItemsCount !== 1 ? 's' : ''} found.`);
       onInspectionStarted?.();
       onOpenChange(false);
       setShowAssignDialog(false);
