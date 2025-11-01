@@ -884,12 +884,12 @@ export function StartInspectionDialog({
                                   </div>
                                 </div>
                                 {isExpanded && (
-                                  <div className="relative mt-2 ml-[84px]">
+                                  <div className="relative mt-2 ml-[84px] space-y-2">
                                     <Textarea
                                       ref={(el) => {
                                         if (el) textareaRefs.current[item.id] = el;
                                       }}
-                                      placeholder="Add notes or @mention to assign..."
+                                      placeholder={status === 'bad' ? "Add notes (required for bad items)..." : "Add notes or @mention to assign..."}
                                       value={itemNotes[item.id] || ""}
                                       onChange={(e) => updateItemNote(item.id, e.target.value)}
                                       onKeyDown={(e) => {
@@ -901,7 +901,6 @@ export function StartInspectionDialog({
                                             setShowMentionDropdown(null);
                                           }
                                         }
-                                        // Don't auto-close notes on Enter - let user manually close or mark as good
                                       }}
                                       className="text-sm min-h-[60px]"
                                       onClick={(e) => e.stopPropagation()}
@@ -925,6 +924,28 @@ export function StartInspectionDialog({
                                           </div>
                                         ))}
                                       </div>
+                                    )}
+                                    {status === 'bad' && (
+                                      <Button
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const notes = itemNotes[item.id]?.trim();
+                                          if (!notes) {
+                                            toast.error("Please add notes for this issue");
+                                            return;
+                                          }
+                                          setExpandedNotes(prev => {
+                                            const next = new Set(prev);
+                                            next.delete(item.id);
+                                            return next;
+                                          });
+                                          toast.success("Notes saved");
+                                        }}
+                                        className="w-full"
+                                      >
+                                        Done
+                                      </Button>
                                     )}
                                   </div>
                                 )}
@@ -1063,12 +1084,12 @@ export function StartInspectionDialog({
                                 </div>
                               </div>
                               {isExpanded && (
-                                <div className="relative mt-2 ml-[84px]">
+                                <div className="relative mt-2 ml-[84px] space-y-2">
                                   <Textarea
                                     ref={(el) => {
                                       if (el) textareaRefs.current[item.id] = el;
                                     }}
-                                    placeholder="Add notes or @mention to assign..."
+                                    placeholder={status === 'bad' ? "Add notes (required for bad items)..." : "Add notes or @mention to assign..."}
                                     value={itemNotes[item.id] || ""}
                                     onChange={(e) => updateItemNote(item.id, e.target.value)}
                                     onKeyDown={(e) => {
@@ -1079,14 +1100,6 @@ export function StartInspectionDialog({
                                         } else if (e.key === 'Escape') {
                                           setShowMentionDropdown(null);
                                         }
-                                      } else if (e.key === 'Enter' && !e.shiftKey && itemNotes[item.id]?.trim()) {
-                                        // Close notes on Enter if notes are filled (and not in mention dropdown)
-                                        e.preventDefault();
-                                        setExpandedNotes(prev => {
-                                          const next = new Set(prev);
-                                          next.delete(item.id);
-                                          return next;
-                                        });
                                       }
                                     }}
                                     className="text-sm min-h-[60px]"
@@ -1108,6 +1121,28 @@ export function StartInspectionDialog({
                                         </div>
                                       ))}
                                     </div>
+                                  )}
+                                  {status === 'bad' && (
+                                    <Button
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const notes = itemNotes[item.id]?.trim();
+                                        if (!notes) {
+                                          toast.error("Please add notes for this issue");
+                                          return;
+                                        }
+                                        setExpandedNotes(prev => {
+                                          const next = new Set(prev);
+                                          next.delete(item.id);
+                                          return next;
+                                        });
+                                        toast.success("Notes saved");
+                                      }}
+                                      className="w-full"
+                                    >
+                                      Done
+                                    </Button>
                                   )}
                                 </div>
                               )}
