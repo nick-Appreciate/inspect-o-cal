@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import { DeleteInspectionDialog } from "@/components/DeleteInspectionDialog";
+import { CompleteInspectionDialog } from "@/components/CompleteInspectionDialog";
 import {
   Table,
   TableBody,
@@ -49,6 +50,9 @@ const Inspections = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [inspectionToDelete, setInspectionToDelete] = useState<Inspection | null>(null);
   const [connectedInspectionsToDelete, setConnectedInspectionsToDelete] = useState<Inspection[]>([]);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [inspectionToComplete, setInspectionToComplete] = useState<Inspection | null>(null);
+  const [connectedInspectionsToComplete, setConnectedInspectionsToComplete] = useState<Inspection[]>([]);
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,63 +151,76 @@ const Inspections = () => {
     }
   };
 
-  const handleToggleComplete = async (inspectionId: string, currentCompleted: boolean, e: React.MouseEvent) => {
+  const handleToggleCompleteClick = async (inspectionId: string, currentCompleted: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
     
     // If marking as complete, check for connected inspections
     if (!currentCompleted) {
+      const completingInspection = inspections.find(i => i.id === inspectionId);
+      if (!completingInspection) return;
+
       const connectedInspections = inspections.filter(i => 
-        (i.parent_inspection_id === inspectionId || i.id === inspectionId) && !i.completed
+        ((i.parent_inspection_id === inspectionId) || // Children
+        (completingInspection.parent_inspection_id && i.id === completingInspection.parent_inspection_id) || // Parent
+        (completingInspection.parent_inspection_id && i.parent_inspection_id === completingInspection.parent_inspection_id && i.id !== inspectionId)) // Siblings
+        && !i.completed // Only incomplete ones
       );
-      
-      if (connectedInspections.length > 1) {
-        const shouldCompleteAll = window.confirm(
-          `This inspection has ${connectedInspections.length - 1} connected follow-up inspection(s). Would you like to mark all of them as complete?`
-        );
-        
-        if (shouldCompleteAll) {
-          try {
-            const { error } = await supabase
-              .from("inspections")
-              .update({ completed: true })
-              .in("id", connectedInspections.map(i => i.id));
 
-            if (error) {
-              toast.error("Failed to update inspections");
-              return;
-            }
-
-            setInspections(prev => 
-              prev.map(i => connectedInspections.some(ci => ci.id === i.id) ? { ...i, completed: true } : i)
-            );
-            toast.success("All connected inspections marked as complete");
-            return;
-          } catch (err) {
-            console.error("Error updating inspections:", err);
-            toast.error("An error occurred");
-            return;
-          }
-        }
+      if (connectedInspections.length > 0) {
+        // Show dialog with checkboxes
+        setInspectionToComplete(completingInspection);
+        setConnectedInspectionsToComplete(connectedInspections);
+        setCompleteDialogOpen(true);
+        return;
       }
     }
     
+    // Simple toggle for individual inspection
+    await handleToggleComplete(inspectionId, currentCompleted);
+  };
+
+  const handleToggleComplete = async (inspectionId: string, currentCompleted: boolean) => {
     try {
       const { error } = await supabase
         .from("inspections")
         .update({ completed: !currentCompleted })
         .eq("id", inspectionId);
 
-      if (error) {
-        toast.error("Failed to update inspection");
-        return;
-      }
+      if (error) throw error;
 
-      setInspections(prev => 
+      setInspections(prev =>
         prev.map(i => i.id === inspectionId ? { ...i, completed: !currentCompleted } : i)
       );
       toast.success(`Inspection marked as ${!currentCompleted ? "complete" : "incomplete"}`);
     } catch (err) {
       console.error("Error updating inspection:", err);
+      toast.error("An error occurred");
+    }
+  };
+
+  const handleCompleteConfirm = async (inspectionIdsToComplete: string[]) => {
+    try {
+      const { error } = await supabase
+        .from("inspections")
+        .update({ completed: true })
+        .in("id", inspectionIdsToComplete);
+
+      if (error) {
+        toast.error("Failed to update inspections");
+        return;
+      }
+
+      setInspections(prev => 
+        prev.map(i => inspectionIdsToComplete.includes(i.id) ? { ...i, completed: true } : i)
+      );
+      toast.success(
+        inspectionIdsToComplete.length > 1 
+          ? `${inspectionIdsToComplete.length} inspections marked as complete` 
+          : "Inspection marked as complete"
+      );
+      fetchInspections(); // Refresh the list
+    } catch (err) {
+      console.error("Error updating inspections:", err);
       toast.error("An error occurred");
     }
   };
@@ -435,7 +452,7 @@ const Inspections = () => {
                           onCheckedChange={(checked) => {
                             inspections.forEach(i => {
                               if (i.completed !== checked) {
-                                handleToggleComplete(i.id, i.completed, { stopPropagation: () => {} } as any);
+                                handleToggleCompleteClick(i.id, i.completed, { stopPropagation: () => {} } as any);
                               }
                             });
                           }}
@@ -519,7 +536,7 @@ const Inspections = () => {
                                 <TableCell>
                                   <Checkbox 
                                     checked={inspection.completed}
-                                    onCheckedChange={(checked) => handleToggleComplete(inspection.id, inspection.completed, { stopPropagation: () => {} } as any)}
+                                    onCheckedChange={(checked) => handleToggleCompleteClick(inspection.id, inspection.completed, { stopPropagation: () => {} } as any)}
                                     onClick={(e) => e.stopPropagation()}
                                   />
                                 </TableCell>
@@ -585,6 +602,14 @@ const Inspections = () => {
         mainInspection={inspectionToDelete}
         connectedInspections={connectedInspectionsToDelete}
         onConfirm={handleDeleteConfirm}
+      />
+
+      <CompleteInspectionDialog
+        open={completeDialogOpen}
+        onOpenChange={setCompleteDialogOpen}
+        mainInspection={inspectionToComplete}
+        connectedInspections={connectedInspectionsToComplete}
+        onConfirm={handleCompleteConfirm}
       />
     </div>
   );
