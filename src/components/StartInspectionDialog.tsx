@@ -118,6 +118,7 @@ export function StartInspectionDialog({
   const [assignToUser, setAssignToUser] = useState<string>("");
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set());
   const [showCompleted, setShowCompleted] = useState(false);
+  const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement>>({});
 
   useEffect(() => {
@@ -143,6 +144,7 @@ export function StartInspectionDialog({
       setShowAssignDialog(false);
       setCollapsedRooms(new Set());
       setShowCompleted(false);
+      setShowCloseConfirmation(false);
     }
   }, [open]);
 
@@ -260,6 +262,8 @@ export function StartInspectionDialog({
 
       setItemsByRoom(itemsMap);
       setStep("inspect");
+      // Collapse all rooms by default
+      setCollapsedRooms(new Set((roomsData || []).map(r => r.id)));
     } catch (error: any) {
       toast.error(error.message || "Failed to load template");
     } finally {
@@ -289,8 +293,24 @@ export function StartInspectionDialog({
   };
 
   const setItemAsBad = (itemId: string, roomId?: string) => {
+    // Check if notes exist, if not, show warning
+    const currentNote = itemNotes[itemId];
+    if (!currentNote || currentNote.trim() === '') {
+      toast.error("Please add notes explaining the issue before marking as bad");
+      // Expand notes to prompt user
+      setExpandedNotes(prev => new Set(prev).add(itemId));
+      // Focus the textarea
+      setTimeout(() => {
+        const textarea = textareaRefs.current[itemId];
+        if (textarea) {
+          textarea.focus();
+        }
+      }, 100);
+      return;
+    }
+
     setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
-    // Expand notes when marked bad
+    // Keep notes expanded when marked bad
     setExpandedNotes(prev => new Set(prev).add(itemId));
     
     // Auto-collapse room if all items have status
@@ -560,8 +580,17 @@ export function StartInspectionDialog({
   const badCount = allItems.filter(item => itemStatus[item.id] === 'bad').length;
   const pendingCount = totalItems - goodCount - badCount;
 
+  const handleDialogClose = (open: boolean) => {
+    if (!open && pendingCount > 0 && step === 'inspect') {
+      setShowCloseConfirmation(true);
+    } else {
+      onOpenChange(open);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">
@@ -964,6 +993,7 @@ export function StartInspectionDialog({
           )}
         </DialogFooter>
       </DialogContent>
+    </Dialog>
 
       {/* Assign Unassigned Issues Dialog */}
       <AlertDialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
@@ -1116,6 +1146,67 @@ export function StartInspectionDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Dialog>
+
+      {/* Assign Unassigned Issues Dialog */}
+      <AlertDialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Assign Unassigned Issues</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {allItems.filter(item => itemStatus[item.id] === 'bad' && !itemAssignments[item.id]?.length).length} unassigned issues. Would you like to assign them to a user?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label className="text-sm">Assign to</Label>
+            <Select value={assignToUser} onValueChange={setAssignToUser}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Select user" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name || user.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setShowAssignDialog(false);
+              setAssignToUser("");
+            }}>
+              Skip
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={submitInspection} disabled={!assignToUser || loading}>
+              {loading ? "Submitting..." : "Assign & Complete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Close Confirmation Dialog */}
+      <AlertDialog open={showCloseConfirmation} onOpenChange={setShowCloseConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Incomplete Inspection?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have {pendingCount} item{pendingCount !== 1 ? 's' : ''} that haven't been reviewed yet. Are you sure you want to close this inspection? All progress will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowCloseConfirmation(false)}>
+              Continue Inspection
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setShowCloseConfirmation(false);
+              onOpenChange(false);
+            }} className="bg-destructive hover:bg-destructive/90">
+              Close Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
