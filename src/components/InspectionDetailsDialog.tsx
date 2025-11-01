@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList } from "lucide-react";
 import {
   Dialog,
@@ -55,11 +55,18 @@ interface Subtask {
   inspection_id: string;
   inventory_quantity?: number;
   inventory_type_id?: string | null;
+  created_at: string;
+  created_by: string;
   assignedProfiles?: Array<{
     full_name: string;
     email: string;
     avatar_url?: string | null;
   }>;
+  creatorProfile?: {
+    full_name: string;
+    email: string;
+    avatar_url?: string | null;
+  };
 }
 
 interface Profile {
@@ -173,18 +180,38 @@ export default function InspectionDetailsDialog({
     // Get all subtasks from the entire inspection chain
     const allSubtasks = await getAllSubtasksInChain(inspectionId);
 
-    // Fetch profiles for assigned users
+    // Fetch profiles for assigned users and creators
     const subtasksWithProfiles = await Promise.all(
       allSubtasks.map(async (subtask) => {
+        let assignedProfiles = [];
+        let creatorProfile = null;
+
+        // Fetch assigned user profiles
         if (subtask.assigned_users && subtask.assigned_users.length > 0) {
           const { data: profiles } = await supabase
             .from("profiles")
             .select("full_name, email, avatar_url")
             .in("id", subtask.assigned_users);
 
-          return { ...subtask, assignedProfiles: profiles || [] };
+          assignedProfiles = profiles || [];
         }
-        return subtask;
+
+        // Fetch creator profile
+        if (subtask.created_by) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email, avatar_url")
+            .eq("id", subtask.created_by)
+            .single();
+
+          creatorProfile = profile;
+        }
+
+        return { 
+          ...subtask, 
+          assignedProfiles,
+          creatorProfile
+        };
       })
     );
 
@@ -660,6 +687,18 @@ export default function InspectionDetailsDialog({
                                 .map((p) => p.full_name || p.email)
                                 .join(", ")}
                             </p>
+                          </div>
+                        )}
+                        {subtask.creatorProfile && (
+                          <div className={`flex items-center gap-2 mt-1 text-xs ${
+                            subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"
+                          }`}>
+                            <Clock className="h-3 w-3" />
+                            <span>
+                              Added by {subtask.creatorProfile.full_name || subtask.creatorProfile.email} 
+                              {' • '}
+                              {formatDistanceToNow(new Date(subtask.created_at), { addSuffix: true })}
+                            </span>
                           </div>
                         )}
                       {subtask.attachment_url && (
