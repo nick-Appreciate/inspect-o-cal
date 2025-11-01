@@ -117,14 +117,15 @@ export function TemplateBuilder({
       .from("template_rooms")
       .insert({
         template_id: templateId,
-        name: newRoomName,
+        name: newRoomName.trim(),
         order_index: rooms.length,
       })
       .select()
       .single();
 
     if (error) {
-      toast.error("Failed to add room");
+      console.error("Failed to add template room:", error);
+      toast.error(error.message || "Failed to add room");
       return;
     }
 
@@ -158,20 +159,24 @@ export function TemplateBuilder({
       return;
     }
 
+    const quantity = newItemQuantity[roomId] || 0;
+    const typeId = newItemType[roomId];
+
     const { data, error } = await supabase
       .from("template_items")
       .insert({
         room_id: roomId,
-        description: description,
-        inventory_quantity: newItemQuantity[roomId] || 0,
-        inventory_type_id: newItemType[roomId] || null,
+        description: description.trim(),
+        inventory_quantity: quantity > 0 ? quantity : null,
+        inventory_type_id: typeId && typeId !== "" ? typeId : null,
         order_index: (itemsByRoom[roomId] || []).length,
       })
       .select()
       .single();
 
     if (error) {
-      toast.error("Failed to add item");
+      console.error("Failed to add template item:", error);
+      toast.error(error.message || "Failed to add item");
       return;
     }
 
@@ -223,6 +228,7 @@ export function TemplateBuilder({
               value={newRoomName}
               onChange={(e) => setNewRoomName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addRoom()}
+              maxLength={100}
             />
             <Button onClick={addRoom} size="icon">
               <Plus className="h-4 w-4" />
@@ -259,6 +265,7 @@ export function TemplateBuilder({
                     onChange={(e) =>
                       setNewItemDescription((prev) => ({ ...prev, [room.id]: e.target.value }))
                     }
+                    maxLength={500}
                   />
                 </div>
 
@@ -268,13 +275,15 @@ export function TemplateBuilder({
                     <Input
                       type="number"
                       min="0"
+                      max="99999"
                       value={newItemQuantity[room.id] || 0}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
                         setNewItemQuantity((prev) => ({
                           ...prev,
-                          [room.id]: parseInt(e.target.value) || 0,
-                        }))
-                      }
+                          [room.id]: isNaN(val) || val < 0 ? 0 : Math.min(val, 99999),
+                        }));
+                      }}
                     />
                   </div>
                   <div>
@@ -297,11 +306,17 @@ export function TemplateBuilder({
                         <div className="p-2 border-t">
                           <Input
                             placeholder="Create new type..."
+                            maxLength={100}
                             onKeyDown={async (e) => {
                               if (e.key === "Enter") {
                                 const input = e.currentTarget;
                                 const newTypeName = input.value.trim();
                                 if (!newTypeName) return;
+                                
+                                if (newTypeName.length > 100) {
+                                  toast.error("Inventory type name must be less than 100 characters");
+                                  return;
+                                }
 
                                 const { data: user } = await supabase.auth.getUser();
                                 if (!user.user) {
@@ -319,7 +334,8 @@ export function TemplateBuilder({
                                   .single();
 
                                 if (error) {
-                                  toast.error("Failed to create inventory type");
+                                  console.error("Failed to create inventory type:", error);
+                                  toast.error(error.message || "Failed to create inventory type");
                                   return;
                                 }
 
