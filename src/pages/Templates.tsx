@@ -69,6 +69,17 @@ export default function Templates() {
     fetchTemplates();
     fetchFloorplans();
     fetchProperties();
+
+    // Realtime: keep templates list in sync when associations or templates change
+    const channel = supabase
+      .channel('templates-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'template_properties' }, () => fetchTemplates())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspection_templates' }, () => fetchTemplates())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    }
   }, []);
 
   const fetchTemplates = async () => {

@@ -30,7 +30,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
+                  <SidebarMenuButton asChild tooltip={{ children: item.title, hidden: false }}>
                     <NavLink
                       to={item.url}
                       end
