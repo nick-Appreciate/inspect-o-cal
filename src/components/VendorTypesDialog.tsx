@@ -94,7 +94,7 @@ export function VendorTypesDialog({
       .insert({
         name: newTypeName,
         created_by: user.id,
-        default_assigned_user_id: newTypeUserId || null,
+        default_assigned_user_id: newTypeUserId && newTypeUserId !== "none" ? newTypeUserId : null,
       })
       .select()
       .single();
@@ -127,7 +127,7 @@ export function VendorTypesDialog({
       .from("vendor_types")
       .update({
         name: editName,
-        default_assigned_user_id: editUserId || null,
+        default_assigned_user_id: editUserId && editUserId !== "none" ? editUserId : null,
       })
       .eq("id", editingId);
 
@@ -139,7 +139,7 @@ export function VendorTypesDialog({
     setVendorTypes(
       vendorTypes.map((t) =>
         t.id === editingId
-          ? { ...t, name: editName, default_assigned_user_id: editUserId || null }
+          ? { ...t, name: editName, default_assigned_user_id: editUserId && editUserId !== "none" ? editUserId : null }
           : t
       )
     );
@@ -190,7 +190,7 @@ export function VendorTypesDialog({
                 <SelectValue placeholder="Default user..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {users.map((user) => (
                   <SelectItem key={user.id} value={user.id}>
                     <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export function VendorTypesDialog({
                         <SelectValue placeholder="Default user..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {users.map((user) => (
                           <SelectItem key={user.id} value={user.id}>
                             <div className="flex items-center gap-2">
