@@ -114,13 +114,20 @@ export default function Properties() {
         *,
         floorplan:floorplans(name)
       `)
-      .eq("property_id", propertyId)
-      .order("name");
+      .eq("property_id", propertyId);
 
     if (!error && data) {
+      // Sort units using natural/numeric sorting
+      const sortedData = [...data].sort((a, b) => {
+        return a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        });
+      });
+      
       setUnitsByProperty(prev => ({
         ...prev,
-        [propertyId]: data
+        [propertyId]: sortedData
       }));
     }
   };
