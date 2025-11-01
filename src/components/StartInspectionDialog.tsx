@@ -246,17 +246,41 @@ export function StartInspectionDialog({
 
       setRooms(roomsData || []);
 
-      // Fetch items for all rooms
+      // Fetch items for all rooms (with fallback to room_template_items)
       const itemsMap: Record<string, Item[]> = {};
       for (const room of roomsData || []) {
+        // First try template_items bound to this template_room
         const { data: items, error: itemsError } = await supabase
           .from("template_items")
           .select("id, description, room_id, inventory_quantity, inventory_type_id")
           .eq("room_id", room.id)
           .order("order_index");
 
-        if (!itemsError && items) {
+        if (!itemsError && items && items.length > 0) {
           itemsMap[room.id] = items;
+        } else {
+          // Fallback: derive from the reusable room_template definition
+          if (room.room_template_id) {
+            const { data: rtItems, error: rtError } = await supabase
+              .from("room_template_items")
+              .select("id, description, inventory_quantity, inventory_type_id, order_index")
+              .eq("room_template_id", room.room_template_id)
+              .order("order_index");
+
+            if (!rtError && rtItems) {
+              itemsMap[room.id] = rtItems.map((rt) => ({
+                id: `rt-${rt.id}`,
+                description: rt.description,
+                room_id: room.id,
+                inventory_quantity: rt.inventory_quantity ?? 0,
+                inventory_type_id: rt.inventory_type_id,
+              }));
+            } else {
+              itemsMap[room.id] = [];
+            }
+          } else {
+            itemsMap[room.id] = [];
+          }
         }
       }
 
