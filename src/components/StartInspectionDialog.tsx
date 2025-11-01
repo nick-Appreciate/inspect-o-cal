@@ -58,6 +58,8 @@ interface StartInspectionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   inspectionId: string;
+  unitId?: string;
+  propertyId?: string;
   onInspectionStarted?: () => void;
 }
 
@@ -71,6 +73,8 @@ export function StartInspectionDialog({
   open,
   onOpenChange,
   inspectionId,
+  unitId,
+  propertyId,
   onInspectionStarted,
 }: StartInspectionDialogProps) {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -117,17 +121,55 @@ export function StartInspectionDialog({
   }, [open]);
 
   const fetchTemplates = async () => {
-    const { data, error } = await supabase
-      .from("inspection_templates")
-      .select("id, name")
-      .order("name");
+    try {
+      let query = supabase
+        .from("inspection_templates")
+        .select(`
+          id, 
+          name,
+          floorplan_id,
+          template_properties(property_id)
+        `);
 
-    if (error) {
+      // If unit is selected, filter by floorplan
+      if (unitId) {
+        // First get the unit's floorplan
+        const { data: unitData, error: unitError } = await supabase
+          .from("units")
+          .select("floorplan_id")
+          .eq("id", unitId)
+          .single();
+
+        if (!unitError && unitData?.floorplan_id) {
+          query = query.eq("floorplan_id", unitData.floorplan_id);
+        }
+      } 
+      // If no unit but property is selected, filter by property associations
+      else if (propertyId) {
+        // Get templates associated with this property
+        const { data: propertyTemplates, error: propError } = await supabase
+          .from("template_properties")
+          .select("template_id")
+          .eq("property_id", propertyId);
+
+        if (!propError && propertyTemplates && propertyTemplates.length > 0) {
+          const templateIds = propertyTemplates.map(pt => pt.template_id);
+          query = query.in("id", templateIds);
+        }
+      }
+
+      const { data, error } = await query.order("name");
+
+      if (error) {
+        toast.error("Failed to load templates");
+        return;
+      }
+
+      setTemplates(data || []);
+    } catch (error) {
+      console.error("Error fetching templates:", error);
       toast.error("Failed to load templates");
-      return;
     }
-
-    setTemplates(data || []);
   };
 
   const fetchUsers = async () => {
@@ -361,7 +403,9 @@ export function StartInspectionDialog({
           </DialogTitle>
           <DialogDescription>
             {step === "select"
-              ? "Select a template to start the inspection"
+              ? unitId 
+                ? "Select a template matching this unit's floorplan to start the inspection"
+                : "Select a template for this property-level inspection"
               : `Check items that pass inspection. Unchecked items will become subtasks.`}
           </DialogDescription>
         </DialogHeader>
@@ -370,7 +414,9 @@ export function StartInspectionDialog({
           <div className="space-y-4 py-4">
             {templates.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No templates found
+                {unitId 
+                  ? "No templates found matching this unit's floorplan. Create a template with the matching floorplan to use it here."
+                  : "No templates found for this property. Associate templates with this property to use them here."}
               </p>
             ) : (
               <div>

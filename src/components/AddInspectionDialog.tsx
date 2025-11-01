@@ -36,6 +36,7 @@ interface Unit {
   id: string;
   property_id: string;
   name: string;
+  floorplan?: { name: string } | null;
 }
 
 interface AddInspectionDialogProps {
@@ -85,12 +86,21 @@ export default function AddInspectionDialog({
   const fetchUnits = async (propertyId: string) => {
     const { data, error } = await supabase
       .from("units")
-      .select("*")
-      .eq("property_id", propertyId)
-      .order("name");
+      .select(`
+        *,
+        floorplan:floorplans(name)
+      `)
+      .eq("property_id", propertyId);
 
     if (!error && data) {
-      setUnits(data);
+      // Sort units using natural/numeric sorting
+      const sortedData = [...data].sort((a, b) => {
+        return a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        });
+      });
+      setUnits(sortedData);
     }
   };
 
@@ -347,6 +357,11 @@ export default function AddInspectionDialog({
                     {units.map((unit) => (
                       <SelectItem key={unit.id} value={unit.id}>
                         {unit.name}
+                        {unit.floorplan && (
+                          <span className="text-muted-foreground ml-2">
+                            ({unit.floorplan.name})
+                          </span>
+                        )}
                       </SelectItem>
                     ))}
                   </SelectContent>

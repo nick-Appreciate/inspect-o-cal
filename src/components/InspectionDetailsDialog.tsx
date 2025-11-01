@@ -867,6 +867,8 @@ export default function InspectionDetailsDialog({
             open={showTemplateSelector}
             onOpenChange={setShowTemplateSelector}
             inspectionId={inspection.id}
+            unitId={inspection.unit_id}
+            propertyId={inspection.property_id}
             onInspectionStarted={fetchSubtasks}
           />
         </>
