@@ -352,16 +352,18 @@ export function TemplateBuilder({
                     >
                       <div className="flex-1">
                         <p className="font-medium">{item.description}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Quantity: {item.inventory_quantity}
-                          {item.inventory_type_id && (
-                            <>
-                              {" "}
-                              • Type:{" "}
-                              {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
-                            </>
-                          )}
-                        </p>
+                        {item.inventory_quantity > 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            Quantity: {item.inventory_quantity}
+                            {item.inventory_type_id && (
+                              <>
+                                {" "}
+                                • Type:{" "}
+                                {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
+                              </>
+                            )}
+                          </p>
+                        )}
                       </div>
                       <Button
                         variant="ghost"
