@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Plus, ChevronDown, Copy } from "lucide-react";
+import { Trash2, Plus, ChevronDown, Copy, Lock } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -771,13 +772,34 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                 <Label className="text-xs">Existing Tasks</Label>
                                 {roomItems[room.id].map((item) => {
                                   const invType = inventoryTypes.find(t => t.id === item.inventory_type_id);
+                                  // Check if this item matches a default task
+                                  const isDefaultTask = defaultTasks.some(dt => 
+                                    dt.description === item.description &&
+                                    dt.inventory_type_id === item.inventory_type_id &&
+                                    dt.inventory_quantity === item.inventory_quantity &&
+                                    dt.vendor_type_id === item.vendor_type_id
+                                  );
                                   return (
                                     <div
                                       key={item.id}
                                       className="flex items-center justify-between p-2 bg-background rounded border text-sm"
                                     >
                                       <div className="flex-1">
-                                        <div>{item.description}</div>
+                                        <div className="flex items-center gap-2">
+                                          <span>{item.description}</span>
+                                          {isDefaultTask && (
+                                            <TooltipProvider>
+                                              <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                  <Lock className="h-3 w-3 text-primary" />
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                  <p className="text-xs">Controlled by default tasks</p>
+                                                </TooltipContent>
+                                              </Tooltip>
+                                            </TooltipProvider>
+                                          )}
+                                        </div>
                                         {invType && (
                                           <div className="text-xs text-muted-foreground">
                                             {invType.name} × {item.inventory_quantity}
