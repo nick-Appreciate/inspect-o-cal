@@ -143,6 +143,14 @@ const Inspections = () => {
     return searchableText.includes(query);
   });
 
+  const isInspectionPast = (dateString: string) => {
+    const inspectionDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    inspectionDate.setHours(0, 0, 0, 0);
+    return inspectionDate < today;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -211,15 +219,19 @@ const Inspections = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInspections.map((inspection) => (
-                  <TableRow 
-                    key={inspection.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => {
-                      setSelectedInspectionId(inspection.id);
-                      setDetailsDialogOpen(true);
-                    }}
-                  >
+                {filteredInspections.map((inspection) => {
+                  const isPast = isInspectionPast(inspection.date);
+                  return (
+                    <TableRow 
+                      key={inspection.id}
+                      className={`cursor-pointer hover:bg-muted/50 ${
+                        isPast ? "bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/30" : ""
+                      }`}
+                      onClick={() => {
+                        setSelectedInspectionId(inspection.id);
+                        setDetailsDialogOpen(true);
+                      }}
+                    >
                     <TableCell>
                       <Badge className={getInspectionColor(inspection.type)}>
                         {inspection.type}
@@ -258,7 +270,8 @@ const Inspections = () => {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                );
+                })}
               </TableBody>
             </Table>
               </div>
