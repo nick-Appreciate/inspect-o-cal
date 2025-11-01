@@ -526,34 +526,18 @@ export function TemplateBuilder({
     room: Room;
     items: Item[];
     inventoryTypes: InventoryType[];
-    newItemDescription: string;
-    newItemQuantity: number;
-    newItemType: string;
     isExpanded: boolean;
     onToggleExpansion: () => void;
-    onDescriptionChange: (value: string) => void;
-    onQuantityChange: (value: number) => void;
-    onTypeChange: (value: string) => void;
-    onAddItem: () => void;
     onDeleteRoom: () => void;
-    onDeleteItem: (itemId: string) => void;
   }
 
   function SortableRoomItem({
     room,
     items,
     inventoryTypes,
-    newItemDescription,
-    newItemQuantity,
-    newItemType,
     isExpanded,
     onToggleExpansion,
-    onDescriptionChange,
-    onQuantityChange,
-    onTypeChange,
-    onAddItem,
     onDeleteRoom,
-    onDeleteItem,
   }: SortableRoomItemProps) {
     const {
       attributes,
@@ -630,101 +614,6 @@ export function TemplateBuilder({
 
         {isExpanded && (
           <>
-            {/* Add Item Form for this Room */}
-        <div className="ml-6 space-y-3 border rounded-md p-4 bg-background">
-          <div>
-            <Label>Task</Label>
-            <Input
-              placeholder="Task..."
-              value={newItemDescription}
-              onChange={(e) => onDescriptionChange(e.target.value)}
-              maxLength={500}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label>Quantity</Label>
-              <Input
-                type="number"
-                min="0"
-                max="99999"
-                value={newItemQuantity}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value);
-                  onQuantityChange(isNaN(val) || val < 0 ? 0 : Math.min(val, 99999));
-                }}
-              />
-            </div>
-            <div>
-              <Label>Inventory Type</Label>
-              <Select
-                value={newItemType}
-                onValueChange={onTypeChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {inventoryTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
-                  <div className="p-2 border-t">
-                    <Input
-                      placeholder="Create new type..."
-                      maxLength={100}
-                      onKeyDown={async (e) => {
-                        if (e.key === "Enter") {
-                          const input = e.currentTarget;
-                          const newTypeName = input.value.trim();
-                          if (!newTypeName) return;
-                          
-                          if (newTypeName.length > 100) {
-                            toast.error("Inventory type name must be less than 100 characters");
-                            return;
-                          }
-
-                          const { data: user } = await supabase.auth.getUser();
-                          if (!user.user) {
-                            toast.error("Please sign in to create inventory types");
-                            return;
-                          }
-
-                          const { data, error } = await supabase
-                            .from("inventory_types")
-                            .insert({
-                              name: newTypeName,
-                              created_by: user.user.id,
-                            })
-                            .select()
-                            .single();
-
-                          if (error) {
-                            console.error("Failed to create inventory type:", error);
-                            toast.error(error.message || "Failed to create inventory type");
-                            return;
-                          }
-
-                          input.value = "";
-                          toast.success("Inventory type created");
-                          // Note: Parent component needs to refresh inventory types
-                        }
-                      }}
-                    />
-                  </div>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Button onClick={onAddItem} className="w-full">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Item to {room.name}
-          </Button>
-        </div>
-
         {/* Items List for this Room */}
         <div className="ml-6 space-y-2">
           {items.length > 0 ? (
@@ -765,23 +654,11 @@ export function TemplateBuilder({
                     <ExternalLink className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
                   )}
                 </div>
-                {!item.source_room_template_item_id && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteItem(item.id);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
               </div>
             ))
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
-              No items yet. Add items using the form above.
+              No tasks yet. Add a room from a room template that has tasks defined.
             </p>
           )}
         </div>
@@ -806,9 +683,8 @@ export function TemplateBuilder({
                 </TooltipTrigger>
                 <TooltipContent className="max-w-sm">
                   <p className="text-sm">
-                    Tasks marked as "Synced from room template" are controlled at the room template level. 
-                    When you update the room template, changes automatically sync to all inspection templates using it. 
-                    You can add custom tasks directly here, but synced tasks can only be edited in the room template.
+                    All tasks are controlled at the Room Template level. When you update a Room Template, 
+                    all connected rooms in your inspection templates will automatically update.
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -942,23 +818,9 @@ export function TemplateBuilder({
                   room={room}
                   items={itemsByRoom[room.id] || []}
                   inventoryTypes={inventoryTypes}
-                  newItemDescription={newItemDescription[room.id] || ""}
-                  newItemQuantity={newItemQuantity[room.id] || 0}
-                  newItemType={newItemType[room.id] || ""}
                   isExpanded={expandedRoomIds.has(room.id)}
                   onToggleExpansion={() => toggleRoomExpansion(room.id)}
-                  onDescriptionChange={(value) =>
-                    setNewItemDescription((prev) => ({ ...prev, [room.id]: value }))
-                  }
-                  onQuantityChange={(value) =>
-                    setNewItemQuantity((prev) => ({ ...prev, [room.id]: value }))
-                  }
-                  onTypeChange={(value) =>
-                    setNewItemType((prev) => ({ ...prev, [room.id]: value }))
-                  }
-                  onAddItem={() => addItem(room.id)}
                   onDeleteRoom={() => deleteRoom(room.id)}
-                  onDeleteItem={(itemId) => deleteItem(itemId, room.id)}
                 />
               ))}
             </div>
