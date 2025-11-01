@@ -214,6 +214,7 @@ export default function Templates() {
         .insert({
           template_id: targetTemplateId,
           name: room.name,
+          room_template_id: room.room_template_id, // Preserve room template reference
           order_index: room.order_index,
         })
         .select()
@@ -233,12 +234,16 @@ export default function Templates() {
 
       if (itemsError || !items) continue;
 
-      // Create new items in the new room
-      const newItems = items.map(item => ({
+      // Only copy custom items (not default tasks from room templates)
+      // Items with source_room_template_item_id are auto-synced from room templates
+      const customItems = items.filter(item => !item.source_room_template_item_id);
+      
+      const newItems = customItems.map(item => ({
         room_id: newRoom.id,
         description: item.description,
         inventory_quantity: item.inventory_quantity,
         inventory_type_id: item.inventory_type_id,
+        vendor_type_id: item.vendor_type_id,
         order_index: item.order_index,
       }));
 
