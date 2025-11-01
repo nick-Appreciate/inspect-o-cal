@@ -82,6 +82,15 @@ export default function Properties() {
   // Delete confirmation state
   const [deletePropertyId, setDeletePropertyId] = useState<string | null>(null);
   const [deleteUnitId, setDeleteUnitId] = useState<string | null>(null);
+  const [cascadeDeleteProperty, setCascadeDeleteProperty] = useState<{
+    propertyId: string;
+    units: number;
+    inspections: number;
+  } | null>(null);
+  const [cascadeDeleteUnit, setCascadeDeleteUnit] = useState<{
+    unitId: string;
+    inspections: number;
+  } | null>(null);
 
   useEffect(() => {
     fetchProperties();
@@ -203,7 +212,7 @@ export default function Properties() {
     fetchProperties();
   };
 
-  const deleteProperty = async () => {
+  const deleteProperty = async (cascade = false) => {
     if (!deletePropertyId) return;
 
     // Check for related records
@@ -217,19 +226,36 @@ export default function Properties() {
       .select("id")
       .eq("property_id", deletePropertyId);
 
-    if (units && units.length > 0) {
-      toast.error(`Cannot delete property. Please delete all ${units.length} unit(s) first.`);
+    const unitsCount = units?.length || 0;
+    const inspectionsCount = inspections?.length || 0;
+
+    if ((unitsCount > 0 || inspectionsCount > 0) && !cascade) {
+      setCascadeDeleteProperty({
+        propertyId: deletePropertyId,
+        units: unitsCount,
+        inspections: inspectionsCount,
+      });
       setDeletePropertyId(null);
       return;
     }
 
+    // Delete associated inspections
     if (inspections && inspections.length > 0) {
-      toast.error(`Cannot delete property. It has ${inspections.length} associated inspection(s).`);
-      setDeletePropertyId(null);
-      return;
+      await supabase
+        .from("inspections")
+        .delete()
+        .eq("property_id", deletePropertyId);
     }
 
-    // Delete template associations first
+    // Delete associated units
+    if (units && units.length > 0) {
+      await supabase
+        .from("units")
+        .delete()
+        .eq("property_id", deletePropertyId);
+    }
+
+    // Delete template associations
     await supabase
       .from("template_properties")
       .delete()
@@ -340,7 +366,7 @@ export default function Properties() {
     fetchUnitsForProperty(selectedPropertyId);
   };
 
-  const deleteUnit = async () => {
+  const deleteUnit = async (cascade = false) => {
     if (!deleteUnitId) return;
 
     // Check for related inspections
@@ -349,10 +375,23 @@ export default function Properties() {
       .select("id")
       .eq("unit_id", deleteUnitId);
 
-    if (inspections && inspections.length > 0) {
-      toast.error(`Cannot delete unit. It has ${inspections.length} associated inspection(s).`);
+    const inspectionsCount = inspections?.length || 0;
+
+    if (inspectionsCount > 0 && !cascade) {
+      setCascadeDeleteUnit({
+        unitId: deleteUnitId,
+        inspections: inspectionsCount,
+      });
       setDeleteUnitId(null);
       return;
+    }
+
+    // Delete associated inspections
+    if (inspections && inspections.length > 0) {
+      await supabase
+        .from("inspections")
+        .delete()
+        .eq("unit_id", deleteUnitId);
     }
 
     const { error } = await supabase
@@ -630,13 +669,13 @@ export default function Properties() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Property</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this property? This will also delete all associated units. This action cannot be undone.
+              Are you sure you want to delete this property? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={deleteProperty}
+              onClick={() => deleteProperty()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
@@ -657,10 +696,76 @@ export default function Properties() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={deleteUnit}
+              onClick={() => deleteUnit()}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cascade Delete Property Confirmation */}
+      <AlertDialog open={!!cascadeDeleteProperty} onOpenChange={() => setCascadeDeleteProperty(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Property with Associations</AlertDialogTitle>
+            <AlertDialogDescription>
+              This property has associated records that will also be deleted:
+              {cascadeDeleteProperty && (
+                <ul className="mt-2 list-disc list-inside space-y-1">
+                  {cascadeDeleteProperty.units > 0 && (
+                    <li>{cascadeDeleteProperty.units} unit(s)</li>
+                  )}
+                  {cascadeDeleteProperty.inspections > 0 && (
+                    <li>{cascadeDeleteProperty.inspections} inspection(s)</li>
+                  )}
+                </ul>
+              )}
+              <p className="mt-3 font-semibold">Do you want to proceed with deleting everything?</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCascadeDeleteProperty(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (cascadeDeleteProperty) {
+                  setDeletePropertyId(cascadeDeleteProperty.propertyId);
+                  setCascadeDeleteProperty(null);
+                  setTimeout(() => deleteProperty(true), 0);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cascade Delete Unit Confirmation */}
+      <AlertDialog open={!!cascadeDeleteUnit} onOpenChange={() => setCascadeDeleteUnit(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Unit with Associations</AlertDialogTitle>
+            <AlertDialogDescription>
+              This unit has {cascadeDeleteUnit?.inspections} associated inspection(s) that will also be deleted.
+              <p className="mt-3 font-semibold">Do you want to proceed with deleting everything?</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCascadeDeleteUnit(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (cascadeDeleteUnit) {
+                  setDeleteUnitId(cascadeDeleteUnit.unitId);
+                  setCascadeDeleteUnit(null);
+                  setTimeout(() => deleteUnit(true), 0);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete All
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
