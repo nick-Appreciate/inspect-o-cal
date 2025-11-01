@@ -355,32 +355,26 @@ export function StartInspectionDialog({
   };
 
   const setItemAsBad = (itemId: string, roomId?: string) => {
-    // Check if notes exist, if not, mark as pending bad
-    const currentNote = itemNotes[itemId];
-    if (!currentNote || currentNote.trim() === '') {
-      // Mark as pending bad - user wants to select bad but hasn't filled notes yet
-      setPendingBadItems(prev => new Set(prev).add(itemId));
-      // Expand notes to prompt user
-      setExpandedNotes(prev => new Set(prev).add(itemId));
-      // Focus the textarea
+    // Mark item as bad and expand notes for user to add details
+    setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
+    setPendingBadItems(prev => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
+    
+    // Always expand notes for bad items
+    setExpandedNotes(prev => new Set(prev).add(itemId));
+    
+    // Focus the textarea if notes are empty
+    if (!itemNotes[itemId]?.trim()) {
       setTimeout(() => {
         const textarea = textareaRefs.current[itemId];
         if (textarea) {
           textarea.focus();
         }
       }, 100);
-      return;
     }
-
-    setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
-    // Remove from pending bad items since notes are now filled
-    setPendingBadItems(prev => {
-      const next = new Set(prev);
-      next.delete(itemId);
-      return next;
-    });
-    // Keep notes expanded when marked bad
-    setExpandedNotes(prev => new Set(prev).add(itemId));
     
     // Auto-collapse room if all items have status
     if (roomId) {
@@ -412,20 +406,7 @@ export function StartInspectionDialog({
       [itemId]: note,
     }));
 
-    // If item is marked as pending bad and notes are now filled, try to complete the bad marking
-    if (pendingBadItems.has(itemId) && note.trim()) {
-      const roomId = Object.entries(itemsByRoom).find(([_, items]) => 
-        items.some(item => item.id === itemId)
-      )?.[0];
-      
-      // Automatically mark as bad now that notes are filled
-      setItemStatus(prev => ({ ...prev, [itemId]: 'bad' }));
-      setPendingBadItems(prev => {
-        const next = new Set(prev);
-        next.delete(itemId);
-        return next;
-      });
-    }
+    // Don't auto-mark as bad - let user explicitly click bad button after adding notes
 
     // Check for @mentions
     const lastAtSymbol = note.lastIndexOf('@');
@@ -919,15 +900,8 @@ export function StartInspectionDialog({
                                           } else if (e.key === 'Escape') {
                                             setShowMentionDropdown(null);
                                           }
-                                        } else if (e.key === 'Enter' && !e.shiftKey && itemNotes[item.id]?.trim()) {
-                                          // Close notes on Enter if notes are filled (and not in mention dropdown)
-                                          e.preventDefault();
-                                          setExpandedNotes(prev => {
-                                            const next = new Set(prev);
-                                            next.delete(item.id);
-                                            return next;
-                                          });
                                         }
+                                        // Don't auto-close notes on Enter - let user manually close or mark as good
                                       }}
                                       className="text-sm min-h-[60px]"
                                       onClick={(e) => e.stopPropagation()}

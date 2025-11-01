@@ -64,7 +64,7 @@ function AppContent() {
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
-        <div className="flex-1">
+        <div className="flex-1 pb-16 md:pb-0">
           <main>
             <Routes>
               <Route path="/" element={<Index />} />
