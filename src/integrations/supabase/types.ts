@@ -65,6 +65,7 @@ export type Database = {
       inspections: {
         Row: {
           attachment_url: string | null
+          completed: boolean | null
           created_at: string
           created_by: string
           date: string
@@ -78,6 +79,7 @@ export type Database = {
         }
         Insert: {
           attachment_url?: string | null
+          completed?: boolean | null
           created_at?: string
           created_by: string
           date: string
@@ -91,6 +93,7 @@ export type Database = {
         }
         Update: {
           attachment_url?: string | null
+          completed?: boolean | null
           created_at?: string
           created_by?: string
           date?: string
