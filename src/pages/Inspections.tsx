@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, ArrowLeft } from "lucide-react";
+import { Trash2, ArrowLeft, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import {
   Table,
@@ -48,6 +49,7 @@ const Inspections = () => {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchInspections();
@@ -125,6 +127,22 @@ const Inspections = () => {
     return colors[type] || "bg-gray-500";
   };
 
+  const filteredInspections = inspections.filter((inspection) => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+
+    const searchableText = [
+      inspection.type,
+      format(new Date(inspection.date), "MMM d, yyyy"),
+      inspection.time,
+      inspection.property.name,
+      inspection.property.address,
+      inspection.unit?.name || "",
+    ].join(" ").toLowerCase();
+
+    return searchableText.includes(query);
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -164,8 +182,24 @@ const Inspections = () => {
             </Button>
           </div>
         ) : (
-          <div className="rounded-lg border bg-card">
-            <Table>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by type, date, property, unit..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {filteredInspections.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg bg-card">
+                <p className="text-muted-foreground">No inspections match your search</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-card">
+                <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Type</TableHead>
@@ -177,7 +211,7 @@ const Inspections = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inspections.map((inspection) => (
+                {filteredInspections.map((inspection) => (
                   <TableRow 
                     key={inspection.id}
                     className="cursor-pointer hover:bg-muted/50"
@@ -227,6 +261,8 @@ const Inspections = () => {
                 ))}
               </TableBody>
             </Table>
+              </div>
+            )}
           </div>
         )}
       </main>
