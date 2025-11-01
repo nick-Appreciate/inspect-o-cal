@@ -213,6 +213,11 @@ const Index = () => {
     }
   };
 
+  const handleInspectionClick = (inspectionId: string) => {
+    setSelectedInspectionId(inspectionId);
+    setDetailsDialogOpen(true);
+  };
+
   const handleInspectionUpdate = () => {
     fetchInspections();
   };
@@ -279,12 +284,17 @@ const Index = () => {
 
       <main className="container mx-auto px-4 py-8">
         {viewMode === "month" ? (
-          <InspectionCalendar inspections={inspections} onDateClick={handleDateClick} />
+          <InspectionCalendar 
+            inspections={inspections} 
+            onDateClick={handleDateClick}
+            onInspectionClick={handleInspectionClick}
+          />
         ) : (
           <WeeklyCalendar
             inspections={inspections}
             onDateClick={handleDateClick}
             onInspectionUpdate={handleInspectionUpdate}
+            onInspectionClick={handleInspectionClick}
           />
         )}
       </main>

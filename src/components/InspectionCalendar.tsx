@@ -9,6 +9,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 interface InspectionCalendarProps {
   inspections: Inspection[];
   onDateClick?: (date: Date) => void;
+  onInspectionClick?: (inspectionId: string) => void;
 }
 
 const getInspectionColor = (type: string): string => {
@@ -23,7 +24,7 @@ const getInspectionColor = (type: string): string => {
   return colorMap[type] || "bg-primary";
 };
 
-export default function InspectionCalendar({ inspections, onDateClick }: InspectionCalendarProps) {
+export default function InspectionCalendar({ inspections, onDateClick, onInspectionClick }: InspectionCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const monthStart = startOfMonth(currentMonth);
@@ -74,10 +75,9 @@ export default function InspectionCalendar({ inspections, onDateClick }: Inspect
               key={index}
               className={`min-h-[100px] p-2 border rounded-lg transition-colors ${
                 day
-                  ? "hover:bg-accent cursor-pointer"
+                  ? "hover:bg-accent"
                   : "bg-muted/30"
               } ${isToday ? "ring-2 ring-primary" : ""}`}
-              onClick={() => day && onDateClick?.(day)}
             >
               {day && (
                 <>
@@ -88,14 +88,18 @@ export default function InspectionCalendar({ inspections, onDateClick }: Inspect
                     {dayInspections.slice(0, 2).map((inspection) => (
                       <Badge
                         key={inspection.id}
-                        className={`${getInspectionColor(inspection.type)} text-white text-xs w-full justify-start truncate`}
+                        className={`${getInspectionColor(inspection.type)} text-white text-xs w-full justify-start truncate cursor-pointer hover:opacity-80 transition-opacity`}
+                        onClick={() => onInspectionClick?.(inspection.id)}
                       >
                         {inspection.time} - {inspection.property.name}
                         {inspection.unitName && ` (${inspection.unitName})`}
                       </Badge>
                     ))}
                     {dayInspections.length > 2 && (
-                      <div className="text-xs text-muted-foreground">
+                      <div 
+                        className="text-xs text-muted-foreground cursor-pointer hover:text-foreground"
+                        onClick={() => day && onDateClick?.(day)}
+                      >
                         +{dayInspections.length - 2} more
                       </div>
                     )}

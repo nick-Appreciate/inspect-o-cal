@@ -21,6 +21,7 @@ interface WeeklyCalendarProps {
   inspections: Inspection[];
   onDateClick?: (date: Date) => void;
   onInspectionUpdate?: () => void;
+  onInspectionClick?: (inspectionId: string) => void;
 }
 
 const getInspectionColor = (type: string): string => {
@@ -53,6 +54,7 @@ export default function WeeklyCalendar({
   inspections,
   onDateClick,
   onInspectionUpdate,
+  onInspectionClick,
 }: WeeklyCalendarProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [resizingInspection, setResizingInspection] = useState<string | null>(null);
@@ -336,6 +338,12 @@ export default function WeeklyCalendar({
                       onMouseDown={(e) =>
                         handleDragStart(e, inspection.id, inspection.time, day)
                       }
+                      onClick={(e) => {
+                        // Only trigger if not dragging
+                        if (e.currentTarget.style.top === `${topPosition}px`) {
+                          onInspectionClick?.(inspection.id);
+                        }
+                      }}
                     >
                       <div className="text-xs font-semibold truncate">
                         {inspection.time}
