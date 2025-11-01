@@ -9,6 +9,7 @@ import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import { Inspection, Property } from "@/types/inspection";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { format } from "date-fns";
 import type { User, Session } from "@supabase/supabase-js";
 
 const Index = () => {
@@ -76,21 +77,25 @@ const Index = () => {
     if (error) {
       console.error("Failed to load inspections:", error);
     } else {
-      const transformedData: Inspection[] = data.map((item: any) => ({
-        id: item.id,
-        type: item.type,
-        date: new Date(item.date),
-        time: item.time,
-        duration: item.duration || 60,
-        property: {
-          id: item.properties.id,
-          name: item.properties.name,
-          address: item.properties.address,
-        },
-        attachmentUrl: item.attachment_url,
-        unitId: item.units?.id,
-        unitName: item.units?.name,
-      }));
+      const transformedData: Inspection[] = data.map((item: any) => {
+        // Parse date string as local date to avoid timezone shifts
+        const [year, month, day] = item.date.split('-').map(Number);
+        return {
+          id: item.id,
+          type: item.type,
+          date: new Date(year, month - 1, day),
+          time: item.time,
+          duration: item.duration || 60,
+          property: {
+            id: item.properties.id,
+            name: item.properties.name,
+            address: item.properties.address,
+          },
+          attachmentUrl: item.attachment_url,
+          unitId: item.units?.id,
+          unitName: item.units?.name,
+        };
+      });
       setInspections(transformedData);
     }
   };
@@ -134,7 +139,7 @@ const Index = () => {
 
     const { error } = await supabase.from("inspections").insert({
       type: newInspection.type,
-      date: newInspection.date.toISOString().split("T")[0],
+      date: format(newInspection.date, 'yyyy-MM-dd'),
       time: newInspection.time,
       property_id: newInspection.property.id,
       unit_id: newInspection.unitId && newInspection.unitId !== "none" ? newInspection.unitId : null,
