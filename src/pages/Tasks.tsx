@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users } from "lucide-react";
+import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -264,54 +264,65 @@ export default function Tasks() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary rounded-lg">
-                <ClipboardCheck className="h-6 w-6 text-primary-foreground" />
+        <div className="container mx-auto px-4 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 bg-primary rounded-lg">
+                <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">My Tasks</h1>
-                <p className="text-sm text-muted-foreground">
+                <h1 className="text-xl sm:text-2xl font-bold">My Tasks</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Manage your inspection subtasks
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               <Button
                 onClick={() => setAddTaskDialogOpen(true)}
+                size="sm"
+                className="flex-1 sm:flex-none"
               >
-                Add Task
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Add Task</span>
               </Button>
               <Button
                 variant="outline"
                 onClick={() => navigate("/")}
+                size="sm"
+                className="flex-1 sm:flex-none"
               >
-                Calendar View
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Calendar</span>
               </Button>
               <Button
                 variant={showAllTasks ? "default" : "outline"}
                 onClick={() => setShowAllTasks(!showAllTasks)}
+                size="sm"
+                className="flex-1 sm:flex-none"
               >
                 {showAllTasks ? (
                   <>
-                    <User className="h-4 w-4 mr-2" />
-                    My Tasks
+                    <User className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">My Tasks</span>
                   </>
                 ) : (
                   <>
-                    <Users className="h-4 w-4 mr-2" />
-                    All Tasks
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">All Tasks</span>
                   </>
                 )}
               </Button>
               <Button
                 variant={showCompleted ? "default" : "outline"}
                 onClick={() => setShowCompleted(!showCompleted)}
+                size="sm"
+                className="whitespace-nowrap"
               >
-                {showCompleted ? "Hide Completed" : "Show Completed"}
+                {showCompleted ? "Hide" : "Show"}
+                <span className="hidden sm:inline ml-1">Completed</span>
               </Button>
-              <Button variant="outline" size="icon" onClick={handleSignOut}>
+              <Button variant="outline" size="icon" onClick={handleSignOut} className="flex-shrink-0">
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>

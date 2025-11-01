@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
 import { StartInspectionDialog } from "./StartInspectionDialog";
 import { UserAvatar } from "./UserAvatar";
+import { AddTaskDialog } from "./AddTaskDialog";
 
 interface Inspection {
   id: string;
@@ -137,6 +138,7 @@ export default function InspectionDetailsDialog({
   const [showFullForm, setShowFullForm] = useState(false);
   const [showAssignAllButton, setShowAssignAllButton] = useState(false);
   const [assignAllUser, setAssignAllUser] = useState<string>("");
+  const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -317,6 +319,58 @@ export default function InspectionDetailsDialog({
       console.error("Failed to load vendor types:", error);
     } else {
       setVendorTypes(data || []);
+    }
+  };
+
+  const handleCreateInventoryType = async (name: string) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("inventory_types")
+      .insert({ name, created_by: user.id });
+    
+    if (error) {
+      toast.error("Failed to create inventory type");
+    } else {
+      toast.success("Inventory type created");
+      fetchInventoryTypes();
+    }
+  };
+
+  const handleAddTaskFromDialog = async (task: {
+    description: string;
+    inventory_quantity: number;
+    inventory_type_id: string | null;
+  }) => {
+    if (!inspectionId) return;
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { error } = await supabase.from("subtasks").insert({
+        inspection_id: inspectionId,
+        original_inspection_id: inspectionId,
+        description: task.description.trim(),
+        inventory_quantity: task.inventory_quantity || 0,
+        inventory_type_id: task.inventory_type_id,
+        assigned_users: null,
+        attachment_url: null,
+        created_by: user.id,
+        status: 'bad',
+      });
+
+      if (error) throw error;
+
+      toast.success("Task added");
+      fetchSubtasks();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add task");
     }
   };
 
@@ -597,8 +651,8 @@ export default function InspectionDetailsDialog({
                   onClick={() => setShowTemplateSelector(true)}
                   className="h-7 text-xs px-2"
                 >
-                  <ClipboardList className="h-3 w-3 sm:mr-1" />
-                  <span className="hidden sm:inline">Start</span>
+                  <ClipboardList className="h-3 w-3 mr-1" />
+                  <span>Start</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -606,8 +660,8 @@ export default function InspectionDetailsDialog({
                   onClick={() => setShowFollowUpDialog(true)}
                   className="h-7 text-xs px-2"
                 >
-                  <Plus className="h-3 w-3 sm:mr-1" />
-                  <span className="hidden sm:inline">Follow-up</span>
+                  <Plus className="h-3 w-3 mr-1" />
+                  <span>Follow-up</span>
                 </Button>
               </div>
             </div>
@@ -790,58 +844,15 @@ export default function InspectionDetailsDialog({
               })}
 
               {/* Add New Task */}
-              <div className="border border-dashed rounded-lg p-2">
-                <div className="relative">
-                  <Textarea
-                    ref={textareaRef}
-                    placeholder="Add task... (use @ to mention users)"
-                    value={newDescription}
-                    onChange={(e) => handleDescriptionChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && e.ctrlKey && !showMentionDropdown) {
-                        handleAddSubtask();
-                      }
-                    }}
-                    className="min-h-[50px] text-sm resize-none"
-                    disabled={isAdding}
-                  />
-                  
-                  {/* Mention Dropdown */}
-                  {showMentionDropdown && filteredMentionUsers.length > 0 && (
-                    <div className="absolute bottom-full left-0 mb-1 w-full bg-popover border rounded-md shadow-md max-h-32 overflow-y-auto z-50">
-                      {filteredMentionUsers.slice(0, 5).map((user) => (
-                        <button
-                          key={user.id}
-                          onClick={() => handleMentionSelect(user)}
-                          className="w-full px-2 py-1 text-left text-xs hover:bg-accent flex items-center gap-2"
-                        >
-                          <UserAvatar
-                            avatarUrl={user.avatar_url}
-                            name={user.full_name}
-                            email={user.email}
-                            size="sm"
-                          />
-                          <span>{user.full_name || user.email}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                {newDescription && (
-                  <div className="flex gap-1 mt-2">
-                    <Button
-                      size="sm"
-                      onClick={handleAddSubtask}
-                      disabled={!newDescription.trim() || isAdding}
-                      className="h-7 text-xs flex-1"
-                    >
-                      <Send className="h-3 w-3 mr-1" />
-                      {isAdding ? "Adding..." : "Add Task"}
-                    </Button>
-                  </div>
-                )}
-              </div>
+              <Button
+                onClick={() => setShowAddTaskDialog(true)}
+                variant="outline"
+                size="sm"
+                className="w-full border-dashed h-10"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Task
+              </Button>
             </div>
           </div>
 
@@ -895,6 +906,16 @@ export default function InspectionDetailsDialog({
               fetchInspectionDetails();
               fetchSubtasks();
             }}
+          />
+
+          <AddTaskDialog
+            open={showAddTaskDialog}
+            onOpenChange={setShowAddTaskDialog}
+            onAdd={handleAddTaskFromDialog}
+            inventoryTypes={inventoryTypes}
+            onCreateInventoryType={handleCreateInventoryType}
+            title="Add Task"
+            description="Add a new task to this inspection"
           />
 
           <StartInspectionDialog

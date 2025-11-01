@@ -454,17 +454,26 @@ export default function Properties() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Property & Unit Management</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/import-properties')}>
-            <Upload className="mr-2 h-4 w-4" />
-            Import Data
+    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Property & Unit Management</h1>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/import-properties')}
+            size="sm"
+            className="flex-1 sm:flex-none"
+          >
+            <Upload className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Import Data</span>
           </Button>
-          <Button onClick={() => openPropertyDialog()}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Property
+          <Button 
+            onClick={() => openPropertyDialog()}
+            size="sm"
+            className="flex-1 sm:flex-none"
+          >
+            <Plus className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+            <span className="hidden sm:inline">New Property</span>
           </Button>
         </div>
       </div>

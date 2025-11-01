@@ -231,23 +231,25 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary rounded-lg">
-                <ClipboardCheck className="h-6 w-6 text-primary-foreground" />
+        <div className="container mx-auto px-4 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 bg-primary rounded-lg">
+                <ClipboardCheck className="h-5 w-5 sm:h-6 sm:w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Inspections Dashboard</h1>
-                <p className="text-sm text-muted-foreground">
+                <h1 className="text-xl sm:text-2xl font-bold">Inspections Dashboard</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   Manage and schedule property inspections
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
               <Button
                 variant="outline"
                 onClick={() => navigate("/tasks")}
+                size="sm"
+                className="flex-1 sm:flex-none"
               >
                 My Tasks
               </Button>
@@ -256,19 +258,19 @@ const Index = () => {
                   variant={viewMode === "month" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("month")}
-                  className="rounded-r-none"
+                  className="rounded-r-none text-xs sm:text-sm"
                 >
-                  <CalendarIcon className="h-4 w-4 mr-2" />
-                  Month
+                  <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Month</span>
                 </Button>
                 <Button
                   variant={viewMode === "week" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("week")}
-                  className="rounded-l-none"
+                  className="rounded-l-none text-xs sm:text-sm"
                 >
-                  <List className="h-4 w-4 mr-2" />
-                  Week
+                  <List className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Week</span>
                 </Button>
               </div>
               <AddInspectionDialog
