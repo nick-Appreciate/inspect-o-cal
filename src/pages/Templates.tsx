@@ -438,9 +438,10 @@ export default function Templates() {
                 ? "border-primary"
                 : "hover:border-muted-foreground"
             }`}
+            onClick={() => setSelectedTemplate(template.id)}
           >
             <CardHeader className="flex flex-row items-start justify-between space-y-0">
-              <div className="flex-1" onClick={() => setSelectedTemplate(template.id)}>
+              <div className="flex-1">
                 <CardTitle>{template.name}</CardTitle>
                 <div className="space-y-1 mt-1">
                   {template.floorplan && (
