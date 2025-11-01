@@ -8,9 +8,22 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, CheckCircle2, XCircle, User } from "lucide-react";
+import { Calendar, Clock, CheckCircle2, XCircle, User, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+
+interface SubtaskWithStatus {
+  id: string;
+  description: string;
+  room_name: string | null;
+  assigned_users: string[];
+  created_at: string;
+  initial_status: 'bad' | 'good';
+  initial_completed: boolean;
+  current_status: 'bad' | 'good';
+  current_completed: boolean;
+  status_changed: boolean;
+}
 
 interface HistoricalInspection {
   id: string;
@@ -20,14 +33,7 @@ interface HistoricalInspection {
   completed: boolean;
   property_name: string;
   unit_name?: string;
-  subtasks: Array<{
-    id: string;
-    description: string;
-    status: string;
-    room_name: string | null;
-    assigned_users: string[];
-    created_at: string;
-  }>;
+  subtasks: SubtaskWithStatus[];
 }
 
 interface InspectionHistoryDialogProps {
@@ -80,9 +86,13 @@ export function InspectionHistoryDialog({
         .from("inspections")
         .select("property_id, unit_id")
         .eq("id", inspectionId)
-        .single();
+        .maybeSingle();
 
       if (currentError) throw currentError;
+      if (!currentInspection) {
+        setLoading(false);
+        return;
+      }
 
       const targetPropertyId = propertyId || currentInspection.property_id;
       const targetUnitId = unitId || currentInspection.unit_id;
@@ -114,28 +124,77 @@ export function InspectionHistoryDialog({
 
       if (inspectionsError) throw inspectionsError;
 
-      // Fetch subtasks for each completed inspection
+      // Fetch all subtasks for the property/unit to build status map
+      let subtasksQuery = supabase
+        .from("subtasks")
+        .select("id, description, status, completed, room_name, assigned_users, created_at, original_inspection_id, inspection_id");
+
+      const { data: allSubtasks, error: allSubtasksError } = await subtasksQuery;
+      
+      if (allSubtasksError) throw allSubtasksError;
+
+      // Build a map of original_inspection_id -> latest status for each issue
+      const subtaskStatusMap = new Map<string, Map<string, any>>();
+      
+      (allSubtasks || []).forEach(subtask => {
+        if (!subtaskStatusMap.has(subtask.original_inspection_id)) {
+          subtaskStatusMap.set(subtask.original_inspection_id, new Map());
+        }
+        const inspectionMap = subtaskStatusMap.get(subtask.original_inspection_id)!;
+        
+        // Use description as key to track same issue across inspections
+        const key = `${subtask.room_name || 'no-room'}-${subtask.description}`;
+        inspectionMap.set(key, subtask);
+      });
+
+      // Build history with initial vs current comparison
       const historyWithSubtasks: HistoricalInspection[] = [];
       
       for (const inspection of inspections || []) {
-        const { data: subtasks, error: subtasksError } = await supabase
-          .from("subtasks")
-          .select("id, description, status, room_name, assigned_users, created_at")
-          .eq("inspection_id", inspection.id)
-          .order("created_at", { ascending: true });
+        // Get initial subtasks created in this inspection
+        const initialSubtasks = (allSubtasks || []).filter(
+          st => st.original_inspection_id === inspection.id
+        );
 
-        if (!subtasksError && subtasks) {
-          historyWithSubtasks.push({
-            id: inspection.id,
-            date: inspection.date,
-            time: inspection.time,
-            type: inspection.type,
-            completed: inspection.completed,
-            property_name: inspection.properties.name,
-            unit_name: inspection.units?.name,
-            subtasks: subtasks,
-          });
-        }
+        const subtasksWithStatus: SubtaskWithStatus[] = initialSubtasks.map(initial => {
+          const key = `${initial.room_name || 'no-room'}-${initial.description}`;
+          
+          // Find latest status of this issue across all inspections
+          let currentStatus = initial;
+          for (const insp of inspections || []) {
+            const inspMap = subtaskStatusMap.get(insp.id);
+            if (inspMap && inspMap.has(key)) {
+              const candidate = inspMap.get(key);
+              if (new Date(candidate.created_at) >= new Date(currentStatus.created_at)) {
+                currentStatus = candidate;
+              }
+            }
+          }
+
+          return {
+            id: initial.id,
+            description: initial.description,
+            room_name: initial.room_name,
+            assigned_users: initial.assigned_users || [],
+            created_at: initial.created_at,
+            initial_status: initial.status as 'bad' | 'good',
+            initial_completed: initial.completed || false,
+            current_status: currentStatus.status as 'bad' | 'good',
+            current_completed: currentStatus.completed || false,
+            status_changed: initial.completed !== currentStatus.completed || initial.status !== currentStatus.status,
+          };
+        });
+
+        historyWithSubtasks.push({
+          id: inspection.id,
+          date: inspection.date,
+          time: inspection.time,
+          type: inspection.type,
+          completed: inspection.completed,
+          property_name: inspection.properties.name,
+          unit_name: inspection.units?.name,
+          subtasks: subtasksWithStatus,
+        });
       }
 
       setHistory(historyWithSubtasks);
@@ -205,35 +264,92 @@ export function InspectionHistoryDialog({
                         {inspection.subtasks.map((subtask) => (
                           <div
                             key={subtask.id}
-                            className="border rounded p-3 space-y-2 bg-muted/30"
+                            className={`border rounded p-3 ${
+                              subtask.status_changed ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800' : 'bg-muted/30'
+                            }`}
                           >
-                            <div className="flex items-start gap-2">
-                              <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm">{subtask.description}</p>
-                                {subtask.room_name && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    Room: {subtask.room_name}
-                                  </p>
-                                )}
-                                {subtask.assigned_users && subtask.assigned_users.length > 0 && (
-                                  <div className="flex items-center gap-1 mt-2 flex-wrap">
-                                    <User className="h-3 w-3 text-muted-foreground" />
-                                    {subtask.assigned_users.map((userId) => {
-                                      const user = users[userId];
-                                      return user ? (
-                                        <Badge
-                                          key={userId}
-                                          variant="secondary"
-                                          className="text-xs"
-                                        >
-                                          {user.full_name || "User"}
-                                        </Badge>
-                                      ) : null;
-                                    })}
-                                  </div>
-                                )}
+                            <div className="space-y-2">
+                              {/* Issue Description */}
+                              <div className="flex items-start gap-2">
+                                <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium">{subtask.description}</p>
+                                  {subtask.room_name && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Room: {subtask.room_name}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Initial vs Current Status */}
+                              <div className="grid grid-cols-[1fr,auto,1fr] gap-2 items-center text-xs">
+                                {/* Initial Status */}
+                                <div className="bg-background/60 rounded p-2">
+                                  <p className="font-medium mb-1 text-muted-foreground">Initial</p>
+                                  <Badge 
+                                    variant={subtask.initial_completed ? "default" : "destructive"}
+                                    className="text-xs"
+                                  >
+                                    {subtask.initial_completed ? (
+                                      <>
+                                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                                        Resolved
+                                      </>
+                                    ) : (
+                                      <>
+                                        <XCircle className="h-3 w-3 mr-1" />
+                                        Open
+                                      </>
+                                    )}
+                                  </Badge>
+                                </div>
+
+                                {/* Arrow */}
+                                {subtask.status_changed && (
+                                  <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                )}
+
+                                {/* Current Status */}
+                                <div className="bg-background/60 rounded p-2">
+                                  <p className="font-medium mb-1 text-muted-foreground">Current</p>
+                                  <Badge 
+                                    variant={subtask.current_completed ? "default" : "destructive"}
+                                    className="text-xs"
+                                  >
+                                    {subtask.current_completed ? (
+                                      <>
+                                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                                        Resolved
+                                      </>
+                                    ) : (
+                                      <>
+                                        <XCircle className="h-3 w-3 mr-1" />
+                                        Open
+                                      </>
+                                    )}
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              {/* Assigned Users */}
+                              {subtask.assigned_users && subtask.assigned_users.length > 0 && (
+                                <div className="flex items-center gap-1 pt-1 flex-wrap">
+                                  <User className="h-3 w-3 text-muted-foreground" />
+                                  {subtask.assigned_users.map((userId) => {
+                                    const user = users[userId];
+                                    return user ? (
+                                      <Badge
+                                        key={userId}
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        {user.full_name || "User"}
+                                      </Badge>
+                                    ) : null;
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
