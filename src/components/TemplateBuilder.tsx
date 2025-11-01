@@ -199,9 +199,29 @@ export function TemplateBuilder({
     setTemplateInfo(data);
     
     // Filter out any property IDs that don't exist anymore
-    const validPropertyIds = data.template_properties
+    const associatedPropertyIds = data.template_properties
       ?.map(tp => tp.property_id)
       .filter(id => id != null) || [];
+    
+    // Only keep property IDs that still exist in the properties table
+    const { data: existingProperties } = await supabase
+      .from("properties")
+      .select("id")
+      .in("id", associatedPropertyIds);
+    
+    const validPropertyIds = existingProperties?.map(p => p.id) || [];
+    
+    // If some properties were deleted, update the associations
+    if (validPropertyIds.length !== associatedPropertyIds.length) {
+      const deletedIds = associatedPropertyIds.filter(id => !validPropertyIds.includes(id));
+      if (deletedIds.length > 0) {
+        await supabase
+          .from("template_properties")
+          .delete()
+          .eq("template_id", templateId)
+          .in("property_id", deletedIds);
+      }
+    }
     
     setSelectedPropertyIds(validPropertyIds);
   };

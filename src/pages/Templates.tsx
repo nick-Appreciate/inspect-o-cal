@@ -87,7 +87,15 @@ export default function Templates() {
       return;
     }
 
-    setTemplates(data || []);
+    // Filter out template_properties where the property no longer exists
+    const cleanedData = data?.map(template => ({
+      ...template,
+      template_properties: template.template_properties?.filter(
+        (tp: any) => tp.properties != null
+      )
+    })) || [];
+
+    setTemplates(cleanedData);
   };
 
   const fetchFloorplans = async () => {
