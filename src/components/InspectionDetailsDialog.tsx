@@ -946,16 +946,16 @@ export default function InspectionDetailsDialog({
               </div>
             )}
 
-            {/* Show Completed Toggle */}
+            {/* Show All Toggle */}
             <div className="flex items-center justify-between mb-3 p-2 bg-muted/30 rounded">
-              <span className="text-sm font-medium">Show All Tasks</span>
+              <span className="text-sm font-medium">Show Completed Items</span>
               <Button
                 variant={showCompleted ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowCompleted(!showCompleted)}
                 className="h-7 text-xs"
               >
-                {showCompleted ? "Hide Good" : "Show All"}
+                {showCompleted ? "Hide Completed" : "Show All"}
               </Button>
             </div>
 
@@ -963,10 +963,10 @@ export default function InspectionDetailsDialog({
             {/* Tasks grouped by room */}
             <div className="space-y-3">
               {(() => {
-                // Filter subtasks based on showCompleted
+                // Filter subtasks: show only bad items OR manually created items (no inspection_run_id)
                 const filteredSubtasks = showCompleted 
                   ? subtasks 
-                  : subtasks.filter(s => s.status === 'bad' || !s.completed);
+                  : subtasks.filter(s => s.status === 'bad' || !s.inspection_run_id);
 
                 // Group subtasks by room
                 const groupedByRoom = filteredSubtasks.reduce((acc, subtask) => {

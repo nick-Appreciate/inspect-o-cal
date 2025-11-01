@@ -135,7 +135,7 @@ export function InspectionHistoryDialog({
       // Fetch all subtasks for the property/unit to build status map
       let subtasksQuery = supabase
         .from("subtasks")
-        .select("id, description, status, completed, room_name, assigned_users, created_at, original_inspection_id, inspection_id");
+        .select("id, description, status, completed, room_name, assigned_users, created_at, original_inspection_id, inspection_id, inspection_run_id");
 
       const { data: allSubtasks, error: allSubtasksError } = await subtasksQuery;
       
@@ -165,7 +165,16 @@ export function InspectionHistoryDialog({
         );
 
         const subtasksWithStatus: SubtaskWithStatus[] = initialSubtasks
-          .filter(initial => showAllItems || initial.status === 'bad')
+          .filter(initial => {
+            // Only show items that were part of an inspection run (have inspection_run_id)
+            // This excludes manually created items
+            if (!initial.inspection_run_id) return false;
+            
+            // If showAllItems is false, only show problems (bad status)
+            if (!showAllItems && initial.status !== 'bad') return false;
+            
+            return true;
+          })
           .map(initial => {
           const key = `${initial.room_name || 'no-room'}-${initial.description}`;
           
@@ -265,7 +274,7 @@ export function InspectionHistoryDialog({
                   className="border rounded-lg p-4 space-y-3 bg-card"
                 >
                   <div className="flex items-start justify-between">
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-lg">{inspection.type}</h3>
                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
@@ -294,6 +303,28 @@ export function InspectionHistoryDialog({
                         </div>
                       )}
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={async () => {
+                        if (confirm("Delete this inspection and all its data? This cannot be undone.")) {
+                          const { error } = await supabase
+                            .from("inspections")
+                            .delete()
+                            .eq("id", inspection.id);
+                          
+                          if (error) {
+                            toast.error("Failed to delete inspection");
+                          } else {
+                            toast.success("Inspection deleted");
+                            fetchHistory();
+                          }
+                        }
+                      }}
+                    >
+                      <XCircle className="h-5 w-5" />
+                    </Button>
                   </div>
 
                   {inspection.subtasks.length > 0 && (
