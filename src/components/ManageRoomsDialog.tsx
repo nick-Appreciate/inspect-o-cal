@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Plus, ChevronDown, Copy, Lock, ArrowRight } from "lucide-react";
+import { Trash2, Plus, ChevronDown, Copy, Lock, ArrowRight, Check, X, Edit2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -91,6 +91,11 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [defaultTaskAppliesToAll, setDefaultTaskAppliesToAll] = useState(true);
   const [defaultTaskRoomAssociations, setDefaultTaskRoomAssociations] = useState<Record<string, string[]>>({});
   const [deleteDefaultTaskId, setDeleteDefaultTaskId] = useState<string | null>(null);
+  const [editingDefaultTaskId, setEditingDefaultTaskId] = useState<string | null>(null);
+  const [editRoomName, setEditRoomName] = useState<string>("");
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [newVendorName, setNewVendorName] = useState("");
+  const [showAddVendorType, setShowAddVendorType] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -519,6 +524,104 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     toast.success("Default task deleted (existing tasks in rooms remain)");
   };
 
+  const startEditingDefaultTask = (task: DefaultTask) => {
+    setEditingDefaultTaskId(task.id);
+    setDefaultTaskAppliesToAll(task.applies_to_all_rooms);
+    setDefaultTaskRooms(defaultTaskRoomAssociations[task.id] || []);
+  };
+
+  const updateDefaultTaskAssociations = async (taskId: string) => {
+    try {
+      // Update applies_to_all_rooms
+      const { error: updateError } = await supabase
+        .from("default_room_tasks" as any)
+        .update({ applies_to_all_rooms: defaultTaskAppliesToAll })
+        .eq("id", taskId);
+
+      if (updateError) throw updateError;
+
+      // Delete existing associations
+      await supabase
+        .from("default_task_room_templates" as any)
+        .delete()
+        .eq("default_task_id", taskId);
+
+      // If not applying to all rooms, create new associations
+      if (!defaultTaskAppliesToAll && defaultTaskRooms.length > 0) {
+        const associations = defaultTaskRooms.map(roomId => ({
+          default_task_id: taskId,
+          room_template_id: roomId,
+        }));
+
+        const { error: insertError } = await supabase
+          .from("default_task_room_templates" as any)
+          .insert(associations);
+
+        if (insertError) throw insertError;
+      }
+
+      toast.success("Default task updated successfully");
+      setEditingDefaultTaskId(null);
+      setDefaultTaskRooms([]);
+      setDefaultTaskAppliesToAll(true);
+      fetchDefaultTasks();
+    } catch (error: any) {
+      console.error("Error updating default task:", error);
+      toast.error(error.message || "Failed to update default task");
+    }
+  };
+
+  const startEditingRoom = (roomId: string, currentName: string) => {
+    setEditingRoomId(roomId);
+    setEditRoomName(currentName);
+  };
+
+  const saveRoomName = async () => {
+    if (!editingRoomId || !editRoomName.trim()) return;
+
+    const { error } = await supabase
+      .from("room_templates" as any)
+      .update({ name: editRoomName.trim() })
+      .eq("id", editingRoomId);
+
+    if (error) {
+      toast.error("Failed to update room name");
+      return;
+    }
+
+    setRooms(rooms.map(r => r.id === editingRoomId ? { ...r, name: editRoomName.trim() } : r));
+    setEditingRoomId(null);
+    setEditRoomName("");
+    toast.success("Room name updated");
+  };
+
+  const addVendorType = async () => {
+    if (!newVendorName.trim()) {
+      toast.error("Please enter a vendor name");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("vendor_types")
+      .insert({
+        name: newVendorName.trim(),
+        created_by: user.id,
+      });
+
+    if (error) {
+      toast.error("Failed to create vendor type");
+      return;
+    }
+
+    setNewVendorName("");
+    setShowAddVendorType(false);
+    fetchVendorTypes();
+    toast.success("Vendor type created");
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -626,18 +729,66 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
                 <div>
                   <Label className="text-xs">Vendor Needed (Optional)</Label>
-                  <select
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                    value={defaultTaskVendorType}
-                    onChange={(e) => setDefaultTaskVendorType(e.target.value)}
-                  >
-                    <option value="">None</option>
-                    {vendorTypes.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
+                  {showAddVendorType ? (
+                    <div className="flex gap-1">
+                      <Input
+                        placeholder="New vendor name"
+                        value={newVendorName}
+                        onChange={(e) => setNewVendorName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            addVendorType();
+                          } else if (e.key === "Escape") {
+                            setShowAddVendorType(false);
+                            setNewVendorName("");
+                          }
+                        }}
+                        className="h-9"
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        onClick={addVendorType}
+                        className="h-9 px-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setShowAddVendorType(false);
+                          setNewVendorName("");
+                        }}
+                        className="h-9 px-2"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1">
+                      <select
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                        value={defaultTaskVendorType}
+                        onChange={(e) => setDefaultTaskVendorType(e.target.value)}
+                      >
+                        <option value="">None</option>
+                        {vendorTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowAddVendorType(!showAddVendorType)}
+                        className="h-9 px-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -694,48 +845,127 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                 {defaultTasks.length > 0 && (
                   <div className="space-y-2 pt-2">
                     <Label className="text-xs">Current Default Tasks</Label>
-                    {defaultTasks.map((task) => {
-                      const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
-                      const associatedRooms = task.applies_to_all_rooms 
-                        ? rooms 
-                        : rooms.filter(r => defaultTaskRoomAssociations[task.id]?.includes(r.id));
-                      
-                      return (
-                        <div
-                          key={task.id}
-                          className="flex items-center justify-between p-2 bg-background rounded border text-sm"
-                        >
-                          <div className="flex-1">
-                            <div>{task.description}</div>
-                            {invType && (
-                              <div className="text-xs text-muted-foreground">
-                                {invType.name} × {task.inventory_quantity}
-                              </div>
-                            )}
-                            {task.vendor_type_id && (
-                              <div className="text-xs text-muted-foreground">
-                                Vendor: {vendorTypes.find(t => t.id === task.vendor_type_id)?.name}
-                              </div>
-                            )}
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {task.applies_to_all_rooms ? (
-                                "Applies to all room templates"
-                              ) : (
-                                <>Applies to: {associatedRooms.map(r => r.name).join(", ") || "No rooms"}</>
-                              )}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => setDeleteDefaultTaskId(task.id)}
-                          >
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
-                        </div>
-                      );
-                    })}
+                                 {defaultTasks.map((task) => {
+                                      const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
+                                      const associatedRooms = task.applies_to_all_rooms 
+                                        ? rooms 
+                                        : rooms.filter(r => defaultTaskRoomAssociations[task.id]?.includes(r.id));
+                                      const isEditing = editingDefaultTaskId === task.id;
+                                      
+                                      return (
+                                        <div
+                                          key={task.id}
+                                          className="bg-background rounded border"
+                                        >
+                                          <div
+                                            className="flex items-center justify-between p-2 text-sm cursor-pointer hover:bg-accent/50"
+                                            onClick={() => !isEditing && startEditingDefaultTask(task)}
+                                          >
+                                            <div className="flex-1">
+                                              <div>{task.description}</div>
+                                              {invType && (
+                                                <div className="text-xs text-muted-foreground">
+                                                  {invType.name} × {task.inventory_quantity}
+                                                </div>
+                                              )}
+                                              {task.vendor_type_id && (
+                                                <div className="text-xs text-muted-foreground">
+                                                  Vendor: {vendorTypes.find(t => t.id === task.vendor_type_id)?.name}
+                                                </div>
+                                              )}
+                                              <div className="text-xs text-muted-foreground mt-1">
+                                                {task.applies_to_all_rooms ? (
+                                                  "Applies to all room templates"
+                                                ) : (
+                                                  <>Applies to: {associatedRooms.map(r => r.name).join(", ") || "No rooms"}</>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteDefaultTaskId(task.id);
+                                              }}
+                                            >
+                                              <Trash2 className="h-3 w-3 text-destructive" />
+                                            </Button>
+                                          </div>
+                                          
+                                          {isEditing && (
+                                            <div className="p-3 border-t bg-accent/20 space-y-2">
+                                              <Label className="text-xs">Edit Room Associations</Label>
+                                              <div className="flex items-center gap-2">
+                                                <input
+                                                  type="checkbox"
+                                                  id={`edit-applies-all-${task.id}`}
+                                                  checked={defaultTaskAppliesToAll}
+                                                  onChange={(e) => {
+                                                    setDefaultTaskAppliesToAll(e.target.checked);
+                                                    if (e.target.checked) {
+                                                      setDefaultTaskRooms([]);
+                                                    }
+                                                  }}
+                                                  className="rounded"
+                                                />
+                                                <Label htmlFor={`edit-applies-all-${task.id}`} className="text-xs font-normal cursor-pointer">
+                                                  Apply to all room templates
+                                                </Label>
+                                              </div>
+                                              
+                                              {!defaultTaskAppliesToAll && rooms.length > 0 && (
+                                                <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1">
+                                                  {rooms.map((room) => (
+                                                    <label
+                                                      key={room.id}
+                                                      className="flex items-center gap-2 cursor-pointer hover:bg-accent p-1 rounded"
+                                                    >
+                                                      <input
+                                                        type="checkbox"
+                                                        checked={defaultTaskRooms.includes(room.id)}
+                                                        onChange={(e) => {
+                                                          if (e.target.checked) {
+                                                            setDefaultTaskRooms([...defaultTaskRooms, room.id]);
+                                                          } else {
+                                                            setDefaultTaskRooms(defaultTaskRooms.filter(id => id !== room.id));
+                                                          }
+                                                        }}
+                                                        className="rounded"
+                                                      />
+                                                      <span className="text-xs">{room.name}</span>
+                                                    </label>
+                                                  ))}
+                                                </div>
+                                              )}
+                                              
+                                              <div className="flex gap-2">
+                                                <Button 
+                                                  onClick={() => updateDefaultTaskAssociations(task.id)}
+                                                  size="sm"
+                                                  className="flex-1"
+                                                >
+                                                  Save
+                                                </Button>
+                                                <Button 
+                                                  onClick={() => {
+                                                    setEditingDefaultTaskId(null);
+                                                    setDefaultTaskRooms([]);
+                                                    setDefaultTaskAppliesToAll(true);
+                                                  }}
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="flex-1"
+                                                >
+                                                  Cancel
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                   </div>
                 )}
               </CardContent>
@@ -753,18 +983,69 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                 ) : (
                   <div className="space-y-2">
                     {rooms.map((room) => (
-                      <div key={room.id} className="border rounded-lg">
+                      <div key={room.id} className="border rounded-lg group">
                         <div
-                          className="flex items-center justify-between p-3 hover:bg-accent/50 transition-colors cursor-pointer"
-                          onClick={() => toggleRoomExpansion(room.id)}
+                          className="flex items-center justify-between p-3 hover:bg-accent/50 transition-colors"
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1">
                             <ChevronDown 
-                              className={`h-4 w-4 transition-transform ${
+                              className={`h-4 w-4 transition-transform cursor-pointer ${
                                 expandedRoomId === room.id ? 'rotate-180' : ''
                               }`}
+                              onClick={() => toggleRoomExpansion(room.id)}
                             />
-                            <span className="font-medium">{room.name}</span>
+                            {editingRoomId === room.id ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <Input
+                                  value={editRoomName}
+                                  onChange={(e) => setEditRoomName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') saveRoomName();
+                                    if (e.key === 'Escape') {
+                                      setEditingRoomId(null);
+                                      setEditRoomName("");
+                                    }
+                                  }}
+                                  className="h-8"
+                                  autoFocus
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={saveRoomName}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setEditingRoomId(null);
+                                    setEditRoomName("");
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 flex-1 cursor-pointer" onClick={() => toggleRoomExpansion(room.id)}>
+                                <span className="font-medium">{room.name}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditingRoom(room.id, room.name);
+                                  }}
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">
@@ -875,19 +1156,67 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                               </div>
 
                               <div>
-                                <Label className="text-xs">Vendor Needed</Label>
-                                <select
-                                  className="flex-1 h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                                  value={newItemVendorType}
-                                  onChange={(e) => setNewItemVendorType(e.target.value)}
-                                >
-                                  <option value="">None</option>
-                                  {vendorTypes.map((type) => (
-                                    <option key={type.id} value={type.id}>
-                                      {type.name}
-                                    </option>
-                                  ))}
-                                </select>
+                                <Label className="text-xs">Vendor Needed (Optional)</Label>
+                                {showAddVendorType ? (
+                                  <div className="flex gap-1">
+                                    <Input
+                                      placeholder="New vendor name"
+                                      value={newVendorName}
+                                      onChange={(e) => setNewVendorName(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          addVendorType();
+                                        } else if (e.key === "Escape") {
+                                          setShowAddVendorType(false);
+                                          setNewVendorName("");
+                                        }
+                                      }}
+                                      className="h-9"
+                                      autoFocus
+                                    />
+                                    <Button
+                                      size="sm"
+                                      onClick={addVendorType}
+                                      className="h-9 px-2"
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        setShowAddVendorType(false);
+                                        setNewVendorName("");
+                                      }}
+                                      className="h-9 px-2"
+                                    >
+                                      ✕
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-1">
+                                    <select
+                                      className="flex-1 h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                                      value={newItemVendorType}
+                                      onChange={(e) => setNewItemVendorType(e.target.value)}
+                                    >
+                                      <option value="">None</option>
+                                      {vendorTypes.map((type) => (
+                                        <option key={type.id} value={type.id}>
+                                          {type.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setShowAddVendorType(!showAddVendorType)}
+                                      className="h-9 px-2"
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
 
                               <Button onClick={() => addRoomItem(room.id)} size="sm" className="w-full">
