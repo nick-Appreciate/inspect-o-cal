@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,14 +23,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 
 interface RoomTemplate {
   id: string;
@@ -40,6 +32,7 @@ interface RoomTemplate {
 
 interface RoomTemplateItem {
   id: string;
+  room_template_id: string;
   description: string;
   order_index: number;
   inventory_type_id: string | null;
@@ -65,7 +58,8 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemInventoryType, setNewItemInventoryType] = useState<string>("");
-  const [newItemQuantity, setNewItemQuantity] = useState(0);
+  const [newItemQuantity, setNewItemQuantity] = useState<number>(0);
+  const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -92,35 +86,6 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     }
 
     setRooms(data as any || []);
-  };
-
-  const fetchInventoryTypes = async () => {
-    const { data, error } = await supabase
-      .from("inventory_types")
-      .select("*")
-      .order("name");
-
-    if (error) {
-      toast.error("Failed to load inventory types");
-      return;
-    }
-
-    setInventoryTypes(data || []);
-  };
-
-  const fetchRoomItems = async (roomId: string) => {
-    const { data, error } = await supabase
-      .from("room_template_items" as any)
-      .select("*")
-      .eq("room_template_id", roomId)
-      .order("order_index");
-
-    if (error) {
-      toast.error("Failed to load room items");
-      return;
-    }
-
-    setRoomItems(prev => ({ ...prev, [roomId]: data as any || [] }));
   };
 
   const addRoom = async () => {
@@ -167,14 +132,40 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     toast.success("Room template deleted");
   };
 
-  const addItemToRoom = async (roomId: string) => {
+  const fetchInventoryTypes = async () => {
+    const { data, error } = await supabase
+      .from("inventory_types")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      toast.error("Failed to load inventory types");
+      return;
+    }
+
+    setInventoryTypes(data || []);
+  };
+
+  const fetchRoomItems = async (roomId: string) => {
+    const { data, error } = await supabase
+      .from("room_template_items" as any)
+      .select("*")
+      .eq("room_template_id", roomId)
+      .order("order_index");
+
+    if (error) {
+      toast.error("Failed to load room items");
+      return;
+    }
+
+    setRoomItems(prev => ({ ...prev, [roomId]: (data as any) || [] }));
+  };
+
+  const addRoomItem = async (roomId: string) => {
     if (!newItemDescription.trim()) {
       toast.error("Please enter a task description");
       return;
     }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
     const items = roomItems[roomId] || [];
     const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order_index)) : -1;
@@ -186,7 +177,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         description: newItemDescription.trim(),
         order_index: maxOrder + 1,
         inventory_type_id: newItemInventoryType || null,
-        inventory_quantity: newItemQuantity,
+        inventory_quantity: newItemQuantity || 0,
       });
 
     if (error) {
@@ -201,18 +192,26 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     toast.success("Task added");
   };
 
-  const deleteItem = async (roomId: string, itemId: string) => {
+  const deleteRoomItem = async () => {
+    if (!deleteItemId) return;
+
     const { error } = await supabase
       .from("room_template_items" as any)
       .delete()
-      .eq("id", itemId);
+      .eq("id", deleteItemId);
 
     if (error) {
       toast.error("Failed to delete task");
       return;
     }
 
-    fetchRoomItems(roomId);
+    // Update local state
+    const updatedItems = { ...roomItems };
+    Object.keys(updatedItems).forEach(roomId => {
+      updatedItems[roomId] = updatedItems[roomId].filter(item => item.id !== deleteItemId);
+    });
+    setRoomItems(updatedItems);
+    setDeleteItemId(null);
     toast.success("Task deleted");
   };
 
@@ -227,7 +226,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
           <DialogHeader>
             <DialogTitle>Manage Room Templates</DialogTitle>
             <DialogDescription>
-              Create reusable room templates that can be added to any inspection template
+              Create reusable room templates with tasks that can be added to any inspection template
             </DialogDescription>
           </DialogHeader>
 
@@ -271,128 +270,112 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {rooms.map((room) => {
-                      const isExpanded = expandedRoomId === room.id;
-                      const items = roomItems[room.id] || [];
-                      
-                      return (
+                    {rooms.map((room) => (
+                      <div key={room.id} className="border rounded-lg">
                         <div
-                          key={room.id}
-                          className="border rounded-lg overflow-hidden"
+                          className="flex items-center justify-between p-3 hover:bg-accent/50 transition-colors cursor-pointer"
+                          onClick={() => toggleRoomExpansion(room.id)}
                         >
-                          <div className="flex items-center justify-between p-3 hover:bg-accent/50 transition-colors">
-                            <div className="flex items-center gap-2 flex-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => toggleRoomExpansion(room.id)}
-                              >
-                                {isExpanded ? (
-                                  <ChevronUp className="h-4 w-4" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <span className="font-medium">{room.name}</span>
-                              <span className="text-sm text-muted-foreground">
-                                ({items.length} {items.length === 1 ? 'task' : 'tasks'})
-                              </span>
-                            </div>
+                          <span className="font-medium">{room.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                              {roomItems[room.id]?.length || 0} tasks
+                            </span>
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => setDeleteRoomId(room.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteRoomId(room.id);
+                              }}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>
-
-                          {isExpanded && (
-                            <div className="p-4 bg-accent/20 space-y-3">
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">Add Task</Label>
-                                <Textarea
-                                  placeholder="Task description"
-                                  value={newItemDescription}
-                                  onChange={(e) => setNewItemDescription(e.target.value)}
-                                  className="min-h-[60px]"
-                                />
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <Label className="text-xs">Inventory Type (optional)</Label>
-                                    <Select
-                                      value={newItemInventoryType}
-                                      onValueChange={setNewItemInventoryType}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="None" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="">None</SelectItem>
-                                        {inventoryTypes.map((type) => (
-                                          <SelectItem key={type.id} value={type.id}>
-                                            {type.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs">Quantity</Label>
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      value={newItemQuantity}
-                                      onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 0)}
-                                      disabled={!newItemInventoryType}
-                                    />
-                                  </div>
-                                </div>
-                                <Button
-                                  onClick={() => addItemToRoom(room.id)}
-                                  size="sm"
-                                  className="w-full"
-                                >
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  Add Task
-                                </Button>
-                              </div>
-
-                              {items.length > 0 && (
-                                <div className="space-y-2">
-                                  <Label className="text-sm font-medium">Tasks</Label>
-                                  {items.map((item) => {
-                                    const invType = inventoryTypes.find(t => t.id === item.inventory_type_id);
-                                    return (
-                                      <div
-                                        key={item.id}
-                                        className="flex items-start justify-between p-2 bg-background rounded border"
-                                      >
-                                        <div className="flex-1">
-                                          <p className="text-sm">{item.description}</p>
-                                          {invType && (
-                                            <p className="text-xs text-muted-foreground mt-1">
-                                              {invType.name} × {item.inventory_quantity}
-                                            </p>
-                                          )}
-                                        </div>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          onClick={() => deleteItem(room.id, item.id)}
-                                        >
-                                          <Trash2 className="h-3 w-3 text-destructive" />
-                                        </Button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
+                        
+                        {expandedRoomId === room.id && (
+                          <div className="p-4 border-t bg-accent/20 space-y-3">
+                            <div className="space-y-2">
+                              <Label>Add Task</Label>
+                              <Input
+                                placeholder="Task description"
+                                value={newItemDescription}
+                                onChange={(e) => setNewItemDescription(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    addRoomItem(room.id);
+                                  }
+                                }}
+                              />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">Inventory Type (Optional)</Label>
+                                  <select
+                                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                                    value={newItemInventoryType}
+                                    onChange={(e) => setNewItemInventoryType(e.target.value)}
+                                  >
+                                    <option value="">None</option>
+                                    {inventoryTypes.map((type) => (
+                                      <option key={type.id} value={type.id}>
+                                        {type.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Quantity</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    value={newItemQuantity}
+                                    onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 0)}
+                                    disabled={!newItemInventoryType}
+                                  />
+                                </div>
+                              </div>
+                              <Button onClick={() => addRoomItem(room.id)} size="sm" className="w-full">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Task
+                              </Button>
+                            </div>
+
+                            {roomItems[room.id] && roomItems[room.id].length > 0 && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Existing Tasks</Label>
+                                {roomItems[room.id].map((item) => {
+                                  const invType = inventoryTypes.find(t => t.id === item.inventory_type_id);
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className="flex items-center justify-between p-2 bg-background rounded border text-sm"
+                                    >
+                                      <div className="flex-1">
+                                        <div>{item.description}</div>
+                                        {invType && (
+                                          <div className="text-xs text-muted-foreground">
+                                            {invType.name} × {item.inventory_quantity}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => setDeleteItemId(item.id)}
+                                      >
+                                        <Trash2 className="h-3 w-3 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -413,6 +396,26 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={deleteRoom}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!deleteItemId} onOpenChange={() => setDeleteItemId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Task</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this task?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteRoomItem}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
