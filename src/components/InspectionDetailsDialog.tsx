@@ -344,6 +344,7 @@ export default function InspectionDetailsDialog({
     description: string;
     inventory_quantity: number;
     inventory_type_id: string | null;
+    vendor_type_id: string | null;
   }) => {
     if (!inspectionId) return;
 
@@ -359,6 +360,7 @@ export default function InspectionDetailsDialog({
         description: task.description.trim(),
         inventory_quantity: task.inventory_quantity || 0,
         inventory_type_id: task.inventory_type_id,
+        vendor_type_id: task.vendor_type_id,
         assigned_users: null,
         attachment_url: null,
         created_by: user.id,
@@ -913,6 +915,7 @@ export default function InspectionDetailsDialog({
             onOpenChange={setShowAddTaskDialog}
             onAdd={handleAddTaskFromDialog}
             inventoryTypes={inventoryTypes}
+            vendorTypes={vendorTypes}
             onCreateInventoryType={handleCreateInventoryType}
             title="Add Task"
             description="Add a new task to this inspection"

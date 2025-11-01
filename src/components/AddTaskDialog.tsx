@@ -25,6 +25,11 @@ interface InventoryType {
   name: string;
 }
 
+interface VendorType {
+  id: string;
+  name: string;
+}
+
 interface AddTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,8 +37,10 @@ interface AddTaskDialogProps {
     description: string;
     inventory_quantity: number;
     inventory_type_id: string | null;
+    vendor_type_id: string | null;
   }) => void;
   inventoryTypes: InventoryType[];
+  vendorTypes?: VendorType[];
   onCreateInventoryType: (name: string) => Promise<void>;
   title?: string;
   description?: string;
@@ -44,6 +51,7 @@ export function AddTaskDialog({
   onOpenChange,
   onAdd,
   inventoryTypes,
+  vendorTypes = [],
   onCreateInventoryType,
   title = "Add Task",
   description = "Add a new task to the checklist",
@@ -51,6 +59,7 @@ export function AddTaskDialog({
   const [taskDescription, setTaskDescription] = useState("");
   const [quantity, setQuantity] = useState(0);
   const [typeId, setTypeId] = useState("");
+  const [vendorTypeId, setVendorTypeId] = useState("");
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
 
@@ -63,12 +72,14 @@ export function AddTaskDialog({
       description: taskDescription,
       inventory_quantity: quantity,
       inventory_type_id: typeId && typeId !== "none" ? typeId : null,
+      vendor_type_id: vendorTypeId && vendorTypeId !== "none" ? vendorTypeId : null,
     });
 
     // Reset form
     setTaskDescription("");
     setQuantity(0);
     setTypeId("");
+    setVendorTypeId("");
     onOpenChange(false);
   };
 
@@ -180,6 +191,24 @@ export function AddTaskDialog({
               </Select>
             )}
           </div>
+          {vendorTypes.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="vendor-type">Vendor Type (Optional)</Label>
+              <Select value={vendorTypeId} onValueChange={setVendorTypeId}>
+                <SelectTrigger id="vendor-type">
+                  <SelectValue placeholder="Select vendor type" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="none">None</SelectItem>
+                  {vendorTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

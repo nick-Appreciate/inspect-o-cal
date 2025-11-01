@@ -355,12 +355,11 @@ export function StartInspectionDialog({
   };
 
   const setItemAsBad = (itemId: string, roomId?: string) => {
-    // Check if notes exist, if not, mark as pending bad and show warning
+    // Check if notes exist, if not, mark as pending bad
     const currentNote = itemNotes[itemId];
     if (!currentNote || currentNote.trim() === '') {
       // Mark as pending bad - user wants to select bad but hasn't filled notes yet
       setPendingBadItems(prev => new Set(prev).add(itemId));
-      toast.error("Please add notes explaining the issue");
       // Expand notes to prompt user
       setExpandedNotes(prev => new Set(prev).add(itemId));
       // Focus the textarea
@@ -426,7 +425,6 @@ export function StartInspectionDialog({
         next.delete(itemId);
         return next;
       });
-      toast.success("Marked as bad with notes");
     }
 
     // Check for @mentions
@@ -574,8 +572,11 @@ export function StartInspectionDialog({
     const itemsWithoutStatus = allItems.filter(item => !itemStatus[item.id] || itemStatus[item.id] === 'pending');
     
     if (itemsWithoutStatus.length > 0) {
-      toast.error(`Please review all items. ${itemsWithoutStatus.length} item${itemsWithoutStatus.length !== 1 ? 's' : ''} still pending.`);
-      return;
+      // Show warning but allow proceeding
+      const proceed = window.confirm(
+        `${itemsWithoutStatus.length} item${itemsWithoutStatus.length !== 1 ? 's' : ''} still pending. Do you want to complete anyway?`
+      );
+      if (!proceed) return;
     }
 
     const badItems = allItems.filter(item => itemStatus[item.id] === 'bad');
@@ -923,10 +924,32 @@ export function StartInspectionDialog({
                                           } else if (e.key === 'Escape') {
                                             setShowMentionDropdown(null);
                                           }
+                                        } else if (e.key === 'Enter' && !e.shiftKey && itemNotes[item.id]?.trim()) {
+                                          // Close notes on Enter if notes are filled (and not in mention dropdown)
+                                          e.preventDefault();
+                                          setExpandedNotes(prev => {
+                                            const next = new Set(prev);
+                                            next.delete(item.id);
+                                            return next;
+                                          });
                                         }
                                       }}
                                       className="text-sm min-h-[60px]"
                                       onClick={(e) => e.stopPropagation()}
+                                      onBlur={() => {
+                                        // Close notes on blur only if notes are filled and not pending bad
+                                        const note = itemNotes[item.id];
+                                        const isPending = pendingBadItems.has(item.id);
+                                        if (note?.trim() && !isPending) {
+                                          setTimeout(() => {
+                                            setExpandedNotes(prev => {
+                                              const next = new Set(prev);
+                                              next.delete(item.id);
+                                              return next;
+                                            });
+                                          }, 200);
+                                        }
+                                      }}
                                     />
                                     {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
                                       <div 
@@ -1106,10 +1129,32 @@ export function StartInspectionDialog({
                                         } else if (e.key === 'Escape') {
                                           setShowMentionDropdown(null);
                                         }
+                                      } else if (e.key === 'Enter' && !e.shiftKey && itemNotes[item.id]?.trim()) {
+                                        // Close notes on Enter if notes are filled (and not in mention dropdown)
+                                        e.preventDefault();
+                                        setExpandedNotes(prev => {
+                                          const next = new Set(prev);
+                                          next.delete(item.id);
+                                          return next;
+                                        });
                                       }
                                     }}
                                     className="text-sm min-h-[60px]"
                                     onClick={(e) => e.stopPropagation()}
+                                    onBlur={() => {
+                                      // Close notes on blur only if notes are filled and not pending bad
+                                      const note = itemNotes[item.id];
+                                      const isPending = pendingBadItems.has(item.id);
+                                      if (note?.trim() && !isPending) {
+                                        setTimeout(() => {
+                                          setExpandedNotes(prev => {
+                                            const next = new Set(prev);
+                                            next.delete(item.id);
+                                            return next;
+                                          });
+                                        }, 200);
+                                      }
+                                    }}
                                   />
                                   {showMentionDropdown === item.id && filteredMentionUsers.length > 0 && (
                                     <div className="absolute z-50 mt-1 w-full max-h-32 overflow-auto bg-popover border rounded-md shadow-lg">
