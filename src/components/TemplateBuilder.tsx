@@ -49,6 +49,7 @@ interface Item {
   description: string;
   inventory_quantity: number;
   inventory_type_id: string | null;
+  vendor_type_id: string | null;
   order_index: number;
   source_room_template_item_id?: string | null;
 }
@@ -56,6 +57,12 @@ interface Item {
 interface InventoryType {
   id: string;
   name: string;
+}
+
+interface VendorType {
+  id: string;
+  name: string;
+  default_assigned_user_id: string | null;
 }
 
 interface Property {
@@ -91,10 +98,12 @@ export function TemplateBuilder({
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [itemsByRoom, setItemsByRoom] = useState<Record<string, Item[]>>({});
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
   const [selectedRoomTemplate, setSelectedRoomTemplate] = useState("");
   const [newItemDescription, setNewItemDescription] = useState<Record<string, string>>({});
   const [newItemQuantity, setNewItemQuantity] = useState<Record<string, number>>({});
   const [newItemType, setNewItemType] = useState<Record<string, string>>({});
+  const [newItemVendorType, setNewItemVendorType] = useState<Record<string, string>>({});
   const [templateInfo, setTemplateInfo] = useState<TemplateInfo | null>(null);
   const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -106,6 +115,7 @@ export function TemplateBuilder({
     fetchRooms();
     fetchRoomTemplates();
     fetchInventoryTypes();
+    fetchVendorTypes();
     fetchTemplateInfo();
     fetchFloorplans();
     fetchProperties();
@@ -193,6 +203,20 @@ export function TemplateBuilder({
     }
 
     setInventoryTypes(data || []);
+  };
+
+  const fetchVendorTypes = async () => {
+    const { data, error } = await supabase
+      .from("vendor_types")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      toast.error("Failed to load vendor types");
+      return;
+    }
+
+    setVendorTypes(data || []);
   };
 
   const fetchRoomTemplates = async () => {
@@ -427,6 +451,7 @@ export function TemplateBuilder({
 
     const quantity = newItemQuantity[roomId] || 0;
     const typeId = newItemType[roomId];
+    const vendorTypeId = newItemVendorType[roomId];
 
     const { data, error } = await supabase
       .from("template_items")
@@ -435,6 +460,7 @@ export function TemplateBuilder({
         description: description.trim(),
         inventory_quantity: quantity > 0 ? quantity : null,
         inventory_type_id: typeId && typeId !== "" ? typeId : null,
+        vendor_type_id: vendorTypeId && vendorTypeId !== "" ? vendorTypeId : null,
         order_index: (itemsByRoom[roomId] || []).length,
       })
       .select()
@@ -453,6 +479,7 @@ export function TemplateBuilder({
     setNewItemDescription((prev) => ({ ...prev, [roomId]: "" }));
     setNewItemQuantity((prev) => ({ ...prev, [roomId]: 0 }));
     setNewItemType((prev) => ({ ...prev, [roomId]: "" }));
+    setNewItemVendorType((prev) => ({ ...prev, [roomId]: "" }));
     toast.success("Item added");
   };
 
@@ -642,6 +669,12 @@ export function TemplateBuilder({
                             {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
                           </>
                         )}
+                      </p>
+                    )}
+                    {item.vendor_type_id && (
+                      <p className="text-sm text-muted-foreground">
+                        Vendor:{" "}
+                        {vendorTypes.find((t) => t.id === item.vendor_type_id)?.name}
                       </p>
                     )}
                     {item.source_room_template_item_id && (

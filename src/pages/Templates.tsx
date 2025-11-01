@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TemplateBuilder } from "@/components/TemplateBuilder";
 import { InventoryTypesDialog } from "@/components/InventoryTypesDialog";
+import { VendorTypesDialog } from "@/components/VendorTypesDialog";
 import { ManageRoomsDialog } from "@/components/ManageRoomsDialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ export default function Templates() {
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [duplicateFromTemplate, setDuplicateFromTemplate] = useState("");
   const [showInventoryTypes, setShowInventoryTypes] = useState(false);
+  const [showVendorTypes, setShowVendorTypes] = useState(false);
   const [showManageRooms, setShowManageRooms] = useState(false);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
@@ -286,6 +288,13 @@ export default function Templates() {
             <Settings className="mr-2 h-4 w-4" />
             Inventory Types
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowVendorTypes(true)}
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Vendor Types
+          </Button>
           <Button onClick={() => setShowNewTemplate(true)}>
             <Plus className="mr-2 h-4 w-4" />
             New Template
@@ -461,6 +470,11 @@ export default function Templates() {
       <InventoryTypesDialog
         open={showInventoryTypes}
         onOpenChange={setShowInventoryTypes}
+      />
+
+      <VendorTypesDialog
+        open={showVendorTypes}
+        onOpenChange={setShowVendorTypes}
       />
 
       <AlertDialog open={!!deleteTemplateId} onOpenChange={() => setDeleteTemplateId(null)}>

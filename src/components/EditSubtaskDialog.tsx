@@ -33,6 +33,12 @@ interface InventoryType {
   name: string;
 }
 
+interface VendorType {
+  id: string;
+  name: string;
+  default_assigned_user_id: string | null;
+}
+
 interface EditSubtaskDialogProps {
   subtaskId: string;
   open: boolean;
@@ -54,12 +60,15 @@ export default function EditSubtaskDialog({
   const [inventoryQuantity, setInventoryQuantity] = useState<number>(0);
   const [inventoryTypeId, setInventoryTypeId] = useState<string>("");
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+  const [vendorTypeId, setVendorTypeId] = useState<string>("");
+  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
 
   useEffect(() => {
     if (open && subtaskId) {
       fetchSubtask();
       fetchUsers();
       fetchInventoryTypes();
+      fetchVendorTypes();
     }
   }, [open, subtaskId]);
 
@@ -76,6 +85,7 @@ export default function EditSubtaskDialog({
       setOriginalInspectionId(data.original_inspection_id);
       setInventoryQuantity(data.inventory_quantity || 0);
       setInventoryTypeId(data.inventory_type_id || "none");
+      setVendorTypeId(data.vendor_type_id || "none");
     }
   };
 
@@ -101,6 +111,17 @@ export default function EditSubtaskDialog({
     }
   };
 
+  const fetchVendorTypes = async () => {
+    const { data, error } = await supabase
+      .from("vendor_types")
+      .select("*")
+      .order("name");
+
+    if (!error && data) {
+      setVendorTypes(data);
+    }
+  };
+
   const handleSave = async () => {
     if (!description.trim()) {
       toast.error("Please enter a description");
@@ -117,6 +138,7 @@ export default function EditSubtaskDialog({
           assigned_users: selectedUsers.length > 0 ? selectedUsers : null,
           inventory_quantity: inventoryQuantity > 0 ? inventoryQuantity : null,
           inventory_type_id: inventoryTypeId && inventoryTypeId !== "none" ? inventoryTypeId : null,
+          vendor_type_id: vendorTypeId && vendorTypeId !== "none" ? vendorTypeId : null,
         })
         .eq("id", subtaskId);
 
@@ -240,6 +262,23 @@ export default function EditSubtaskDialog({
                 </Select>
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Vendor Needed (Optional)</Label>
+            <Select value={vendorTypeId} onValueChange={setVendorTypeId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select vendor type" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="none">None</SelectItem>
+                {vendorTypes.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

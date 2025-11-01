@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      default_room_tasks: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          inventory_quantity: number
+          inventory_type_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description: string
+          id?: string
+          inventory_quantity?: number
+          inventory_type_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string
+          id?: string
+          inventory_quantity?: number
+          inventory_type_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "default_room_tasks_inventory_type_id_fkey"
+            columns: ["inventory_type_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       floorplans: {
         Row: {
           created_at: string
@@ -236,6 +271,7 @@ export type Database = {
           inventory_type_id: string | null
           order_index: number
           room_template_id: string
+          vendor_type_id: string | null
         }
         Insert: {
           created_at?: string
@@ -245,6 +281,7 @@ export type Database = {
           inventory_type_id?: string | null
           order_index?: number
           room_template_id: string
+          vendor_type_id?: string | null
         }
         Update: {
           created_at?: string
@@ -254,6 +291,7 @@ export type Database = {
           inventory_type_id?: string | null
           order_index?: number
           room_template_id?: string
+          vendor_type_id?: string | null
         }
         Relationships: [
           {
@@ -268,6 +306,13 @@ export type Database = {
             columns: ["room_template_id"]
             isOneToOne: false
             referencedRelation: "room_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_template_items_vendor_type_id_fkey"
+            columns: ["vendor_type_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_types"
             referencedColumns: ["id"]
           },
         ]
@@ -306,6 +351,7 @@ export type Database = {
           inventory_quantity: number | null
           inventory_type_id: string | null
           original_inspection_id: string
+          vendor_type_id: string | null
         }
         Insert: {
           assigned_users?: string[] | null
@@ -319,6 +365,7 @@ export type Database = {
           inventory_quantity?: number | null
           inventory_type_id?: string | null
           original_inspection_id: string
+          vendor_type_id?: string | null
         }
         Update: {
           assigned_users?: string[] | null
@@ -332,6 +379,7 @@ export type Database = {
           inventory_quantity?: number | null
           inventory_type_id?: string | null
           original_inspection_id?: string
+          vendor_type_id?: string | null
         }
         Relationships: [
           {
@@ -355,6 +403,13 @@ export type Database = {
             referencedRelation: "inspections"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "subtasks_vendor_type_id_fkey"
+            columns: ["vendor_type_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_types"
+            referencedColumns: ["id"]
+          },
         ]
       }
       template_items: {
@@ -367,6 +422,7 @@ export type Database = {
           order_index: number
           room_id: string
           source_room_template_item_id: string | null
+          vendor_type_id: string | null
         }
         Insert: {
           created_at?: string
@@ -377,6 +433,7 @@ export type Database = {
           order_index?: number
           room_id: string
           source_room_template_item_id?: string | null
+          vendor_type_id?: string | null
         }
         Update: {
           created_at?: string
@@ -387,6 +444,7 @@ export type Database = {
           order_index?: number
           room_id?: string
           source_room_template_item_id?: string | null
+          vendor_type_id?: string | null
         }
         Relationships: [
           {
@@ -408,6 +466,13 @@ export type Database = {
             columns: ["source_room_template_item_id"]
             isOneToOne: false
             referencedRelation: "room_template_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_items_vendor_type_id_fkey"
+            columns: ["vendor_type_id"]
+            isOneToOne: false
+            referencedRelation: "vendor_types"
             referencedColumns: ["id"]
           },
         ]
@@ -531,6 +596,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vendor_types: {
+        Row: {
+          created_at: string
+          created_by: string
+          default_assigned_user_id: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          default_assigned_user_id?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          default_assigned_user_id?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
     }
     Views: {
