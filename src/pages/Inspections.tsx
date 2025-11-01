@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
+import { DeleteInspectionDialog } from "@/components/DeleteInspectionDialog";
 import {
   Table,
   TableBody,
@@ -14,16 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -55,6 +46,9 @@ const Inspections = () => {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [inspectionToDelete, setInspectionToDelete] = useState<Inspection | null>(null);
+  const [connectedInspectionsToDelete, setConnectedInspectionsToDelete] = useState<Inspection[]>([]);
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -104,30 +98,23 @@ const Inspections = () => {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
+  const handleDeleteClick = (id: string) => {
+    const deletingInspection = inspections.find(i => i.id === id);
+    if (!deletingInspection) return;
 
     // Find connected inspections (children and parent)
-    const deletingInspection = inspections.find(i => i.id === deleteId);
     const connectedInspections = inspections.filter(i => 
-      (i.parent_inspection_id === deleteId) || // Children
-      (deletingInspection?.parent_inspection_id && i.id === deletingInspection.parent_inspection_id) || // Parent
-      (deletingInspection?.parent_inspection_id && i.parent_inspection_id === deletingInspection.parent_inspection_id && i.id !== deleteId) // Siblings
+      (i.parent_inspection_id === id) || // Children
+      (deletingInspection.parent_inspection_id && i.id === deletingInspection.parent_inspection_id) || // Parent
+      (deletingInspection.parent_inspection_id && i.parent_inspection_id === deletingInspection.parent_inspection_id && i.id !== id) // Siblings
     );
 
-    let inspectionIdsToDelete = [deleteId];
+    setInspectionToDelete(deletingInspection);
+    setConnectedInspectionsToDelete(connectedInspections);
+    setDeleteDialogOpen(true);
+  };
 
-    // If there are connected inspections, ask the user
-    if (connectedInspections.length > 0) {
-      const shouldDeleteAll = window.confirm(
-        `This inspection has ${connectedInspections.length} connected inspection(s). Would you like to delete all of them?`
-      );
-      
-      if (shouldDeleteAll) {
-        inspectionIdsToDelete = [deleteId, ...connectedInspections.map(i => i.id)];
-      }
-    }
-
+  const handleDeleteConfirm = async (inspectionIdsToDelete: string[]) => {
     try {
       const { data, error } = await supabase
         .from("inspections")
@@ -144,7 +131,6 @@ const Inspections = () => {
       if (!data || data.length === 0) {
         console.error("No inspection deleted - possibly due to permissions");
         toast.error("Cannot delete this inspection. You may not have permission.");
-        setDeleteId(null);
         return;
       }
 
@@ -154,7 +140,6 @@ const Inspections = () => {
           : "Inspection deleted successfully"
       );
       setInspections(inspections.filter((i) => !inspectionIdsToDelete.includes(i.id)));
-      setDeleteId(null);
       fetchInspections(); // Refresh the list
     } catch (err) {
       console.error("Error deleting inspection:", err);
@@ -568,7 +553,7 @@ const Inspections = () => {
                                     size="icon"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setDeleteId(inspection.id);
+                                      handleDeleteClick(inspection.id);
                                     }}
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -594,22 +579,13 @@ const Inspections = () => {
         onOpenChange={setDetailsDialogOpen}
       />
 
-      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Inspection</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this inspection? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteInspectionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        mainInspection={inspectionToDelete}
+        connectedInspections={connectedInspectionsToDelete}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 };
