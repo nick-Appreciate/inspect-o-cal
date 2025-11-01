@@ -44,6 +44,13 @@ interface InventoryType {
   name: string;
 }
 
+interface DefaultTask {
+  id: string;
+  description: string;
+  inventory_type_id: string | null;
+  inventory_quantity: number;
+}
+
 interface ManageRoomsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -63,15 +70,17 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
   const [selectedDuplicateRoomId, setSelectedDuplicateRoomId] = useState<string>("");
-  const [bulkTaskDescription, setBulkTaskDescription] = useState("");
-  const [bulkTaskInventoryType, setBulkTaskInventoryType] = useState<string>("");
-  const [bulkTaskQuantity, setBulkTaskQuantity] = useState<string>("");
-  const [selectedBulkRoomIds, setSelectedBulkRoomIds] = useState<Set<string>>(new Set());
+  const [defaultTasks, setDefaultTasks] = useState<DefaultTask[]>([]);
+  const [defaultTaskDescription, setDefaultTaskDescription] = useState("");
+  const [defaultTaskInventoryType, setDefaultTaskInventoryType] = useState<string>("");
+  const [defaultTaskQuantity, setDefaultTaskQuantity] = useState<string>("");
+  const [deleteDefaultTaskId, setDeleteDefaultTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       fetchRooms();
       fetchInventoryTypes();
+      fetchDefaultTasks();
     }
   }, [open]);
 
@@ -93,6 +102,20 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     }
 
     setRooms(data as any || []);
+  };
+
+  const fetchDefaultTasks = async () => {
+    const { data, error } = await supabase
+      .from("default_room_tasks" as any)
+      .select("*")
+      .order("created_at");
+
+    if (error) {
+      toast.error("Failed to load default tasks");
+      return;
+    }
+
+    setDefaultTasks(data as any || []);
   };
 
   const addRoom = async () => {
@@ -118,7 +141,22 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
       return;
     }
 
-    // If duplicating from another room, copy its items
+    const itemsToInsert: any[] = [];
+
+    // Add default tasks to the new room
+    if (defaultTasks.length > 0) {
+      defaultTasks.forEach((task, index) => {
+        itemsToInsert.push({
+          room_template_id: (newRoom as any).id,
+          description: task.description,
+          order_index: index,
+          inventory_type_id: task.inventory_type_id,
+          inventory_quantity: task.inventory_quantity,
+        });
+      });
+    }
+
+    // If duplicating from another room, add its items after default tasks
     if (selectedDuplicateRoomId) {
       const { data: items, error: itemsError } = await supabase
         .from("room_template_items" as any)
@@ -127,19 +165,22 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         .order("order_index");
 
       if (!itemsError && items && items.length > 0) {
-        const itemsToInsert = items.map((item: any) => ({
-          room_template_id: (newRoom as any).id,
-          description: item.description,
-          order_index: item.order_index,
-          inventory_type_id: item.inventory_type_id,
-          inventory_quantity: item.inventory_quantity,
-        }));
-
-        await supabase.from("room_template_items" as any).insert(itemsToInsert);
-        toast.success(`Room template created with ${items.length} tasks`);
-      } else {
-        toast.success("Room template created");
+        items.forEach((item: any, index: number) => {
+          itemsToInsert.push({
+            room_template_id: (newRoom as any).id,
+            description: item.description,
+            order_index: defaultTasks.length + index,
+            inventory_type_id: item.inventory_type_id,
+            inventory_quantity: item.inventory_quantity,
+          });
+        });
       }
+    }
+
+    // Insert all items
+    if (itemsToInsert.length > 0) {
+      await supabase.from("room_template_items" as any).insert(itemsToInsert);
+      toast.success(`Room template created with ${itemsToInsert.length} task${itemsToInsert.length > 1 ? 's' : ''}`);
     } else {
       toast.success("Room template created");
     }
@@ -290,65 +331,86 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     toast.success("Inventory type created");
   };
 
-  const bulkAddTask = async () => {
-    if (!bulkTaskDescription.trim()) {
+  const addDefaultTask = async () => {
+    if (!defaultTaskDescription.trim()) {
       toast.error("Please enter a task description");
       return;
     }
 
-    if (selectedBulkRoomIds.size === 0) {
-      toast.error("Please select at least one room template");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Insert into default_room_tasks
+    const { data: newDefaultTask, error: defaultError } = await supabase
+      .from("default_room_tasks" as any)
+      .insert({
+        description: defaultTaskDescription.trim(),
+        inventory_type_id: defaultTaskInventoryType || null,
+        inventory_quantity: parseInt(defaultTaskQuantity) || 0,
+        created_by: user.id,
+      })
+      .select()
+      .single();
+
+    if (defaultError || !newDefaultTask) {
+      toast.error("Failed to add default task");
       return;
     }
 
-    const roomIdsArray = Array.from(selectedBulkRoomIds);
-    
-    // Prepare items to insert
-    const itemsToInsert = [];
-    for (const roomId of roomIdsArray) {
-      const items = roomItems[roomId] || [];
-      const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order_index)) : -1;
-      
-      itemsToInsert.push({
-        room_template_id: roomId,
-        description: bulkTaskDescription.trim(),
-        order_index: maxOrder + 1,
-        inventory_type_id: bulkTaskInventoryType || null,
-        inventory_quantity: parseInt(bulkTaskQuantity) || 0,
-      });
-    }
+    // Add this task to all existing room templates
+    if (rooms.length > 0) {
+      const itemsToInsert = [];
+      for (const room of rooms) {
+        const items = roomItems[room.id] || [];
+        const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order_index)) : -1;
+        
+        itemsToInsert.push({
+          room_template_id: room.id,
+          description: defaultTaskDescription.trim(),
+          order_index: maxOrder + 1,
+          inventory_type_id: defaultTaskInventoryType || null,
+          inventory_quantity: parseInt(defaultTaskQuantity) || 0,
+        });
+      }
 
-    const { error } = await supabase
-      .from("room_template_items" as any)
-      .insert(itemsToInsert);
+      const { error: insertError } = await supabase
+        .from("room_template_items" as any)
+        .insert(itemsToInsert);
 
-    if (error) {
-      toast.error("Failed to add tasks");
-      return;
+      if (insertError) {
+        toast.error("Default task created but failed to add to existing rooms");
+      } else {
+        // Refresh items for all rooms
+        rooms.forEach(room => fetchRoomItems(room.id));
+        toast.success(`Default task added to all ${rooms.length} room template${rooms.length > 1 ? 's' : ''}`);
+      }
+    } else {
+      toast.success("Default task created (will be added to future rooms)");
     }
 
     // Clear form and refresh
-    setBulkTaskDescription("");
-    setBulkTaskInventoryType("");
-    setBulkTaskQuantity("");
-    setSelectedBulkRoomIds(new Set());
-    
-    // Refresh items for all affected rooms
-    roomIdsArray.forEach(roomId => fetchRoomItems(roomId));
-    
-    toast.success(`Task added to ${roomIdsArray.length} room template${roomIdsArray.length > 1 ? 's' : ''}`);
+    setDefaultTaskDescription("");
+    setDefaultTaskInventoryType("");
+    setDefaultTaskQuantity("");
+    fetchDefaultTasks();
   };
 
-  const toggleBulkRoomSelection = (roomId: string) => {
-    setSelectedBulkRoomIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(roomId)) {
-        newSet.delete(roomId);
-      } else {
-        newSet.add(roomId);
-      }
-      return newSet;
-    });
+  const deleteDefaultTask = async () => {
+    if (!deleteDefaultTaskId) return;
+
+    const { error } = await supabase
+      .from("default_room_tasks" as any)
+      .delete()
+      .eq("id", deleteDefaultTaskId);
+
+    if (error) {
+      toast.error("Failed to delete default task");
+      return;
+    }
+
+    setDefaultTasks(defaultTasks.filter(t => t.id !== deleteDefaultTaskId));
+    setDeleteDefaultTaskId(null);
+    toast.success("Default task deleted (existing tasks in rooms remain)");
   };
 
   return (
@@ -410,15 +472,19 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Bulk Add Task to Multiple Rooms</CardTitle>
+                <CardTitle className="text-base">Default Tasks</CardTitle>
+                <DialogDescription>
+                  Default tasks are automatically added to all new room templates. Add them to existing rooms too.
+                </DialogDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
                   <Label>Task Description</Label>
                   <Input
                     placeholder="e.g., Check smoke detector"
-                    value={bulkTaskDescription}
-                    onChange={(e) => setBulkTaskDescription(e.target.value)}
+                    value={defaultTaskDescription}
+                    onChange={(e) => setDefaultTaskDescription(e.target.value)}
+                    maxLength={500}
                   />
                 </div>
 
@@ -427,8 +493,8 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                     <Label className="text-xs">Inventory Type (Optional)</Label>
                     <select
                       className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                      value={bulkTaskInventoryType}
-                      onChange={(e) => setBulkTaskInventoryType(e.target.value)}
+                      value={defaultTaskInventoryType}
+                      onChange={(e) => setDefaultTaskInventoryType(e.target.value)}
                     >
                       <option value="">None</option>
                       {inventoryTypes.map((type) => (
@@ -443,51 +509,51 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                     <Input
                       type="number"
                       min="0"
+                      max="99999"
                       placeholder="0"
-                      value={bulkTaskQuantity}
-                      onChange={(e) => setBulkTaskQuantity(e.target.value)}
-                      disabled={!bulkTaskInventoryType}
+                      value={defaultTaskQuantity}
+                      onChange={(e) => setDefaultTaskQuantity(e.target.value)}
+                      disabled={!defaultTaskInventoryType}
                     />
                   </div>
                 </div>
 
-                <div>
-                  <Label>Select Room Templates</Label>
-                  {rooms.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-2">
-                      Create room templates first before bulk adding tasks
-                    </p>
-                  ) : (
-                    <div className="border rounded-md p-3 max-h-40 overflow-y-auto space-y-2">
-                      {rooms.map((room) => (
-                        <div key={room.id} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id={`bulk-${room.id}`}
-                            checked={selectedBulkRoomIds.has(room.id)}
-                            onChange={() => toggleBulkRoomSelection(room.id)}
-                            className="rounded border-input"
-                          />
-                          <label
-                            htmlFor={`bulk-${room.id}`}
-                            className="text-sm cursor-pointer flex-1"
-                          >
-                            {room.name} ({roomItems[room.id]?.length || 0} tasks)
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Button 
-                  onClick={bulkAddTask} 
-                  className="w-full"
-                  disabled={rooms.length === 0}
-                >
+                <Button onClick={addDefaultTask} className="w-full">
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Task to {selectedBulkRoomIds.size} Selected Room{selectedBulkRoomIds.size !== 1 ? 's' : ''}
+                  Add Default Task
                 </Button>
+
+                {defaultTasks.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <Label className="text-xs">Current Default Tasks</Label>
+                    {defaultTasks.map((task) => {
+                      const invType = inventoryTypes.find(t => t.id === task.inventory_type_id);
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex items-center justify-between p-2 bg-background rounded border text-sm"
+                        >
+                          <div className="flex-1">
+                            <div>{task.description}</div>
+                            {invType && (
+                              <div className="text-xs text-muted-foreground">
+                                {invType.name} × {task.inventory_quantity}
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setDeleteDefaultTaskId(task.id)}
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -671,6 +737,26 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteDefaultTaskId} onOpenChange={() => setDeleteDefaultTaskId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Default Task</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this default task? This will not affect tasks already added to room templates.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteDefaultTask}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deleteRoomId} onOpenChange={() => setDeleteRoomId(null)}>
         <AlertDialogContent>
