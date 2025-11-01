@@ -93,6 +93,11 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [newVendorName, setNewVendorName] = useState("");
   const [showAddVendorType, setShowAddVendorType] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTaskDescription, setEditTaskDescription] = useState("");
+  const [editTaskInventoryType, setEditTaskInventoryType] = useState<string>("");
+  const [editTaskQuantity, setEditTaskQuantity] = useState<string>("");
+  const [editTaskVendorType, setEditTaskVendorType] = useState<string>("");
 
   useEffect(() => {
     if (open) {
@@ -580,6 +585,48 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setShowAddVendorType(false);
     fetchVendorTypes();
     toast.success("Vendor type created");
+  };
+
+  const startEditingTask = (item: RoomTemplateItem) => {
+    setEditingTaskId(item.id);
+    setEditTaskDescription(item.description);
+    setEditTaskInventoryType(item.inventory_type_id || "");
+    setEditTaskQuantity(item.inventory_quantity.toString());
+    setEditTaskVendorType(item.vendor_type_id || "");
+  };
+
+  const cancelEditingTask = () => {
+    setEditingTaskId(null);
+    setEditTaskDescription("");
+    setEditTaskInventoryType("");
+    setEditTaskQuantity("");
+    setEditTaskVendorType("");
+  };
+
+  const saveTaskEdit = async (roomId: string) => {
+    if (!editingTaskId || !editTaskDescription.trim()) {
+      toast.error("Please enter a task description");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("room_template_items" as any)
+      .update({
+        description: editTaskDescription.trim(),
+        inventory_type_id: editTaskInventoryType || null,
+        inventory_quantity: parseInt(editTaskQuantity) || 0,
+        vendor_type_id: editTaskVendorType || null,
+      })
+      .eq("id", editingTaskId);
+
+    if (error) {
+      toast.error("Failed to update task");
+      return;
+    }
+
+    cancelEditingTask();
+    fetchRoomItems(roomId);
+    toast.success("Task updated");
   };
 
   return (
@@ -1131,29 +1178,124 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                   return (
                                     <div
                                       key={item.id}
-                                      className="flex items-center justify-between p-2 bg-background rounded border text-sm"
+                                      className="p-2 bg-background rounded border text-sm space-y-2"
                                     >
-                                      <div className="flex-1">
-                                        <span>{item.description}</span>
-                                        {invType && (
-                                          <div className="text-xs text-muted-foreground">
-                                            {invType.name} × {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
+                                      {editingTaskId === item.id ? (
+                                        <div className="space-y-2">
+                                          <div>
+                                            <Input
+                                              placeholder="Task description"
+                                              value={editTaskDescription}
+                                              onChange={(e) => setEditTaskDescription(e.target.value)}
+                                              className="h-8"
+                                            />
                                           </div>
-                                        )}
-                                        {item.vendor_type_id && (
-                                          <div className="text-xs text-muted-foreground">
-                                            Vendor: {vendorTypes.find(t => t.id === item.vendor_type_id)?.name}
+                                          <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                              <select
+                                                className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                                value={editTaskInventoryType}
+                                                onChange={(e) => setEditTaskInventoryType(e.target.value)}
+                                              >
+                                                <option value="">No Inventory</option>
+                                                {inventoryTypes.map((type) => (
+                                                  <option key={type.id} value={type.id}>
+                                                    {type.name}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                            <div>
+                                              <select
+                                                className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                                value={editTaskQuantity}
+                                                onChange={(e) => setEditTaskQuantity(e.target.value)}
+                                                disabled={!editTaskInventoryType}
+                                              >
+                                                <option value="0">0</option>
+                                                <option value="-1">User Selected</option>
+                                                <option value="1">1</option>
+                                                <option value="2">2</option>
+                                                <option value="3">3</option>
+                                                <option value="4">4</option>
+                                                <option value="5">5</option>
+                                                <option value="6">6</option>
+                                                <option value="7">7</option>
+                                                <option value="8">8</option>
+                                                <option value="9">9</option>
+                                                <option value="10">10</option>
+                                              </select>
+                                            </div>
                                           </div>
-                                        )}
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        onClick={() => setDeleteItemId(item.id)}
-                                      >
-                                        <Trash2 className="h-3 w-3 text-destructive" />
-                                      </Button>
+                                          <div>
+                                            <select
+                                              className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                              value={editTaskVendorType}
+                                              onChange={(e) => setEditTaskVendorType(e.target.value)}
+                                            >
+                                              <option value="">No Vendor</option>
+                                              {vendorTypes.map((type) => (
+                                                <option key={type.id} value={type.id}>
+                                                  {type.name}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              size="sm"
+                                              onClick={() => saveTaskEdit(room.id)}
+                                              className="flex-1 h-7"
+                                            >
+                                              <Check className="h-3 w-3 mr-1" />
+                                              Save
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={cancelEditingTask}
+                                              className="flex-1 h-7"
+                                            >
+                                              <X className="h-3 w-3 mr-1" />
+                                              Cancel
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex-1">
+                                            <span>{item.description}</span>
+                                            {invType && (
+                                              <div className="text-xs text-muted-foreground">
+                                                {invType.name} × {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
+                                              </div>
+                                            )}
+                                            {item.vendor_type_id && (
+                                              <div className="text-xs text-muted-foreground">
+                                                Vendor: {vendorTypes.find(t => t.id === item.vendor_type_id)?.name}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex gap-1">
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7"
+                                              onClick={() => startEditingTask(item)}
+                                            >
+                                              <Edit2 className="h-3 w-3" />
+                                            </Button>
+                                            <Button
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-7 w-7"
+                                              onClick={() => setDeleteItemId(item.id)}
+                                            >
+                                              <Trash2 className="h-3 w-3 text-destructive" />
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
