@@ -47,6 +47,7 @@ interface Property {
   id: string;
   name: string;
   address: string;
+  units?: { floorplan_id: string | null }[];
 }
 
 export default function Templates() {
@@ -125,7 +126,10 @@ export default function Templates() {
   const fetchProperties = async () => {
     const { data, error } = await supabase
       .from("properties")
-      .select("*")
+      .select(`
+        *,
+        units(floorplan_id)
+      `)
       .order("name");
 
     if (!error && data) {
@@ -136,6 +140,12 @@ export default function Templates() {
   const createTemplate = async () => {
     if (!newTemplateName.trim()) {
       toast.error("Please enter a template name");
+      return;
+    }
+
+    // Require floorplan
+    if (!newFloorplanId && !newFloorplanName.trim()) {
+      toast.error("Please select or create a floorplan");
       return;
     }
 
@@ -333,7 +343,7 @@ export default function Templates() {
               />
             </div>
             <div>
-              <Label>Floorplan (Optional)</Label>
+              <Label>Floorplan</Label>
               <Select 
                 value={newFloorplanId} 
                 onValueChange={(value) => {
@@ -367,10 +377,26 @@ export default function Templates() {
             <div>
               <Label>Associate with Properties (Optional)</Label>
               <div className="border rounded-md p-4 max-h-48 overflow-y-auto space-y-2">
-                {properties.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No properties available</p>
-                ) : (
-                  properties.map((property) => (
+                {(() => {
+                  const currentFloorplanId = newFloorplanId;
+                  const filteredProperties = currentFloorplanId 
+                    ? properties.filter(property => {
+                        // Check if property has any units with this floorplan
+                        return property.units?.some(unit => unit.floorplan_id === currentFloorplanId);
+                      })
+                    : properties;
+                  
+                  if (filteredProperties.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        {currentFloorplanId 
+                          ? "No properties with this floorplan" 
+                          : "No properties available"}
+                      </p>
+                    );
+                  }
+                  
+                  return filteredProperties.map((property) => (
                     <div key={property.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={property.id}
@@ -390,8 +416,8 @@ export default function Templates() {
                         {property.name} - {property.address}
                       </label>
                     </div>
-                  ))
-                )}
+                  ));
+                })()}
               </div>
             </div>
             <div>
