@@ -582,6 +582,21 @@ export function StartInspectionDialog({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Create inspection run
+      const { data: inspectionRun, error: runError } = await supabase
+        .from("inspection_runs")
+        .insert({
+          inspection_id: inspectionId,
+          template_id: selectedTemplate,
+          started_by: user.id,
+          completed_at: new Date().toISOString(),
+          completed_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (runError) throw runError;
+
       // Create subtasks for all BAD items (from template and custom)
       const subtasks: any[] = [];
       
@@ -600,6 +615,7 @@ export function StartInspectionDialog({
             
             subtasks.push({
               inspection_id: inspectionId,
+              inspection_run_id: inspectionRun.id,
               original_inspection_id: inspectionId,
               description: description,
               inventory_quantity: item.inventory_quantity > 0 ? item.inventory_quantity : null,
@@ -626,6 +642,7 @@ export function StartInspectionDialog({
           
           subtasks.push({
             inspection_id: inspectionId,
+            inspection_run_id: inspectionRun.id,
             original_inspection_id: inspectionId,
             description: description,
             inventory_quantity: item.inventory_quantity > 0 ? item.inventory_quantity : null,
@@ -651,6 +668,7 @@ export function StartInspectionDialog({
         .from("inspections")
         .update({
           completed: true,
+          completed_by: user.id,
           inspection_template_id: selectedTemplate
         })
         .eq("id", inspectionId);

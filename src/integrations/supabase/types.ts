@@ -119,6 +119,54 @@ export type Database = {
         }
         Relationships: []
       }
+      inspection_runs: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          inspection_id: string
+          started_at: string
+          started_by: string
+          template_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          inspection_id: string
+          started_at?: string
+          started_by: string
+          template_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          inspection_id?: string
+          started_at?: string
+          started_by?: string
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_runs_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspection_templates: {
         Row: {
           created_at: string
@@ -412,6 +460,7 @@ export type Database = {
           description: string
           id: string
           inspection_id: string
+          inspection_run_id: string | null
           inventory_quantity: number | null
           inventory_type_id: string | null
           original_inspection_id: string
@@ -430,6 +479,7 @@ export type Database = {
           description: string
           id?: string
           inspection_id: string
+          inspection_run_id?: string | null
           inventory_quantity?: number | null
           inventory_type_id?: string | null
           original_inspection_id: string
@@ -448,6 +498,7 @@ export type Database = {
           description?: string
           id?: string
           inspection_id?: string
+          inspection_run_id?: string | null
           inventory_quantity?: number | null
           inventory_type_id?: string | null
           original_inspection_id?: string
@@ -461,6 +512,13 @@ export type Database = {
             columns: ["inspection_id"]
             isOneToOne: false
             referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtasks_inspection_run_id_fkey"
+            columns: ["inspection_run_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_runs"
             referencedColumns: ["id"]
           },
           {
