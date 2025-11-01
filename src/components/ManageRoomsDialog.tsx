@@ -58,7 +58,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemInventoryType, setNewItemInventoryType] = useState<string>("");
-  const [newItemQuantity, setNewItemQuantity] = useState<number>(0);
+  const [newItemQuantity, setNewItemQuantity] = useState<string>("");
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
   const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
@@ -179,7 +179,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
         description: newItemDescription.trim(),
         order_index: maxOrder + 1,
         inventory_type_id: newItemInventoryType || null,
-        inventory_quantity: newItemQuantity || 0,
+        inventory_quantity: parseInt(newItemQuantity) || 0,
       });
 
     if (error) {
@@ -189,7 +189,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
 
     setNewItemDescription("");
     setNewItemInventoryType("");
-    setNewItemQuantity(0);
+    setNewItemQuantity("");
     fetchRoomItems(roomId);
     toast.success("Task added");
   };
@@ -422,8 +422,9 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                   <Input
                                     type="number"
                                     min="0"
+                                    placeholder="0"
                                     value={newItemQuantity}
-                                    onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 0)}
+                                    onChange={(e) => setNewItemQuantity(e.target.value)}
                                     disabled={!newItemInventoryType}
                                   />
                                 </div>
