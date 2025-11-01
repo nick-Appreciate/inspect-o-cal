@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Trash2, ArrowLeft, Search, ArrowUpDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -106,14 +107,22 @@ const Inspections = () => {
     if (!deleteId) return;
 
     try {
-      const { error } = await supabase
+      const { data, error, count } = await supabase
         .from("inspections")
         .delete()
-        .eq("id", deleteId);
+        .eq("id", deleteId)
+        .select();
 
       if (error) {
         console.error("Delete error:", error);
         toast.error("Failed to delete inspection");
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        console.error("No inspection deleted - possibly due to permissions");
+        toast.error("Cannot delete this inspection. You may not have permission.");
+        setDeleteId(null);
         return;
       }
 
@@ -422,8 +431,8 @@ const Inspections = () => {
                   </TableHeader>
                   <TableBody>
                     {Object.entries(groupedByProperty).map(([propertyId, { property, chains }]) => (
-                      <>
-                        <TableRow key={`${propertyId}-separator`} className="bg-muted/30 hover:bg-muted/30">
+                      <React.Fragment key={propertyId}>
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
                           <TableCell colSpan={7} className="font-semibold">
                             <div>
                               <div className="text-base">{property.name}</div>
@@ -494,7 +503,7 @@ const Inspections = () => {
                             );
                           })
                         )}
-                      </>
+                      </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
