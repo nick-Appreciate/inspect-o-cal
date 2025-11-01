@@ -13,6 +13,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Room {
   id: string;
@@ -393,6 +410,242 @@ export function TemplateBuilder({
     toast.success("Item deleted");
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = rooms.findIndex((room) => room.id === active.id);
+    const newIndex = rooms.findIndex((room) => room.id === over.id);
+
+    const newRooms = arrayMove(rooms, oldIndex, newIndex);
+    setRooms(newRooms);
+
+    // Update order_index for all rooms
+    const updates = newRooms.map((room, index) => ({
+      id: room.id,
+      order_index: index,
+    }));
+
+    for (const update of updates) {
+      await supabase
+        .from("template_rooms")
+        .update({ order_index: update.order_index })
+        .eq("id", update.id);
+    }
+
+    toast.success("Room order updated");
+  };
+
+  interface SortableRoomItemProps {
+    room: Room;
+    items: Item[];
+    inventoryTypes: InventoryType[];
+    newItemDescription: string;
+    newItemQuantity: number;
+    newItemType: string;
+    onDescriptionChange: (value: string) => void;
+    onQuantityChange: (value: number) => void;
+    onTypeChange: (value: string) => void;
+    onAddItem: () => void;
+    onDeleteRoom: () => void;
+    onDeleteItem: (itemId: string) => void;
+  }
+
+  function SortableRoomItem({
+    room,
+    items,
+    inventoryTypes,
+    newItemDescription,
+    newItemQuantity,
+    newItemType,
+    onDescriptionChange,
+    onQuantityChange,
+    onTypeChange,
+    onAddItem,
+    onDeleteRoom,
+    onDeleteItem,
+  }: SortableRoomItemProps) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: room.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div ref={setNodeRef} style={style} className="space-y-4">
+        {/* Room Header */}
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+          <div className="flex items-center gap-2">
+            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+              <GripVertical className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold">{room.name}</h3>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onDeleteRoom}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Add Item Form for this Room */}
+        <div className="ml-6 space-y-3 border rounded-md p-4 bg-background">
+          <div>
+            <Label>Task</Label>
+            <Input
+              placeholder="Task..."
+              value={newItemDescription}
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              maxLength={500}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Quantity</Label>
+              <Input
+                type="number"
+                min="0"
+                max="99999"
+                value={newItemQuantity}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  onQuantityChange(isNaN(val) || val < 0 ? 0 : Math.min(val, 99999));
+                }}
+              />
+            </div>
+            <div>
+              <Label>Inventory Type</Label>
+              <Select
+                value={newItemType}
+                onValueChange={onTypeChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {inventoryTypes.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.name}
+                    </SelectItem>
+                  ))}
+                  <div className="p-2 border-t">
+                    <Input
+                      placeholder="Create new type..."
+                      maxLength={100}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter") {
+                          const input = e.currentTarget;
+                          const newTypeName = input.value.trim();
+                          if (!newTypeName) return;
+                          
+                          if (newTypeName.length > 100) {
+                            toast.error("Inventory type name must be less than 100 characters");
+                            return;
+                          }
+
+                          const { data: user } = await supabase.auth.getUser();
+                          if (!user.user) {
+                            toast.error("Please sign in to create inventory types");
+                            return;
+                          }
+
+                          const { data, error } = await supabase
+                            .from("inventory_types")
+                            .insert({
+                              name: newTypeName,
+                              created_by: user.user.id,
+                            })
+                            .select()
+                            .single();
+
+                          if (error) {
+                            console.error("Failed to create inventory type:", error);
+                            toast.error(error.message || "Failed to create inventory type");
+                            return;
+                          }
+
+                          input.value = "";
+                          toast.success("Inventory type created");
+                          // Note: Parent component needs to refresh inventory types
+                        }
+                      }}
+                    />
+                  </div>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <Button onClick={onAddItem} className="w-full">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Item to {room.name}
+          </Button>
+        </div>
+
+        {/* Items List for this Room */}
+        <div className="ml-6 space-y-2">
+          {items.length > 0 ? (
+            items.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-start justify-between p-3 border rounded-md bg-background"
+              >
+                <div className="flex-1">
+                  <p className="font-medium">{item.description}</p>
+                  {item.inventory_quantity > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Quantity: {item.inventory_quantity}
+                      {item.inventory_type_id && (
+                        <>
+                          {" "}
+                          • Type:{" "}
+                          {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDeleteItem(item.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No items yet. Add items using the form above.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card className="flex flex-col max-h-[85vh]">
       <CardHeader className="flex-shrink-0">
@@ -498,174 +751,48 @@ export function TemplateBuilder({
         </div>
 
         {/* Rooms with Items */}
-        <div className="space-y-6">
-          {rooms.map((room) => (
-            <div key={room.id} className="space-y-4">
-              {/* Room Header */}
-              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                <div className="flex items-center gap-2">
-                  <GripVertical className="h-5 w-5 text-muted-foreground" />
-                  <h3 className="text-lg font-semibold">{room.name}</h3>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => deleteRoom(room.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {/* Add Item Form for this Room */}
-              <div className="ml-6 space-y-3 border rounded-md p-4 bg-background">
-                <div>
-                  <Label>Task</Label>
-                  <Input
-                    placeholder="Task..."
-                    value={newItemDescription[room.id] || ""}
-                    onChange={(e) =>
-                      setNewItemDescription((prev) => ({ ...prev, [room.id]: e.target.value }))
-                    }
-                    maxLength={500}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label>Quantity</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="99999"
-                      value={newItemQuantity[room.id] || 0}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        setNewItemQuantity((prev) => ({
-                          ...prev,
-                          [room.id]: isNaN(val) || val < 0 ? 0 : Math.min(val, 99999),
-                        }));
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <Label>Inventory Type</Label>
-                    <Select
-                      value={newItemType[room.id] || ""}
-                      onValueChange={(value) =>
-                        setNewItemType((prev) => ({ ...prev, [room.id]: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {inventoryTypes.map((type) => (
-                          <SelectItem key={type.id} value={type.id}>
-                            {type.name}
-                          </SelectItem>
-                        ))}
-                        <div className="p-2 border-t">
-                          <Input
-                            placeholder="Create new type..."
-                            maxLength={100}
-                            onKeyDown={async (e) => {
-                              if (e.key === "Enter") {
-                                const input = e.currentTarget;
-                                const newTypeName = input.value.trim();
-                                if (!newTypeName) return;
-                                
-                                if (newTypeName.length > 100) {
-                                  toast.error("Inventory type name must be less than 100 characters");
-                                  return;
-                                }
-
-                                const { data: user } = await supabase.auth.getUser();
-                                if (!user.user) {
-                                  toast.error("Please sign in to create inventory types");
-                                  return;
-                                }
-
-                                const { data, error } = await supabase
-                                  .from("inventory_types")
-                                  .insert({
-                                    name: newTypeName,
-                                    created_by: user.user.id,
-                                  })
-                                  .select()
-                                  .single();
-
-                                if (error) {
-                                  console.error("Failed to create inventory type:", error);
-                                  toast.error(error.message || "Failed to create inventory type");
-                                  return;
-                                }
-
-                                setInventoryTypes((prev) => [...prev, data]);
-                                setNewItemType((prev) => ({ ...prev, [room.id]: data.id }));
-                                input.value = "";
-                                toast.success("Inventory type created");
-                              }
-                            }}
-                          />
-                        </div>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <Button onClick={() => addItem(room.id)} className="w-full">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Item to {room.name}
-                </Button>
-              </div>
-
-              {/* Items List for this Room */}
-              <div className="ml-6 space-y-2">
-                {(itemsByRoom[room.id] || []).length > 0 ? (
-                  (itemsByRoom[room.id] || []).map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-start justify-between p-3 border rounded-md bg-background"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium">{item.description}</p>
-                        {item.inventory_quantity > 0 && (
-                          <p className="text-sm text-muted-foreground">
-                            Quantity: {item.inventory_quantity}
-                            {item.inventory_type_id && (
-                              <>
-                                {" "}
-                                • Type:{" "}
-                                {inventoryTypes.find((t) => t.id === item.inventory_type_id)?.name}
-                              </>
-                            )}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteItem(item.id, room.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No items yet. Add items using the form above.
-                  </p>
-                )}
-              </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={rooms.map((r) => r.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-6">
+              {rooms.map((room) => (
+                <SortableRoomItem
+                  key={room.id}
+                  room={room}
+                  items={itemsByRoom[room.id] || []}
+                  inventoryTypes={inventoryTypes}
+                  newItemDescription={newItemDescription[room.id] || ""}
+                  newItemQuantity={newItemQuantity[room.id] || 0}
+                  newItemType={newItemType[room.id] || ""}
+                  onDescriptionChange={(value) =>
+                    setNewItemDescription((prev) => ({ ...prev, [room.id]: value }))
+                  }
+                  onQuantityChange={(value) =>
+                    setNewItemQuantity((prev) => ({ ...prev, [room.id]: value }))
+                  }
+                  onTypeChange={(value) =>
+                    setNewItemType((prev) => ({ ...prev, [room.id]: value }))
+                  }
+                  onAddItem={() => addItem(room.id)}
+                  onDeleteRoom={() => deleteRoom(room.id)}
+                  onDeleteItem={(itemId) => deleteItem(itemId, room.id)}
+                />
+              ))}
             </div>
-          ))}
+          </SortableContext>
+        </DndContext>
 
-          {rooms.length === 0 && (
-            <p className="text-muted-foreground text-center py-8">
-              Create a room to get started
-            </p>
-          )}
-        </div>
+        {rooms.length === 0 && (
+          <p className="text-muted-foreground text-center py-8">
+            Create a room to get started
+          </p>
+        )}
       </CardContent>
     </Card>
   );
