@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Trash2, Plus, ChevronDown, Copy, Lock } from "lucide-react";
+import { Trash2, Plus, ChevronDown, Copy, Lock, ArrowRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Dialog,
@@ -504,7 +504,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
               </CardContent>
             </Card>
 
-            <Card>
+            <Card data-default-tasks-section>
               <CardHeader>
                 <CardTitle className="text-base">Default Tasks</CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -811,28 +811,31 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                           </div>
                                         )}
                                       </div>
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <span>
-                                              <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7"
-                                                onClick={() => !isDefaultTask && setDeleteItemId(item.id)}
-                                                disabled={isDefaultTask}
-                                              >
-                                                <Trash2 className="h-3 w-3 text-destructive" />
-                                              </Button>
-                                            </span>
-                                          </TooltipTrigger>
-                                          {isDefaultTask && (
-                                            <TooltipContent>
-                                              <p className="text-xs">Can only be deleted from Default Tasks</p>
-                                            </TooltipContent>
-                                          )}
-                                        </Tooltip>
-                                      </TooltipProvider>
+                                      {isDefaultTask ? (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs text-primary hover:text-primary"
+                                          onClick={() => {
+                                            // Scroll to default tasks section
+                                            const defaultTasksSection = document.querySelector('[data-default-tasks-section]');
+                                            if (defaultTasksSection) {
+                                              defaultTasksSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                            }
+                                          }}
+                                        >
+                                          Edit <ArrowRight className="h-3 w-3 ml-1" />
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7"
+                                          onClick={() => setDeleteItemId(item.id)}
+                                        >
+                                          <Trash2 className="h-3 w-3 text-destructive" />
+                                        </Button>
+                                      )}
                                     </div>
                                   );
                                 })}
