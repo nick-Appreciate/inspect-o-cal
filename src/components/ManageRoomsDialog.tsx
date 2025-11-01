@@ -100,6 +100,43 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
       fetchInventoryTypes();
       fetchVendorTypes();
       fetchDefaultTasks();
+      
+      // Set up realtime subscriptions
+      const roomsChannel = supabase
+        .channel('room-templates-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'room_templates' },
+          () => fetchRooms()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'default_room_tasks' },
+          () => fetchDefaultTasks()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'default_task_room_templates' },
+          () => fetchDefaultTasks()
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'room_template_items' },
+          (payload: any) => {
+            // Refresh items for the affected room
+            if (payload.new?.room_template_id) {
+              fetchRoomItems(payload.new.room_template_id);
+            }
+            if (payload.old?.room_template_id && payload.old.room_template_id !== payload.new?.room_template_id) {
+              fetchRoomItems(payload.old.room_template_id);
+            }
+          }
+        )
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(roomsChannel);
+      };
     }
   }, [open]);
 
