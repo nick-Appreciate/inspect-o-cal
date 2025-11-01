@@ -347,6 +347,7 @@ export function TemplateBuilder({
         order_index: item.order_index,
         inventory_type_id: item.inventory_type_id,
         inventory_quantity: item.inventory_quantity,
+        source_room_template_item_id: item.id, // Track source for auto-sync
       }));
 
       const { error: insertItemsError } = await supabase
