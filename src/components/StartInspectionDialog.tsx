@@ -262,8 +262,8 @@ export function StartInspectionDialog({
 
       setItemsByRoom(itemsMap);
       setStep("inspect");
-      // Collapse all rooms by default
-      setCollapsedRooms(new Set((roomsData || []).map(r => r.id)));
+      // Don't collapse rooms by default so users can see all items
+      setCollapsedRooms(new Set());
     } catch (error: any) {
       toast.error(error.message || "Failed to load template");
     } finally {
@@ -663,9 +663,13 @@ export function StartInspectionDialog({
                     ? items 
                     : items.filter(item => !itemStatus[item.id] || itemStatus[item.id] === 'pending');
                   
-                  if (visibleItems.length === 0) return null;
+                  if (visibleItems.length === 0 && !showCompleted) return null;
 
                   const isCollapsed = collapsedRooms.has(room.id);
+                  const roomGoodCount = items.filter(item => itemStatus[item.id] === 'good').length;
+                  const roomBadCount = items.filter(item => itemStatus[item.id] === 'bad').length;
+                  const roomPendingCount = items.length - roomGoodCount - roomBadCount;
+
                   return (
                     <div key={room.id} className="space-y-2">
                       <button
@@ -680,10 +684,17 @@ export function StartInspectionDialog({
                             return next;
                           });
                         }}
-                        className="w-full flex items-center gap-2 font-semibold text-base sticky top-0 bg-background py-2 border-b hover:bg-accent/50 transition-colors z-10"
+                        className="w-full flex items-center justify-between gap-2 font-semibold text-base sticky top-0 bg-background py-2 border-b hover:bg-accent/50 transition-colors z-10"
                       >
-                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        {room.name}
+                        <div className="flex items-center gap-2">
+                          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          {room.name}
+                        </div>
+                        <div className="flex gap-3 text-xs font-normal">
+                          <span className="text-green-600">✓ {roomGoodCount}</span>
+                          <span className="text-destructive">✗ {roomBadCount}</span>
+                          <span className="text-muted-foreground">⊙ {roomPendingCount}</span>
+                        </div>
                       </button>
                       {!isCollapsed && (
                         <div className="space-y-3 pt-1">
