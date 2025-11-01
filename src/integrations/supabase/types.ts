@@ -227,6 +227,51 @@ export type Database = {
         }
         Relationships: []
       }
+      room_template_items: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          inventory_quantity: number | null
+          inventory_type_id: string | null
+          order_index: number
+          room_template_id: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          inventory_quantity?: number | null
+          inventory_type_id?: string | null
+          order_index?: number
+          room_template_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          inventory_quantity?: number | null
+          inventory_type_id?: string | null
+          order_index?: number
+          room_template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_template_items_inventory_type_id_fkey"
+            columns: ["inventory_type_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "room_template_items_room_template_id_fkey"
+            columns: ["room_template_id"]
+            isOneToOne: false
+            referencedRelation: "room_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_templates: {
         Row: {
           created_at: string
