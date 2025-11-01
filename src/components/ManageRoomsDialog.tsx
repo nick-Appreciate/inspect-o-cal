@@ -60,6 +60,8 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
   const [newItemInventoryType, setNewItemInventoryType] = useState<string>("");
   const [newItemQuantity, setNewItemQuantity] = useState<number>(0);
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
+  const [newInventoryTypeName, setNewInventoryTypeName] = useState("");
+  const [showAddInventoryType, setShowAddInventoryType] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -219,6 +221,33 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
     setExpandedRoomId(expandedRoomId === roomId ? null : roomId);
   };
 
+  const addInventoryType = async () => {
+    if (!newInventoryTypeName.trim()) {
+      toast.error("Please enter an inventory type name");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("inventory_types")
+      .insert({
+        name: newInventoryTypeName.trim(),
+        created_by: user.id,
+      });
+
+    if (error) {
+      toast.error("Failed to create inventory type");
+      return;
+    }
+
+    setNewInventoryTypeName("");
+    setShowAddInventoryType(false);
+    fetchInventoryTypes();
+    toast.success("Inventory type created");
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -318,18 +347,54 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
                                   <Label className="text-xs">Inventory Type (Optional)</Label>
-                                  <select
-                                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                                    value={newItemInventoryType}
-                                    onChange={(e) => setNewItemInventoryType(e.target.value)}
-                                  >
-                                    <option value="">None</option>
-                                    {inventoryTypes.map((type) => (
-                                      <option key={type.id} value={type.id}>
-                                        {type.name}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  {showAddInventoryType ? (
+                                    <div className="flex gap-1">
+                                      <Input
+                                        placeholder="New type name"
+                                        value={newInventoryTypeName}
+                                        onChange={(e) => setNewInventoryTypeName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            addInventoryType();
+                                          } else if (e.key === "Escape") {
+                                            setShowAddInventoryType(false);
+                                            setNewInventoryTypeName("");
+                                          }
+                                        }}
+                                        className="h-9"
+                                      />
+                                      <Button
+                                        size="sm"
+                                        onClick={addInventoryType}
+                                        className="h-9 px-2"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex gap-1">
+                                      <select
+                                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                                        value={newItemInventoryType}
+                                        onChange={(e) => setNewItemInventoryType(e.target.value)}
+                                      >
+                                        <option value="">None</option>
+                                        {inventoryTypes.map((type) => (
+                                          <option key={type.id} value={type.id}>
+                                            {type.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setShowAddInventoryType(true)}
+                                        className="h-9 px-2"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                                 <div>
                                   <Label className="text-xs">Quantity</Label>
