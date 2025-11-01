@@ -473,9 +473,9 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Default Tasks</CardTitle>
-                <DialogDescription>
+                <p className="text-sm text-muted-foreground mt-1">
                   Default tasks are automatically added to all new room templates. Add them to existing rooms too.
-                </DialogDescription>
+                </p>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
