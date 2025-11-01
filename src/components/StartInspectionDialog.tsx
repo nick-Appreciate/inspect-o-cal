@@ -484,14 +484,14 @@ export function StartInspectionDialog({
                                 >
                                   {item.description}
                                 </label>
-                                {item.inventory_quantity && item.inventory_quantity > 0 && (
+                                {(item.inventory_quantity && item.inventory_quantity > 0) || item.inventory_quantity === -1 ? (
                                   <p className="text-xs text-primary font-medium mt-1">
-                                    Items needed: {item.inventory_quantity}
+                                    Items needed: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
                                     {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
                                       <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
                                     )}
                                   </p>
-                                )}
+                                ) : null}
                               </div>
                               <Button
                                 variant="ghost"
@@ -542,14 +542,14 @@ export function StartInspectionDialog({
                               >
                                 {item.description}
                               </label>
-                              {item.inventory_quantity > 0 && (
+                              {item.inventory_quantity > 0 || item.inventory_quantity === -1 ? (
                                 <p className="text-xs text-primary font-medium mt-1">
-                                  Items needed: {item.inventory_quantity}
+                                  Items needed: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
                                   {item.inventory_type_id && inventoryTypes.find(t => t.id === item.inventory_type_id)?.name && (
                                     <> {inventoryTypes.find(t => t.id === item.inventory_type_id)?.name}</>
                                   )}
                                 </p>
-                              )}
+                              ) : null}
                             </div>
                             <Button
                               variant="ghost"

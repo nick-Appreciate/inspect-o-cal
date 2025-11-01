@@ -715,15 +715,25 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                   </div>
                   <div>
                     <Label className="text-xs">Quantity</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      max="99999"
-                      placeholder="0"
-                      value={defaultTaskQuantity}
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={defaultTaskQuantity || "0"}
                       onChange={(e) => setDefaultTaskQuantity(e.target.value)}
                       disabled={!defaultTaskInventoryType}
-                    />
+                    >
+                      <option value="0">0</option>
+                      <option value="-1">User Selected</option>
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                      <option value="5">5</option>
+                      <option value="6">6</option>
+                      <option value="7">7</option>
+                      <option value="8">8</option>
+                      <option value="9">9</option>
+                      <option value="10">10</option>
+                    </select>
                   </div>
                 </div>
 
@@ -865,7 +875,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                               <div>{task.description}</div>
                                               {invType && (
                                                 <div className="text-xs text-muted-foreground">
-                                                  {invType.name} × {task.inventory_quantity}
+                                                  {invType.name} × {task.inventory_quantity === -1 ? "User Selected" : task.inventory_quantity}
                                                 </div>
                                               )}
                                               {task.vendor_type_id && (
@@ -1144,14 +1154,25 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                 </div>
                                 <div>
                                   <Label className="text-xs">Quantity</Label>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    placeholder="0"
-                                    value={newItemQuantity}
+                                  <select
+                                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                                    value={newItemQuantity || "0"}
                                     onChange={(e) => setNewItemQuantity(e.target.value)}
                                     disabled={!newItemInventoryType}
-                                  />
+                                  >
+                                    <option value="0">0</option>
+                                    <option value="-1">User Selected</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                  </select>
                                 </div>
                               </div>
 
@@ -1262,7 +1283,7 @@ export function ManageRoomsDialog({ open, onOpenChange }: ManageRoomsDialogProps
                                         </div>
                                         {invType && (
                                           <div className="text-xs text-muted-foreground">
-                                            {invType.name} × {item.inventory_quantity}
+                                            {invType.name} × {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
                                           </div>
                                         )}
                                         {item.vendor_type_id && (

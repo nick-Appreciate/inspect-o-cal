@@ -679,16 +679,16 @@ export default function InspectionDetailsDialog({
                             </Badge>
                           )}
                         </div>
-                        {subtask.inventory_quantity && subtask.inventory_quantity > 0 && (
+                        {(subtask.inventory_quantity && subtask.inventory_quantity > 0) || subtask.inventory_quantity === -1 ? (
                           <p className={`text-xs mt-1 ${
                             subtask.completed ? "text-muted-foreground/60" : "text-primary font-medium"
                           }`}>
-                            Items needed: {subtask.inventory_quantity}
+                            Items needed: {subtask.inventory_quantity === -1 ? "User Selected" : subtask.inventory_quantity}
                             {subtask.inventory_type_id && inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name && (
                               <> {inventoryTypes.find(t => t.id === subtask.inventory_type_id)?.name}</>
                             )}
                           </p>
-                        )}
+                        ) : null}
                         {subtask.vendor_type_id && (
                           <p className={`text-xs mt-1 ${
                             subtask.completed ? "text-muted-foreground/60" : "text-muted-foreground"

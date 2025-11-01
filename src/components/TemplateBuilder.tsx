@@ -678,9 +678,9 @@ export function TemplateBuilder({
                 <div className="flex-1 flex items-start gap-2">
                   <div className="flex-1">
                     <p className="font-medium">{item.description}</p>
-                    {item.inventory_quantity > 0 && (
+                    {(item.inventory_quantity > 0 || item.inventory_quantity === -1) && (
                       <p className="text-sm text-muted-foreground">
-                        Quantity: {item.inventory_quantity}
+                        Quantity: {item.inventory_quantity === -1 ? "User Selected" : item.inventory_quantity}
                         {item.inventory_type_id && (
                           <>
                             {" "}
