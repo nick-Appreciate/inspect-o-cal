@@ -31,9 +31,14 @@ interface HistoricalInspection {
   time: string;
   type: string;
   completed: boolean;
+  completed_by?: string;
   property_name: string;
   unit_name?: string;
   subtasks: SubtaskWithStatus[];
+  completedByProfile?: {
+    full_name: string | null;
+    email: string;
+  };
 }
 
 interface InspectionHistoryDialogProps {
@@ -106,6 +111,7 @@ export function InspectionHistoryDialog({
           time,
           type,
           completed,
+          completed_by,
           properties!inner(name),
           units(name)
         `)
@@ -185,15 +191,31 @@ export function InspectionHistoryDialog({
           };
         });
 
+        // Fetch completed by profile if exists
+        let completedByProfile = undefined;
+        if (inspection.completed_by) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email")
+            .eq("id", inspection.completed_by)
+            .maybeSingle();
+          
+          if (profile) {
+            completedByProfile = profile;
+          }
+        }
+
         historyWithSubtasks.push({
           id: inspection.id,
           date: inspection.date,
           time: inspection.time,
           type: inspection.type,
           completed: inspection.completed,
+          completed_by: inspection.completed_by,
           property_name: inspection.properties.name,
           unit_name: inspection.units?.name,
           subtasks: subtasksWithStatus,
+          completedByProfile,
         });
       }
 
@@ -252,6 +274,12 @@ export function InspectionHistoryDialog({
                         {inspection.property_name}
                         {inspection.unit_name && ` - ${inspection.unit_name}`}
                       </div>
+                      {inspection.completedByProfile && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <User className="h-4 w-4" />
+                          <span>Completed by: {inspection.completedByProfile.full_name || inspection.completedByProfile.email}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
