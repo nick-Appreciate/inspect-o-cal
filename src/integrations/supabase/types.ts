@@ -366,6 +366,7 @@ export type Database = {
           inventory_type_id: string | null
           order_index: number
           room_id: string
+          source_room_template_item_id: string | null
         }
         Insert: {
           created_at?: string
@@ -375,6 +376,7 @@ export type Database = {
           inventory_type_id?: string | null
           order_index?: number
           room_id: string
+          source_room_template_item_id?: string | null
         }
         Update: {
           created_at?: string
@@ -384,6 +386,7 @@ export type Database = {
           inventory_type_id?: string | null
           order_index?: number
           room_id?: string
+          source_room_template_item_id?: string | null
         }
         Relationships: [
           {
@@ -398,6 +401,13 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "template_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_items_source_room_template_item_id_fkey"
+            columns: ["source_room_template_item_id"]
+            isOneToOne: false
+            referencedRelation: "room_template_items"
             referencedColumns: ["id"]
           },
         ]
