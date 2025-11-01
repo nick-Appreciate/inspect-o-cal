@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, GripVertical } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import {
@@ -95,6 +95,7 @@ export function TemplateBuilder({
   const [floorplans, setFloorplans] = useState<Floorplan[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
+  const [showTemplateSettings, setShowTemplateSettings] = useState(true);
 
   useEffect(() => {
     fetchRooms();
@@ -191,7 +192,13 @@ export function TemplateBuilder({
     }
 
     setTemplateInfo(data);
-    setSelectedPropertyIds(data.template_properties?.map(tp => tp.property_id) || []);
+    
+    // Filter out any property IDs that don't exist anymore
+    const validPropertyIds = data.template_properties
+      ?.map(tp => tp.property_id)
+      .filter(id => id != null) || [];
+    
+    setSelectedPropertyIds(validPropertyIds);
   };
 
   const fetchFloorplans = async () => {
@@ -262,7 +269,6 @@ export function TemplateBuilder({
     }
 
     setSelectedPropertyIds(propertyIds);
-    fetchTemplateInfo();
     toast.success("Properties updated");
   };
 
@@ -660,62 +666,74 @@ export function TemplateBuilder({
         {/* Template Settings */}
         {templateInfo && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Template Settings</CardTitle>
+            <CardHeader 
+              className="cursor-pointer hover:bg-accent/50 transition-colors"
+              onClick={() => setShowTemplateSettings(!showTemplateSettings)}
+            >
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Template Settings</CardTitle>
+                <ChevronDown 
+                  className={`h-4 w-4 transition-transform ${
+                    showTemplateSettings ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Floorplan</Label>
-                <Select
-                  value={templateInfo.floorplan_id || "none"}
-                  onValueChange={(value) => updateFloorplan(value === "none" ? null : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select floorplan" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    <SelectItem value="none">No Floorplan</SelectItem>
-                    {floorplans.map((floorplan) => (
-                      <SelectItem key={floorplan.id} value={floorplan.id}>
-                        {floorplan.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Associated Properties</Label>
-                <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
-                  {properties.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No properties available</p>
-                  ) : (
-                    properties.map((property) => (
-                      <div key={property.id} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id={`prop-${property.id}`}
-                          checked={selectedPropertyIds.includes(property.id)}
-                          onChange={(e) => {
-                            const newIds = e.target.checked
-                              ? [...selectedPropertyIds, property.id]
-                              : selectedPropertyIds.filter(id => id !== property.id);
-                            updateProperties(newIds);
-                          }}
-                          className="rounded border-input"
-                        />
-                        <label
-                          htmlFor={`prop-${property.id}`}
-                          className="text-sm cursor-pointer"
-                        >
-                          {property.name} - {property.address}
-                        </label>
-                      </div>
-                    ))
-                  )}
+            {showTemplateSettings && (
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>Floorplan</Label>
+                  <Select
+                    value={templateInfo.floorplan_id || "none"}
+                    onValueChange={(value) => updateFloorplan(value === "none" ? null : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select floorplan" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="none">No Floorplan</SelectItem>
+                      {floorplans.map((floorplan) => (
+                        <SelectItem key={floorplan.id} value={floorplan.id}>
+                          {floorplan.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-            </CardContent>
+
+                <div>
+                  <Label>Associated Properties</Label>
+                  <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                    {properties.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No properties available</p>
+                    ) : (
+                      properties.map((property) => (
+                        <div key={property.id} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`prop-${property.id}`}
+                            checked={selectedPropertyIds.includes(property.id)}
+                            onChange={(e) => {
+                              const newIds = e.target.checked
+                                ? [...selectedPropertyIds, property.id]
+                                : selectedPropertyIds.filter(id => id !== property.id);
+                              updateProperties(newIds);
+                            }}
+                            className="rounded border-input"
+                          />
+                          <label
+                            htmlFor={`prop-${property.id}`}
+                            className="text-sm cursor-pointer"
+                          >
+                            {property.name} - {property.address}
+                          </label>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            )}
           </Card>
         )}
 
