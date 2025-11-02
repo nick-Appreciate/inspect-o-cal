@@ -1110,6 +1110,11 @@ export default function InspectionDetailsDialog({
                                     toggleActivity(subtask.id);
                                   }}
                                 >
+                                  {expandedActivity[subtask.id] ? (
+                                    <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                  )}
                                   <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
                                     {subtask.description}
                                   </p>
@@ -1126,31 +1131,37 @@ export default function InspectionDetailsDialog({
                                 </div>
 
                                 {/* Activity Feed (visible when expanded) */}
-                                {expandedActivity[subtask.id] && subtaskActivities[subtask.id] && (
+                                {expandedActivity[subtask.id] && (
                                   <div className="border-l-2 border-muted pl-3 space-y-2 max-h-48 overflow-y-auto mb-2">
-                                    {subtaskActivities[subtask.id].map((activity: any) => (
-                                      <div key={activity.id} className="text-xs">
-                                        <div className="flex items-start gap-2">
-                                          <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
-                                          <div className="flex-1">
-                                            <div className="font-medium">
-                                              {activity.activity_type === 'created' && 'Created'}
-                                              {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
-                                              {activity.activity_type === 'note_added' && 'Note added'}
-                                              {activity.activity_type === 'completed' && 'Marked complete'}
-                                              {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
-                                            </div>
-                                            {activity.notes && (
-                                              <div className="text-muted-foreground mt-1">{activity.notes}</div>
-                                            )}
-                                            <div className="text-muted-foreground text-[10px] mt-0.5">
-                                              {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
-                                              {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                    {subtaskActivities[subtask.id] && subtaskActivities[subtask.id].length > 0 ? (
+                                      subtaskActivities[subtask.id].map((activity: any) => (
+                                        <div key={activity.id} className="text-xs">
+                                          <div className="flex items-start gap-2">
+                                            <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
+                                            <div className="flex-1">
+                                              <div className="font-medium">
+                                                {activity.activity_type === 'created' && 'Created'}
+                                                {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
+                                                {activity.activity_type === 'note_added' && 'Note added'}
+                                                {activity.activity_type === 'completed' && 'Marked complete'}
+                                                {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
+                                              </div>
+                                              {activity.notes && (
+                                                <div className="text-muted-foreground mt-1">{activity.notes}</div>
+                                              )}
+                                              <div className="text-muted-foreground text-[10px] mt-0.5">
+                                                {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
+                                                {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                              </div>
                                             </div>
                                           </div>
                                         </div>
+                                      ))
+                                    ) : (
+                                      <div className="text-xs text-muted-foreground italic py-2">
+                                        No activity yet
                                       </div>
-                                    ))}
+                                    )}
                                   </div>
                                 )}
 
