@@ -219,12 +219,24 @@ export default function InspectionDetailsDialog({
               // Refetch activities for this subtask
               supabase
                 .from('subtask_activity')
-                .select('*, created_by_profile:created_by(full_name, email, avatar_url)')
+                .select('*')
                 .eq('subtask_id', subtaskId)
                 .order('created_at', { ascending: true })
-                .then(({ data }) => {
-                  if (data) {
-                    setSubtaskActivities(prev => ({ ...prev, [subtaskId]: data }));
+                .then(async ({ data: activities }) => {
+                  if (activities) {
+                    const creatorIds = [...new Set(activities.map(a => a.created_by))];
+                    const { data: profiles } = await supabase
+                      .from('profiles')
+                      .select('id, full_name, email, avatar_url')
+                      .in('id', creatorIds);
+
+                    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+                    const activitiesWithProfiles = activities.map(activity => ({
+                      ...activity,
+                      created_by_profile: profileMap.get(activity.created_by)
+                    }));
+
+                    setSubtaskActivities(prev => ({ ...prev, [subtaskId]: activitiesWithProfiles }));
                   }
                 });
             }
@@ -307,6 +319,46 @@ export default function InspectionDetailsDialog({
 
     const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
+    // Get current inspection template details if exists
+    const { data: currentInspection } = await supabase
+      .from("inspections")
+      .select("inspection_template_id")
+      .eq("id", inspectionId)
+      .maybeSingle();
+
+    let roomOrder: Map<string, number> = new Map();
+    let itemOrderInRoom: Map<string, number> = new Map();
+
+    if (currentInspection?.inspection_template_id) {
+      // Fetch template room order
+      const { data: templateRooms } = await supabase
+        .from("template_rooms")
+        .select("id, name, order_index")
+        .eq("template_id", currentInspection.inspection_template_id)
+        .order("order_index");
+
+      if (templateRooms) {
+        templateRooms.forEach((room, idx) => {
+          roomOrder.set(room.name, idx);
+        });
+
+        // Fetch template items order for each room
+        for (const room of templateRooms) {
+          const { data: roomItems } = await supabase
+            .from("template_items")
+            .select("id, description, order_index")
+            .eq("room_id", room.id)
+            .order("order_index");
+
+          if (roomItems) {
+            roomItems.forEach(item => {
+              itemOrderInRoom.set(`${room.name}:${item.description}`, item.order_index);
+            });
+          }
+        }
+      }
+    }
+
     // Map profiles to subtasks
     const subtasksWithProfiles = allSubtasks.map(subtask => {
       const assignedProfiles = subtask.assigned_users
@@ -322,12 +374,36 @@ export default function InspectionDetailsDialog({
       };
     });
 
-    // Sort: incomplete tasks first, then completed tasks
+    // Sort by template order (room, then item), then by creation date for unmatched
     subtasksWithProfiles.sort((a, b) => {
-      if (a.completed === b.completed) {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      // First sort by completion status
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
       }
-      return a.completed ? 1 : -1;
+
+      const roomA = a.room_name || "No Room";
+      const roomB = b.room_name || "No Room";
+      
+      const roomOrderA = roomOrder.get(roomA) ?? 999;
+      const roomOrderB = roomOrder.get(roomB) ?? 999;
+
+      if (roomOrderA !== roomOrderB) {
+        return roomOrderA - roomOrderB;
+      }
+
+      // Same room, sort by item order
+      const itemKeyA = `${roomA}:${a.description}`;
+      const itemKeyB = `${roomB}:${b.description}`;
+      
+      const itemOrderA = itemOrderInRoom.get(itemKeyA) ?? 999;
+      const itemOrderB = itemOrderInRoom.get(itemKeyB) ?? 999;
+
+      if (itemOrderA !== itemOrderB) {
+        return itemOrderA - itemOrderB;
+      }
+
+      // Fallback to creation date
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
     setSubtasks(subtasksWithProfiles);
@@ -620,14 +696,27 @@ export default function InspectionDetailsDialog({
     setSubtaskNotes(prev => ({ ...prev, [subtaskId]: '' }));
     
     // Reload activities to show the new note
-    const { data, error: fetchError } = await supabase
+    const { data: activities, error: fetchError } = await supabase
       .from('subtask_activity')
-      .select('*, created_by_profile:created_by(full_name, email, avatar_url)')
+      .select('*')
       .eq('subtask_id', subtaskId)
       .order('created_at', { ascending: true });
-    
-    if (!fetchError && data) {
-      setSubtaskActivities(prev => ({ ...prev, [subtaskId]: data }));
+
+    if (!fetchError && activities) {
+      const creatorIds = [...new Set(activities.map(a => a.created_by))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, avatar_url')
+        .in('id', creatorIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+      const activitiesWithProfiles = activities.map(activity => ({
+        ...activity,
+        created_by_profile: profileMap.get(activity.created_by)
+      }));
+
+      setSubtaskActivities(prev => ({ ...prev, [subtaskId]: activitiesWithProfiles }));
     }
   };
 
@@ -635,16 +724,30 @@ export default function InspectionDetailsDialog({
     const isExpanding = !expandedActivity[subtaskId];
     setExpandedActivity(prev => ({ ...prev, [subtaskId]: !prev[subtaskId] }));
     
-    // Fetch activities if expanding and not already loaded
-    if (isExpanding && !subtaskActivities[subtaskId]) {
-      const { data, error } = await supabase
+    // Fetch activities if expanding
+    if (isExpanding) {
+      const { data: activities, error } = await supabase
         .from('subtask_activity')
-        .select('*, created_by_profile:created_by(full_name, email, avatar_url)')
+        .select('*')
         .eq('subtask_id', subtaskId)
         .order('created_at', { ascending: true });
-      
-      if (!error && data) {
-        setSubtaskActivities(prev => ({ ...prev, [subtaskId]: data }));
+
+      if (!error && activities) {
+        // Fetch all creator profiles
+        const creatorIds = [...new Set(activities.map(a => a.created_by))];
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, avatar_url')
+          .in('id', creatorIds);
+
+        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+        const activitiesWithProfiles = activities.map(activity => ({
+          ...activity,
+          created_by_profile: profileMap.get(activity.created_by)
+        }));
+
+        setSubtaskActivities(prev => ({ ...prev, [subtaskId]: activitiesWithProfiles }));
       }
     }
   };
@@ -1134,42 +1237,40 @@ export default function InspectionDetailsDialog({
                                   )}
                                 </div>
 
-                                {/* Activity Feed (visible when expanded) */}
-                                {expandedActivity[subtask.id] && (
-                                  <div className="mb-3">
-                                    <div className="border-l-2 border-muted pl-3 space-y-2 max-h-48 overflow-y-auto mb-3">
-                                      {subtaskActivities[subtask.id] && subtaskActivities[subtask.id].length > 0 ? (
-                                        subtaskActivities[subtask.id].map((activity: any) => (
-                                          <div key={activity.id} className="text-xs">
-                                            <div className="flex items-start gap-2">
-                                              <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
-                                              <div className="flex-1">
-                                                <div className="font-medium">
-                                                  {activity.activity_type === 'created' && 'Created'}
-                                                  {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
-                                                  {activity.activity_type === 'note_added' && 'Note added'}
-                                                  {activity.activity_type === 'completed' && 'Marked complete'}
-                                                  {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
-                                                </div>
-                                                {activity.notes && (
-                                                  <div className="text-muted-foreground mt-1">{activity.notes}</div>
-                                                )}
-                                                <div className="text-muted-foreground text-[10px] mt-0.5">
-                                                  {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
-                                                  {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <div className="text-xs text-muted-foreground italic py-2">
-                                          No activity yet
-                                        </div>
-                                      )}
+                                {/* Good/Bad Buttons - Always at top */}
+                                {!isInherited && !subtask.completed && (
+                                  <div className="mb-2" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex gap-1">
+                                      <Button
+                                        variant={isGood ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStatusChange(subtask.id, 'good', subtask.status);
+                                        }}
+                                        className={`h-6 text-[10px] px-2 ${isGood ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                      >
+                                        Good
+                                      </Button>
+                                      <Button
+                                        variant={isBad ? "destructive" : "outline"}
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStatusChange(subtask.id, 'bad', subtask.status);
+                                        }}
+                                        className="h-6 text-[10px] px-2"
+                                      >
+                                        Bad
+                                      </Button>
                                     </div>
+                                  </div>
+                                )}
 
-                                    {/* Add Note Form - Always visible when expanded */}
+                                {/* Notes and Activity (visible when expanded) */}
+                                {expandedActivity[subtask.id] && (
+                                  <div className="space-y-3">
+                                    {/* Add Note Form */}
                                     {!isInherited && (
                                       <div className="space-y-2 relative" onClick={(e) => e.stopPropagation()}>
                                         <Textarea
@@ -1238,35 +1339,38 @@ export default function InspectionDetailsDialog({
                                         </Button>
                                       </div>
                                     )}
-                                  </div>
-                                )}
 
-                                {/* Good/Bad Buttons */}
-                                {!isInherited && !subtask.completed && (
-                                  <div className="space-y-2 mb-2" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex gap-1">
-                                      <Button
-                                        variant={isGood ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleStatusChange(subtask.id, 'good', subtask.status);
-                                        }}
-                                        className={`h-6 text-[10px] px-2 ${isGood ? 'bg-green-600 hover:bg-green-700' : ''}`}
-                                      >
-                                        Good
-                                      </Button>
-                                      <Button
-                                        variant={isBad ? "destructive" : "outline"}
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleStatusChange(subtask.id, 'bad', subtask.status);
-                                        }}
-                                        className="h-6 text-[10px] px-2"
-                                      >
-                                        Bad
-                                      </Button>
+                                    {/* Activity Feed */}
+                                    <div className="border-l-2 border-muted pl-3 space-y-2 max-h-48 overflow-y-auto">
+                                      {subtaskActivities[subtask.id] && subtaskActivities[subtask.id].length > 0 ? (
+                                        subtaskActivities[subtask.id].map((activity: any) => (
+                                          <div key={activity.id} className="text-xs">
+                                            <div className="flex items-start gap-2">
+                                              <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
+                                              <div className="flex-1">
+                                                <div className="font-medium">
+                                                  {activity.activity_type === 'created' && 'Created'}
+                                                  {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
+                                                  {activity.activity_type === 'note_added' && 'Note added'}
+                                                  {activity.activity_type === 'completed' && 'Marked complete'}
+                                                  {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
+                                                </div>
+                                                {activity.notes && (
+                                                  <div className="text-muted-foreground mt-1">{activity.notes}</div>
+                                                )}
+                                                <div className="text-muted-foreground text-[10px] mt-0.5">
+                                                  {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
+                                                  {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <div className="text-xs text-muted-foreground italic py-2">
+                                          No activity yet
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 )}
