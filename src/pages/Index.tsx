@@ -130,45 +130,8 @@ const Index = () => {
     if (!user) return;
 
     try {
-      // Upload attachment if provided
-      let attachmentUrl: string | undefined;
-      if (newInspection.attachment) {
-        const fileExt = newInspection.attachment.name.split(".").pop();
-        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage
-          .from("attachments")
-          .upload(fileName, newInspection.attachment);
-
-        if (uploadError) {
-          console.error("Attachment upload error:", uploadError);
-          toast.error("Failed to upload attachment");
-          return;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from("attachments")
-          .getPublicUrl(fileName);
-
-        attachmentUrl = publicUrl;
-      }
-
-      const { error } = await supabase.from("inspections").insert({
-        type: newInspection.type,
-        date: formatInTimeZone(newInspection.date, 'America/Chicago', 'yyyy-MM-dd'),
-        time: newInspection.time,
-        property_id: newInspection.property.id,
-        unit_id: newInspection.unitId && newInspection.unitId !== "none" ? newInspection.unitId : null,
-        attachment_url: attachmentUrl,
-        created_by: user.id,
-      });
-
-      if (error) {
-        console.error("Insert inspection error:", error);
-        toast.error(`Failed to add inspection: ${error.message}`);
-        return;
-      }
-
-      toast.success("Inspection added successfully");
+      // The inspection is created inside AddInspectionDialog (with checklist items and attachment handling).
+      // Here we just refresh the list to reflect the new data.
       await fetchInspections();
     } catch (err: any) {
       console.error("Error in handleAddInspection:", err);

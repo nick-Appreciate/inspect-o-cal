@@ -212,6 +212,21 @@ export default function AddInspectionDialog({
     }
 
     try {
+      // Upload attachment if provided and get URL
+      let attachmentUrl: string | undefined;
+      if (attachment) {
+        const fileExt = attachment.name.split(".").pop();
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("attachments")
+          .upload(fileName, attachment);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage
+          .from("attachments")
+          .getPublicUrl(fileName);
+        attachmentUrl = publicUrl;
+      }
+
       // Create the inspection
       const { data: inspection, error: inspectionError } = await supabase
         .from("inspections")
@@ -223,6 +238,7 @@ export default function AddInspectionDialog({
           unit_id: selectedUnit && selectedUnit !== "none" ? selectedUnit : null,
           created_by: user.id,
           inspection_template_id: selectedTemplate,
+          attachment_url: attachmentUrl,
         })
         .select()
         .single();
