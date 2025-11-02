@@ -259,6 +259,7 @@ export default function AddInspectionDialog({
             })));
           } else {
             // Fallback: derive from room_template_items if template_items don't exist
+            // AND populate the template_items table to fix it for future use
             if (room.room_template_id) {
               const { data: rtItems } = await supabase
                 .from("room_template_items")
@@ -266,12 +267,27 @@ export default function AddInspectionDialog({
                 .eq("room_template_id", room.room_template_id)
                 .order("order_index");
 
-              if (rtItems) {
+              if (rtItems && rtItems.length > 0) {
                 allItems.push(...rtItems.map(rt => ({
                   description: rt.description,
                   inventory_quantity: rt.inventory_quantity || 0,
                   inventory_type_id: rt.inventory_type_id,
                 })));
+
+                // Populate template_items to fix the template for future use
+                const templateItemsToInsert = rtItems.map(rt => ({
+                  room_id: room.id,
+                  description: rt.description,
+                  inventory_type_id: rt.inventory_type_id,
+                  inventory_quantity: rt.inventory_quantity || 0,
+                  order_index: rt.order_index,
+                  source_room_template_item_id: rt.id,
+                  vendor_type_id: rt.vendor_type_id,
+                }));
+
+                await supabase
+                  .from("template_items")
+                  .insert(templateItemsToInsert);
               }
             }
           }
