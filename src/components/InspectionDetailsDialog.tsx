@@ -23,10 +23,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
-import { StartInspectionDialog } from "./StartInspectionDialog";
 import { UserAvatar } from "./UserAvatar";
 import { AddTaskDialog } from "./AddTaskDialog";
-import { InspectionHistoryDialog } from "./InspectionHistoryDialog";
 
 interface Inspection {
   id: string;
@@ -65,6 +63,8 @@ interface Subtask {
   completed_by?: string | null;
   room_name?: string;
   status?: 'good' | 'bad' | 'pending';
+  status_changed_by?: string | null;
+  status_changed_at?: string | null;
   assignedProfiles?: Array<{
     full_name: string;
     email: string;
@@ -76,6 +76,11 @@ interface Subtask {
     avatar_url?: string | null;
   };
   completedByProfile?: {
+    full_name: string;
+    email: string;
+    avatar_url?: string | null;
+  } | null;
+  statusChangedByProfile?: {
     full_name: string;
     email: string;
     avatar_url?: string | null;
@@ -150,11 +155,9 @@ export default function InspectionDetailsDialog({
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [parentInspection, setParentInspection] = useState<Inspection | null>(null);
   const [childInspections, setChildInspections] = useState<Inspection[]>([]);
-  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
   const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
   const [collapsedRooms, setCollapsedRooms] = useState<Set<string>>(new Set());
-  const [collapsedRuns, setCollapsedRuns] = useState<Set<string>>(new Set());
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState("");
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
@@ -178,8 +181,6 @@ export default function InspectionDetailsDialog({
     subtaskCount: number;
   }>>([]);
   const [showCompleted, setShowCompleted] = useState<'all' | 'problems' | 'unchecked'>('all');
-  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
-  const [inspectionRuns, setInspectionRuns] = useState<InspectionRun[]>([]);
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -189,7 +190,6 @@ export default function InspectionDetailsDialog({
       fetchInventoryTypes();
       fetchVendorTypes();
       fetchHistoricalInspections();
-      fetchInspectionRuns();
     }
   }, [inspectionId, open]);
 
@@ -282,11 +282,24 @@ export default function InspectionDetailsDialog({
           completedByProfile = profile;
         }
 
+        // Fetch status changed by profile
+        let statusChangedByProfile = null;
+        if (subtask.status_changed_by) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, email, avatar_url")
+            .eq("id", subtask.status_changed_by)
+            .maybeSingle();
+
+          statusChangedByProfile = profile;
+        }
+
         return { 
           ...subtask, 
           assignedProfiles,
           creatorProfile,
-          completedByProfile
+          completedByProfile,
+          statusChangedByProfile
         };
       })
     );
@@ -428,63 +441,6 @@ export default function InspectionDetailsDialog({
     }
   };
 
-  const fetchInspectionRuns = async () => {
-    if (!inspectionId) return;
-
-    const { data, error } = await supabase
-      .from("inspection_runs")
-      .select(`
-        *,
-        inspection_templates(name)
-      `)
-      .eq("inspection_id", inspectionId)
-      .order("started_at", { ascending: false });
-
-    if (error) {
-      console.error("Failed to load inspection runs:", error);
-      return;
-    }
-
-    if (data) {
-      // Fetch profiles for started_by and completed_by users
-      const runsWithProfiles = await Promise.all(
-        data.map(async (run) => {
-          let startedByProfile = undefined;
-          let completedByProfile = undefined;
-
-          if (run.started_by) {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("full_name, email")
-              .eq("id", run.started_by)
-              .maybeSingle();
-
-            if (profile) startedByProfile = profile;
-          }
-
-          if (run.completed_by) {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("full_name, email")
-              .eq("id", run.completed_by)
-              .maybeSingle();
-
-            if (profile) completedByProfile = profile;
-          }
-
-          return {
-            ...run,
-            template: run.inspection_templates,
-            startedByProfile,
-            completedByProfile,
-          };
-        })
-      );
-
-      setInspectionRuns(runsWithProfiles);
-    }
-  };
-
   const handleCreateInventoryType = async (name: string) => {
     const {
       data: { user },
@@ -575,6 +531,30 @@ export default function InspectionDetailsDialog({
     } else {
       toast.success("Subtask deleted");
       fetchSubtasks();
+    }
+  };
+
+  const handleStatusChange = async (subtaskId: string, newStatus: 'good' | 'bad' | 'pending') => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("subtasks")
+      .update({
+        status: newStatus,
+        status_changed_by: user.id,
+        status_changed_at: new Date().toISOString(),
+      })
+      .eq("id", subtaskId);
+
+    if (error) {
+      toast.error("Failed to update status");
+    } else {
+      fetchSubtasks();
+      toast.success(`Status updated to ${newStatus}`);
     }
   };
 
@@ -825,29 +805,11 @@ export default function InspectionDetailsDialog({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowTemplateSelector(true)}
-                  className="h-7 text-xs px-2"
-                >
-                  <ClipboardList className="h-3 w-3 mr-1" />
-                  <span>Start</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
                   onClick={() => setShowFollowUpDialog(true)}
                   className="h-7 text-xs px-2"
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   <span>Follow-up</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowHistoryDialog(true)}
-                  className="h-7 text-xs px-2"
-                >
-                  <History className="h-3 w-3 mr-1" />
-                  <span>History</span>
                 </Button>
               </div>
             </div>
@@ -1033,16 +995,18 @@ export default function InspectionDetailsDialog({
                       <div className="p-2 space-y-2">
                         {roomSubtasks.map((subtask) => {
                           const isInherited = subtask.original_inspection_id !== inspectionId;
-                          const run = inspectionRuns.find(r => r.id === subtask.inspection_run_id);
                           const isGood = subtask.status === 'good';
                           const isBad = subtask.status === 'bad';
+                          const isPending = !subtask.status || subtask.status === 'pending';
 
                           return (
                             <div
                               key={subtask.id}
                               className={`flex items-start gap-2 p-2 border rounded transition-colors ${
                                 isGood
-                                  ? "bg-green-50 dark:bg-green-950/20 opacity-80"
+                                  ? "bg-green-50 dark:bg-green-950/20"
+                                  : isBad
+                                  ? "bg-red-50 dark:bg-red-950/20"
                                   : subtask.completed
                                   ? "bg-muted/30 opacity-60"
                                   : isInherited
@@ -1050,15 +1014,9 @@ export default function InspectionDetailsDialog({
                                   : "hover:bg-accent/30"
                               }`}
                             >
-                              <Checkbox
-                                checked={subtask.completed || isGood}
-                                onCheckedChange={() => !isGood && toggleSubtaskComplete(subtask.id, subtask.completed)}
-                                className="mt-0.5 flex-shrink-0"
-                                disabled={isGood}
-                              />
                               <div className="flex-1 min-w-0 text-xs">
-                                <div className="flex items-start gap-2 flex-wrap">
-                                  <p className={`flex-1 ${subtask.completed || isGood ? "line-through text-muted-foreground" : ""}`}>
+                                <div className="flex items-start gap-2 flex-wrap mb-2">
+                                  <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
                                     {subtask.description}
                                   </p>
                                   {isGood && (
@@ -1071,18 +1029,39 @@ export default function InspectionDetailsDialog({
                                       Issue
                                     </Badge>
                                   )}
-                                  {/* Inspection Run Badge */}
-                                  {run && (
-                                    <Badge 
-                                      variant="secondary" 
-                                      className="text-[10px] px-1.5 py-0 cursor-pointer hover:bg-secondary/80"
-                                      onClick={() => setShowHistoryDialog(true)}
-                                    >
-                                      <History className="h-2.5 w-2.5 mr-1" />
-                                      {run.template?.name || 'Run'} • {formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}
-                                    </Badge>
-                                  )}
                                 </div>
+
+                                {/* Good/Bad/Reset Buttons */}
+                                {!isInherited && !subtask.completed && (
+                                  <div className="flex gap-1 mb-2">
+                                    <Button
+                                      variant={isGood ? "default" : "outline"}
+                                      size="sm"
+                                      onClick={() => handleStatusChange(subtask.id, 'good')}
+                                      className={`h-6 text-[10px] px-2 ${isGood ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                    >
+                                      Good
+                                    </Button>
+                                    <Button
+                                      variant={isBad ? "destructive" : "outline"}
+                                      size="sm"
+                                      onClick={() => handleStatusChange(subtask.id, 'bad')}
+                                      className="h-6 text-[10px] px-2"
+                                    >
+                                      Bad
+                                    </Button>
+                                    {!isPending && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleStatusChange(subtask.id, 'pending')}
+                                        className="h-6 text-[10px] px-2"
+                                      >
+                                        Reset
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
 
                                 {/* Assigned Users */}
                                 {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
@@ -1235,22 +1214,6 @@ export default function InspectionDetailsDialog({
             description="Add a new task to this inspection"
           />
 
-          <StartInspectionDialog
-            open={showTemplateSelector}
-            onOpenChange={setShowTemplateSelector}
-            inspectionId={inspection.id}
-            unitId={inspection.unit_id}
-            propertyId={inspection.property_id}
-            onInspectionStarted={fetchSubtasks}
-          />
-
-          <InspectionHistoryDialog
-            open={showHistoryDialog}
-            onOpenChange={setShowHistoryDialog}
-            inspectionId={inspection.id}
-            propertyId={inspection.property_id}
-            unitId={inspection.unit_id}
-          />
         </>
       )}
     </>

@@ -466,6 +466,8 @@ export type Database = {
           original_inspection_id: string
           room_name: string | null
           status: string | null
+          status_changed_at: string | null
+          status_changed_by: string | null
           vendor_type_id: string | null
         }
         Insert: {
@@ -485,6 +487,8 @@ export type Database = {
           original_inspection_id: string
           room_name?: string | null
           status?: string | null
+          status_changed_at?: string | null
+          status_changed_by?: string | null
           vendor_type_id?: string | null
         }
         Update: {
@@ -504,6 +508,8 @@ export type Database = {
           original_inspection_id?: string
           room_name?: string | null
           status?: string | null
+          status_changed_at?: string | null
+          status_changed_by?: string | null
           vendor_type_id?: string | null
         }
         Relationships: [

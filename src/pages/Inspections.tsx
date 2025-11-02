@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
-import { InspectionHistoryDialog } from "@/components/InspectionHistoryDialog";
 import { DeleteInspectionDialog } from "@/components/DeleteInspectionDialog";
 import { CompleteInspectionDialog } from "@/components/CompleteInspectionDialog";
 import { UnCompleteInspectionDialog } from "@/components/UnCompleteInspectionDialog";
@@ -66,28 +65,10 @@ const Inspections = () => {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [showCompleted, setShowCompleted] = useState(false);
-  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-  const [historyInspection, setHistoryInspection] = useState<Inspection | null>(null);
 
   useEffect(() => {
     fetchInspections();
-    
-    // Listen for history dialog open events from InspectionDetailsDialog
-    const handleOpenHistoryDialog = (event: any) => {
-      const { inspectionId, propertyId, unitId } = event.detail;
-      const inspection = inspections.find(i => i.id === inspectionId);
-      if (inspection) {
-        setHistoryInspection(inspection);
-        setHistoryDialogOpen(true);
-      }
-    };
-    
-    window.addEventListener('openHistoryDialog', handleOpenHistoryDialog);
-    
-    return () => {
-      window.removeEventListener('openHistoryDialog', handleOpenHistoryDialog);
-    };
-  }, [inspections]);
+  }, []);
 
   const fetchInspections = async () => {
     try {
@@ -708,19 +689,7 @@ const Inspections = () => {
                                   )}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setHistoryInspection(inspection);
-                                        setHistoryDialogOpen(true);
-                                      }}
-                                      title="View History"
-                                    >
-                                      <History className="h-4 w-4" />
-                                    </Button>
+                                   <div className="flex items-center justify-end gap-1">
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -807,20 +776,7 @@ const Inspections = () => {
                                 
                                 {/* Action Buttons */}
                                 <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 flex-shrink-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setHistoryInspection(inspection);
-                                      setHistoryDialogOpen(true);
-                                    }}
-                                    title="View History"
-                                  >
-                                    <History className="h-3 w-3" />
-                                  </Button>
-                                  <Button
+                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 flex-shrink-0"
@@ -876,14 +832,6 @@ const Inspections = () => {
         mainInspection={inspectionToUnComplete}
         connectedInspections={connectedInspectionsToUnComplete}
         onConfirm={handleUnCompleteConfirm}
-      />
-
-      <InspectionHistoryDialog
-        open={historyDialogOpen}
-        onOpenChange={setHistoryDialogOpen}
-        inspectionId={historyInspection?.id || ""}
-        propertyId={historyInspection?.property.id}
-        unitId={historyInspection?.unit?.id}
       />
     </div>
   );
