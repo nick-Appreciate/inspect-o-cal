@@ -426,22 +426,38 @@ export function TemplateBuilder({
 
     // Copy tasks to the new room if any exist
     if (templateItems && templateItems.length > 0) {
-      const itemsToInsert = templateItems.map((item: any) => ({
-        room_id: newRoom.id,
-        description: item.description,
-        order_index: item.order_index,
-        inventory_type_id: item.inventory_type_id,
-        inventory_quantity: item.inventory_quantity,
-        source_room_template_item_id: item.id, // Track source for auto-sync
-      }));
-
-      const { error: insertItemsError } = await supabase
+      // Get existing items to check for duplicates (in case trigger already added them)
+      const { data: existingItems } = await supabase
         .from("template_items")
-        .insert(itemsToInsert);
+        .select("description")
+        .eq("room_id", newRoom.id);
 
-      if (insertItemsError) {
-        console.error("Failed to copy template items:", insertItemsError);
-        toast.error("Room added but failed to copy some tasks");
+      const existingDescriptions = new Set(
+        (existingItems || []).map(item => item.description.toLowerCase())
+      );
+
+      // Filter out items that already exist
+      const itemsToInsert = templateItems
+        .filter((item: any) => !existingDescriptions.has(item.description.toLowerCase()))
+        .map((item: any, index: number) => ({
+          room_id: newRoom.id,
+          description: item.description,
+          order_index: index,
+          inventory_type_id: item.inventory_type_id,
+          inventory_quantity: item.inventory_quantity,
+          vendor_type_id: item.vendor_type_id,
+          source_room_template_item_id: item.id, // Track source for auto-sync
+        }));
+
+      if (itemsToInsert.length > 0) {
+        const { error: insertItemsError } = await supabase
+          .from("template_items")
+          .insert(itemsToInsert);
+
+        if (insertItemsError) {
+          console.error("Failed to copy template items:", insertItemsError);
+          toast.error("Room added but failed to copy some tasks");
+        }
       }
 
       // Fetch the newly added items to update the UI
@@ -476,6 +492,17 @@ export function TemplateBuilder({
     const description = newItemDescription[roomId];
     if (!description?.trim()) {
       toast.error("Please enter a task");
+      return;
+    }
+
+    // Check for duplicates
+    const existingItems = itemsByRoom[roomId] || [];
+    const isDuplicate = existingItems.some(
+      item => item.description.toLowerCase() === description.trim().toLowerCase()
+    );
+
+    if (isDuplicate) {
+      toast.error("This task already exists in this room");
       return;
     }
 
