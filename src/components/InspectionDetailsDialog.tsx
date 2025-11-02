@@ -182,6 +182,7 @@ export default function InspectionDetailsDialog({
   }>>([]);
   const [showCompleted, setShowCompleted] = useState<'to-do' | 'completed' | 'all'>('to-do');
   const [subtaskNotes, setSubtaskNotes] = useState<Record<string, string>>({});
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -1049,7 +1050,14 @@ export default function InspectionDetailsDialog({
                                       <Button
                                         variant={isGood ? "default" : "outline"}
                                         size="sm"
-                                        onClick={() => handleStatusChange(subtask.id, 'good', subtask.status)}
+                                        onClick={() => {
+                                          handleStatusChange(subtask.id, 'good', subtask.status);
+                                          setExpandedNotes(prev => {
+                                            const next = new Set(prev);
+                                            next.delete(subtask.id);
+                                            return next;
+                                          });
+                                        }}
                                         className={`h-6 text-[10px] px-2 ${isGood ? 'bg-green-600 hover:bg-green-700' : ''}`}
                                       >
                                         Good
@@ -1057,40 +1065,75 @@ export default function InspectionDetailsDialog({
                                       <Button
                                         variant={isBad ? "destructive" : "outline"}
                                         size="sm"
-                                        onClick={() => handleStatusChange(subtask.id, 'bad', subtask.status)}
+                                        onClick={() => {
+                                          if (!isBad) {
+                                            setExpandedNotes(prev => new Set(prev).add(subtask.id));
+                                          } else {
+                                            handleStatusChange(subtask.id, 'bad', subtask.status);
+                                          }
+                                        }}
                                         className="h-6 text-[10px] px-2"
                                       >
                                         Bad
                                       </Button>
+                                      {!isBad && !isGood && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            setExpandedNotes(prev => {
+                                              const next = new Set(prev);
+                                              if (next.has(subtask.id)) {
+                                                next.delete(subtask.id);
+                                              } else {
+                                                next.add(subtask.id);
+                                              }
+                                              return next;
+                                            });
+                                          }}
+                                          className="h-6 text-[10px] px-2"
+                                        >
+                                          {expandedNotes.has(subtask.id) ? 'Hide' : 'Notes'}
+                                        </Button>
+                                      )}
                                     </div>
                                     
-                                    {/* Assign dropdown for Bad items */}
-                                    {isBad && (
-                                      <Select
-                                        value=""
-                                        onValueChange={(userId) => handleAssignUser(subtask.id, userId)}
-                                      >
-                                        <SelectTrigger className="h-7 text-xs">
-                                          <SelectValue placeholder="Assign to..." />
-                                        </SelectTrigger>
-                                        <SelectContent className="max-h-48">
-                                          {users.map((user) => (
-                                            <SelectItem key={user.id} value={user.id} className="text-xs">
-                                              {user.full_name || user.email}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    )}
-
-                                    {/* Notes (required for Bad) */}
-                                    {(isBad || !isGood) && (
-                                      <Textarea
-                                        placeholder={isBad ? "Notes (required for Bad)" : "Add notes..."}
-                                        value={subtaskNotes[subtask.id] || subtask.description}
-                                        onChange={(e) => setSubtaskNotes({...subtaskNotes, [subtask.id]: e.target.value})}
-                                        className="h-16 text-xs"
-                                      />
+                                    {/* Assign dropdown and Notes (for Bad or expanded items) */}
+                                    {(isBad || expandedNotes.has(subtask.id)) && (
+                                      <>
+                                        {isBad && (
+                                          <Select
+                                            value=""
+                                            onValueChange={(userId) => handleAssignUser(subtask.id, userId)}
+                                          >
+                                            <SelectTrigger className="h-7 text-xs">
+                                              <SelectValue placeholder="Assign to..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="max-h-48">
+                                              {users.map((user) => (
+                                                <SelectItem key={user.id} value={user.id} className="text-xs">
+                                                  {user.full_name || user.email}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        )}
+                                        <Textarea
+                                          placeholder={isBad ? "Notes (required for Bad)" : "Add notes..."}
+                                          value={subtaskNotes[subtask.id] || subtask.description}
+                                          onChange={(e) => setSubtaskNotes({...subtaskNotes, [subtask.id]: e.target.value})}
+                                          className="h-16 text-xs"
+                                        />
+                                        {isBad && (
+                                          <Button
+                                            size="sm"
+                                            onClick={() => handleStatusChange(subtask.id, 'bad', subtask.status)}
+                                            className="h-7 text-xs w-full"
+                                          >
+                                            Save
+                                          </Button>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 )}
