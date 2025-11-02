@@ -252,6 +252,12 @@ export default function AddInspectionDialog({
         .eq("template_id", selectedTemplate)
         .order("order_index");
 
+      // Fetch global default tasks (applies to all rooms)
+      const { data: globalTasks } = await supabase
+        .from("default_room_tasks")
+        .select("*")
+        .eq("applies_to_all_rooms", true);
+
       if (rooms) {
         for (const room of rooms) {
           const allItems: Array<{
@@ -341,22 +347,15 @@ export default function AddInspectionDialog({
             }
           }
 
-          // Add global default tasks that apply to all rooms (only for first room to avoid duplicates)
-          if (room === rooms[0]) {
-            const { data: globalTasks } = await supabase
-              .from("default_room_tasks")
-              .select("*")
-              .eq("applies_to_all_rooms", true);
-
-            if (globalTasks) {
-              for (const task of globalTasks) {
-                allItems.push({
-                  description: task.description,
-                  inventory_quantity: task.inventory_quantity || 0,
-                  inventory_type_id: task.inventory_type_id,
-                  vendor_type_id: task.vendor_type_id,
-                });
-              }
+          // Add global default tasks that apply to all rooms (apply per room)
+          if (globalTasks) {
+            for (const task of globalTasks) {
+              allItems.push({
+                description: task.description,
+                inventory_quantity: task.inventory_quantity || 0,
+                inventory_type_id: task.inventory_type_id,
+                vendor_type_id: task.vendor_type_id,
+              });
             }
           }
 

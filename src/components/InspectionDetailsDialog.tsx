@@ -35,6 +35,7 @@ interface Inspection {
   attachment_url?: string;
   parent_inspection_id?: string;
   unit_id?: string;
+  inspection_template_id?: string | null;
   properties: {
     name: string;
     address: string;
@@ -163,6 +164,7 @@ export default function InspectionDetailsDialog({
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [templateName, setTemplateName] = useState<string | null>(null);
   
   // New subtask form state
   const [newDescription, setNewDescription] = useState("");
@@ -264,6 +266,17 @@ export default function InspectionDetailsDialog({
       toast.error("Failed to load inspection details");
     } else {
       setInspection(data);
+
+      // Load template name if present
+      setTemplateName(null);
+      if (data.inspection_template_id) {
+        const { data: template } = await supabase
+          .from("inspection_templates")
+          .select("name")
+          .eq("id", data.inspection_template_id)
+          .maybeSingle();
+        setTemplateName(template?.name || null);
+      }
       
       // Fetch parent inspection if exists
       if (data.parent_inspection_id) {
@@ -1007,6 +1020,11 @@ export default function InspectionDetailsDialog({
                 <span className="text-xs text-muted-foreground">
                   {format(new Date(inspection.date), "MMM d")} • {inspection.time}
                 </span>
+                {templateName && (
+                  <span className="text-xs text-muted-foreground">
+                    Template: {templateName}
+                  </span>
+                )}
               </div>
               <div className="flex gap-1">
                 <Button
