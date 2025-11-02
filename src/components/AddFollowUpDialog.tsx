@@ -105,25 +105,30 @@ export default function AddFollowUpDialog({
   };
 
   const copySubtasksFromChain = async (parentId: string, newInspectionId: string) => {
-    // Get all subtasks from the entire inspection chain
-    // This includes the parent and all its ancestors
+    /* 
+     * COMPLETE REBUILD: Copy ALL subtasks from parent chain with FULL data
+     * This ensures follow-up inspections have complete room and task information
+     */
     const subtasks = await getAllSubtasksInChain(parentId);
 
-    // Link all these subtasks to the new inspection
-    // by creating entries that reference them
     if (subtasks.length > 0) {
-      const { error } = await supabase.from("subtasks").insert(
-        subtasks.map((subtask) => ({
-          inspection_id: newInspectionId,
-          original_inspection_id: subtask.original_inspection_id,
-          description: subtask.description,
-          assigned_users: subtask.assigned_users,
-          attachment_url: subtask.attachment_url,
-          completed: false, // Reset completion status for new inspection
-          created_by: subtask.created_by,
-        }))
-      );
+      // Copy COMPLETE subtask data (not just description and assignments)
+      const subtasksToInsert = subtasks.map((subtask) => ({
+        inspection_id: newInspectionId,
+        original_inspection_id: subtask.original_inspection_id,
+        description: subtask.description,
+        room_name: subtask.room_name, // CRITICAL: Room name for grouping
+        inventory_type_id: subtask.inventory_type_id, // CRITICAL: For inventory tracking
+        vendor_type_id: subtask.vendor_type_id, // CRITICAL: For vendor assignments
+        inventory_quantity: subtask.inventory_quantity || 0, // CRITICAL: Quantity needed
+        assigned_users: subtask.assigned_users,
+        attachment_url: subtask.attachment_url,
+        status: 'pending', // CRITICAL: Reset status for new inspection
+        completed: false, // Reset completion for new inspection
+        created_by: subtask.created_by,
+      }));
 
+      const { error } = await supabase.from("subtasks").insert(subtasksToInsert);
       if (error) throw error;
     }
   };

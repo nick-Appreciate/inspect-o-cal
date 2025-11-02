@@ -258,130 +258,163 @@ export default function AddInspectionDialog({
       if (inspectionError) throw inspectionError;
 
       // CLEAN ARCHITECTURE: Template Items → Subtasks (1-1 deduplicated flow)
-      const { data: rooms } = await supabase
+      const { data: rooms, error: roomsError } = await supabase
         .from("template_rooms")
         .select("*")
         .eq("template_id", selectedTemplate)
         .order("order_index");
 
-      if (rooms && rooms.length > 0) {
-        // Collect ALL subtasks across all rooms with deduplication
-        const allSubtasksMap = new Map<string, {
-          inspection_id: string;
-          original_inspection_id: string;
-          description: string;
-          room_name: string;
-          inventory_type_id: string | null;
-          vendor_type_id: string | null;
-          inventory_quantity: number;
-          status: string;
-          completed: boolean;
-          created_by: string;
-        }>();
-
-        // Fetch global default tasks once (will be added to first room only)
-        const { data: globalTasks } = await supabase
-          .from("default_room_tasks")
-          .select("*")
-          .eq("applies_to_all_rooms", true);
-
-        for (const room of rooms) {
-          // PRIMARY SOURCE: template_items (1-1 from room template)
-          const { data: templateItems } = await supabase
-            .from("template_items")
-            .select("*")
-            .eq("room_id", room.id)
-            .order("order_index");
-
-          if (templateItems && templateItems.length > 0) {
-            templateItems.forEach(item => {
-              const key = `${room.name}:${item.description.toLowerCase().trim()}`;
-              if (!allSubtasksMap.has(key)) {
-                allSubtasksMap.set(key, {
-                  inspection_id: inspection.id,
-                  original_inspection_id: inspection.id,
-                  description: item.description,
-                  room_name: room.name,
-                  inventory_type_id: item.inventory_type_id,
-                  vendor_type_id: item.vendor_type_id,
-                  inventory_quantity: item.inventory_quantity || 0,
-                  status: 'pending',
-                  completed: false,
-                  created_by: user.id,
-                });
-              }
-            });
-          }
-
-          // SECONDARY SOURCE: Room-specific default tasks
-          if (room.room_template_id) {
-            const { data: defaultTasks } = await supabase
-              .from("default_task_room_templates")
-              .select(`
-                default_room_tasks (
-                  description,
-                  inventory_quantity,
-                  inventory_type_id,
-                  vendor_type_id
-                )
-              `)
-              .eq("room_template_id", room.room_template_id);
-
-            if (defaultTasks) {
-              defaultTasks.forEach(dt => {
-                if (dt.default_room_tasks) {
-                  const key = `${room.name}:${dt.default_room_tasks.description.toLowerCase().trim()}`;
-                  if (!allSubtasksMap.has(key)) {
-                    allSubtasksMap.set(key, {
-                      inspection_id: inspection.id,
-                      original_inspection_id: inspection.id,
-                      description: dt.default_room_tasks.description,
-                      room_name: room.name,
-                      inventory_type_id: dt.default_room_tasks.inventory_type_id,
-                      vendor_type_id: dt.default_room_tasks.vendor_type_id,
-                      inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
-                      status: 'pending',
-                      completed: false,
-                      created_by: user.id,
-                    });
-                  }
-                }
-              });
-            }
-          }
-
-          // TERTIARY SOURCE: Global default tasks (only for first room)
-          if (room === rooms[0] && globalTasks) {
-            globalTasks.forEach(task => {
-              const key = `${room.name}:${task.description.toLowerCase().trim()}`;
-              if (!allSubtasksMap.has(key)) {
-                allSubtasksMap.set(key, {
-                  inspection_id: inspection.id,
-                  original_inspection_id: inspection.id,
-                  description: task.description,
-                  room_name: room.name,
-                  inventory_type_id: task.inventory_type_id,
-                  vendor_type_id: task.vendor_type_id,
-                  inventory_quantity: task.inventory_quantity || 0,
-                  status: 'pending',
-                  completed: false,
-                  created_by: user.id,
-                });
-              }
-            });
-          }
-        }
-
-        // Single batch insert of all deduplicated subtasks
-        const allSubtasks = Array.from(allSubtasksMap.values());
-        if (allSubtasks.length > 0) {
-          const { error: subtasksError } = await supabase
-            .from("subtasks")
-            .insert(allSubtasks);
-
-          if (subtasksError) throw subtasksError;
-        }
+      if (roomsError) {
+        console.error("Failed to fetch template rooms:", roomsError);
+        throw new Error("Failed to load inspection template rooms");
       }
+
+      if (!rooms || rooms.length === 0) {
+        console.warn("No rooms found in template:", selectedTemplate);
+        throw new Error("This template has no rooms configured. Please add rooms to the template first.");
+      }
+
+      console.log(`Creating inspection with ${rooms.length} rooms from template`);
+
+      // Collect ALL subtasks across all rooms with deduplication
+      const allSubtasksMap = new Map<string, {
+        inspection_id: string;
+        original_inspection_id: string;
+        description: string;
+        room_name: string;
+        inventory_type_id: string | null;
+        vendor_type_id: string | null;
+        inventory_quantity: number;
+        status: string;
+        completed: boolean;
+        created_by: string;
+      }>();
+
+      // Fetch global default tasks once (will be added to first room only)
+      const { data: globalTasks } = await supabase
+        .from("default_room_tasks")
+        .select("*")
+        .eq("applies_to_all_rooms", true);
+
+      for (const room of rooms) {
+        let roomItemCount = 0;
+
+        // PRIMARY SOURCE: template_items (1-1 from room template)
+        const { data: templateItems, error: itemsError } = await supabase
+          .from("template_items")
+          .select("*")
+          .eq("room_id", room.id)
+          .order("order_index");
+
+        if (itemsError) {
+          console.error(`Failed to fetch items for room ${room.name}:`, itemsError);
+          continue; // Skip this room but continue with others
+        }
+
+        if (templateItems && templateItems.length > 0) {
+          templateItems.forEach(item => {
+            const key = `${room.name}:${item.description.toLowerCase().trim()}`;
+            if (!allSubtasksMap.has(key)) {
+              allSubtasksMap.set(key, {
+                inspection_id: inspection.id,
+                original_inspection_id: inspection.id,
+                description: item.description,
+                room_name: room.name,
+                inventory_type_id: item.inventory_type_id,
+                vendor_type_id: item.vendor_type_id,
+                inventory_quantity: item.inventory_quantity || 0,
+                status: 'pending',
+                completed: false,
+                created_by: user.id,
+              });
+              roomItemCount++;
+            }
+          });
+        }
+
+        // SECONDARY SOURCE: Room-specific default tasks
+        if (room.room_template_id) {
+          const { data: defaultTasks } = await supabase
+            .from("default_task_room_templates")
+            .select(`
+              default_room_tasks (
+                description,
+                inventory_quantity,
+                inventory_type_id,
+                vendor_type_id
+              )
+            `)
+            .eq("room_template_id", room.room_template_id);
+
+          if (defaultTasks) {
+            defaultTasks.forEach(dt => {
+              if (dt.default_room_tasks) {
+                const key = `${room.name}:${dt.default_room_tasks.description.toLowerCase().trim()}`;
+                if (!allSubtasksMap.has(key)) {
+                  allSubtasksMap.set(key, {
+                    inspection_id: inspection.id,
+                    original_inspection_id: inspection.id,
+                    description: dt.default_room_tasks.description,
+                    room_name: room.name,
+                    inventory_type_id: dt.default_room_tasks.inventory_type_id,
+                    vendor_type_id: dt.default_room_tasks.vendor_type_id,
+                    inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
+                    status: 'pending',
+                    completed: false,
+                    created_by: user.id,
+                  });
+                  roomItemCount++;
+                }
+              }
+            });
+          }
+        }
+
+        // TERTIARY SOURCE: Global default tasks (only for first room)
+        if (room === rooms[0] && globalTasks) {
+          globalTasks.forEach(task => {
+            const key = `${room.name}:${task.description.toLowerCase().trim()}`;
+            if (!allSubtasksMap.has(key)) {
+              allSubtasksMap.set(key, {
+                inspection_id: inspection.id,
+                original_inspection_id: inspection.id,
+                description: task.description,
+                room_name: room.name,
+                inventory_type_id: task.inventory_type_id,
+                vendor_type_id: task.vendor_type_id,
+                inventory_quantity: task.inventory_quantity || 0,
+                status: 'pending',
+                completed: false,
+                created_by: user.id,
+              });
+              roomItemCount++;
+            }
+          });
+        }
+
+        console.log(`Room "${room.name}": ${roomItemCount} tasks added`);
+      }
+
+      // Single batch insert of all deduplicated subtasks
+      const allSubtasks = Array.from(allSubtasksMap.values());
+      
+      if (allSubtasks.length === 0) {
+        console.warn("No subtasks created for inspection");
+        throw new Error("No tasks found in template. Please add tasks to the template rooms.");
+      }
+
+      console.log(`Inserting ${allSubtasks.length} total subtasks`);
+
+      const { error: subtasksError } = await supabase
+        .from("subtasks")
+        .insert(allSubtasks);
+
+      if (subtasksError) {
+        console.error("Failed to insert subtasks:", subtasksError);
+        throw subtasksError;
+      }
+
+      console.log("Inspection created successfully with all tasks");
 
       onAddInspection({
         type,
