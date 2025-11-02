@@ -183,6 +183,8 @@ export default function InspectionDetailsDialog({
   const [showCompleted, setShowCompleted] = useState<'to-do' | 'completed' | 'all'>('to-do');
   const [subtaskNotes, setSubtaskNotes] = useState<Record<string, string>>({});
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [localStatus, setLocalStatus] = useState<Record<string, 'good' | 'bad' | 'pending'>>({});
+  const [subtaskMention, setSubtaskMention] = useState<Record<string, { query: string; atIndex: number }>>({});
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -510,19 +512,21 @@ export default function InspectionDetailsDialog({
   };
 
   const handleStatusChange = async (subtaskId: string, newStatus: 'good' | 'bad', currentStatus?: string) => {
-    // If clicking bad and it's already bad, toggle to pending
-    // If clicking good and it's already good, toggle to pending
     const finalStatus = currentStatus === newStatus ? 'pending' : newStatus;
-    
-    // If changing to bad, expand notes for user to add them
+
     if (finalStatus === 'bad') {
+      setLocalStatus(prev => ({ ...prev, [subtaskId]: 'bad' }));
       setExpandedNotes(prev => ({ ...prev, [subtaskId]: true }));
-      return; // Don't save yet, let user add notes
+      return; // wait for submit
     }
+
+    // Optimistic update for good/pending
+    setLocalStatus(prev => ({ ...prev, [subtaskId]: finalStatus }));
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast.error("You must be logged in");
+      setLocalStatus(prev => { const { [subtaskId]: _, ...rest } = prev; return rest; });
       return;
     }
 
@@ -532,27 +536,25 @@ export default function InspectionDetailsDialog({
         status: finalStatus,
         status_changed_by: user.id,
         status_changed_at: new Date().toISOString(),
-        ...(finalStatus === 'pending' && { attachment_url: null }), // Clear notes when resetting
+        ...(finalStatus === 'pending' && { attachment_url: null }),
       })
       .eq("id", subtaskId);
 
     if (error) {
       toast.error("Failed to update status");
-    } else {
-      // Close notes when marking as good
-      if (finalStatus === 'good') {
-        setExpandedNotes(prev => ({ ...prev, [subtaskId]: false }));
-      }
-      fetchSubtasks();
-      toast.success(`Status updated to ${finalStatus}`);
     }
+
+    // Clear local override after backend confirms (UI already updated)
+    setLocalStatus(prev => { const { [subtaskId]: _, ...rest } = prev; return rest; });
+    if (finalStatus === 'good') setExpandedNotes(prev => ({ ...prev, [subtaskId]: false }));
+    fetchSubtasks();
   };
 
   const handleSaveNotes = async (subtaskId: string) => {
     const note = subtaskNotes[subtaskId] || '';
     
     if (!note.trim()) {
-      toast.error("Please add notes before marking as bad");
+      toast.error("Please @assign and enter notes before submitting");
       return;
     }
 
@@ -574,12 +576,13 @@ export default function InspectionDetailsDialog({
 
     if (error) {
       console.error('Error saving notes:', error);
-      toast.error('Failed to save notes');
+      toast.error('Failed to submit');
       return;
     }
 
-    toast.success('Marked as bad with notes');
+    toast.success('Submitted');
     setExpandedNotes(prev => ({ ...prev, [subtaskId]: false }));
+    setLocalStatus(prev => { const { [subtaskId]: _, ...rest } = prev; return rest; });
     fetchSubtasks();
   };
 
@@ -1024,9 +1027,10 @@ export default function InspectionDetailsDialog({
                       <div className="p-2 space-y-2">
                         {roomSubtasks.map((subtask) => {
                           const isInherited = subtask.original_inspection_id !== inspectionId;
-                          const isGood = subtask.status === 'good';
-                          const isBad = subtask.status === 'bad';
-                          const isPending = !subtask.status || subtask.status === 'pending';
+                          const effectiveStatus = localStatus[subtask.id] ?? subtask.status;
+                          const isGood = effectiveStatus === 'good';
+                          const isBad = effectiveStatus === 'bad';
+                          const isPending = !effectiveStatus || effectiveStatus === 'pending';
 
                           return (
                             <div
@@ -1091,17 +1095,61 @@ export default function InspectionDetailsDialog({
                                     
                                     {/* Notes section (visible when expanded or bad status) */}
                                     {(isBad || expandedNotes[subtask.id]) && (
-                                      <>
+                                      <div className="space-y-2 relative">
                                         <Textarea
-                                          placeholder="Add notes (required for Bad)..."
-                                          value={subtaskNotes[subtask.id] || subtask.attachment_url || ''}
+                                          placeholder="Type @ to assign and enter notes (required for Bad)…"
+                                          value={subtaskNotes[subtask.id] || ''}
                                           onChange={(e) => {
                                             e.stopPropagation();
-                                            setSubtaskNotes({...subtaskNotes, [subtask.id]: e.target.value});
+                                            const value = e.target.value;
+                                            setSubtaskNotes({ ...subtaskNotes, [subtask.id]: value });
+                                            const lastAt = value.lastIndexOf('@');
+                                            if (lastAt !== -1) {
+                                              const after = value.slice(lastAt + 1);
+                                              if (!after.includes(' ') && after.length >= 0) {
+                                                setSubtaskMention(prev => ({ ...prev, [subtask.id]: { query: after.toLowerCase(), atIndex: lastAt } }));
+                                              } else {
+                                                setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                              }
+                                            } else {
+                                              setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                            }
                                           }}
                                           onClick={(e) => e.stopPropagation()}
                                           className="h-16 text-xs"
                                         />
+
+                                        {/* Mentions dropdown */}
+                                        {subtaskMention[subtask.id]?.query && (
+                                          <div className="absolute left-0 top-full mt-1 w-56 bg-background border border-border rounded-md shadow z-50">
+                                            <ul className="max-h-40 overflow-auto text-xs">
+                                              {users
+                                                .filter(u => (u.full_name || u.email).toLowerCase().includes(subtaskMention[subtask.id]!.query))
+                                                .slice(0, 5)
+                                                .map(u => (
+                                                  <li
+                                                    key={u.id}
+                                                    className="px-2 py-1 hover:bg-accent cursor-pointer"
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      const current = subtaskNotes[subtask.id] || '';
+                                                      const atIndex = subtaskMention[subtask.id]!.atIndex;
+                                                      const before = current.slice(0, atIndex);
+                                                      const after = current.slice(atIndex + subtaskMention[subtask.id]!.query.length + 1);
+                                                      const name = u.full_name || u.email;
+                                                      const next = `${before}@${name} ${after}`;
+                                                      setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
+                                                      setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                                      handleAssignUser(subtask.id, u.id);
+                                                    }}
+                                                  >
+                                                    {u.full_name || u.email}
+                                                  </li>
+                                                ))}
+                                            </ul>
+                                          </div>
+                                        )}
+
                                         {isBad && (
                                           <>
                                             <Select
@@ -1113,7 +1161,7 @@ export default function InspectionDetailsDialog({
                                               <SelectTrigger className="h-7 text-xs" onClick={(e) => e.stopPropagation()}>
                                                 <SelectValue placeholder="Assign to..." />
                                               </SelectTrigger>
-                                              <SelectContent className="max-h-48">
+                                              <SelectContent className="max-h-48 z-50 bg-background">
                                                 {users.map((user) => (
                                                   <SelectItem key={user.id} value={user.id} className="text-xs">
                                                     {user.full_name || user.email}
@@ -1129,11 +1177,11 @@ export default function InspectionDetailsDialog({
                                               }}
                                               className="h-7 text-xs w-full"
                                             >
-                                              Save
+                                              Submit
                                             </Button>
                                           </>
                                         )}
-                                      </>
+                                      </div>
                                     )}
                                   </div>
                                 )}
@@ -1226,7 +1274,7 @@ export default function InspectionDetailsDialog({
                   <SelectTrigger className="h-7 text-xs flex-1">
                     <SelectValue placeholder="Assign all to..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-50 bg-background">
                     {users.map((user) => (
                       <SelectItem key={user.id} value={user.id} className="text-xs">
                         {user.full_name || user.email}
