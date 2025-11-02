@@ -79,6 +79,7 @@ export default function AddInspectionDialog({
   const [newUnitName, setNewUnitName] = useState("");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch units and templates when property is selected
   useEffect(() => {
@@ -198,6 +199,12 @@ export default function AddInspectionDialog({
       return;
     }
 
+    if (isSubmitting) {
+      return; // Prevent double submission
+    }
+
+    setIsSubmitting(true);
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast.error("You must be logged in");
@@ -269,17 +276,17 @@ export default function AddInspectionDialog({
             }
           }
 
-          // Add default tasks for this room template
+          // Add room-specific default tasks for this room template
           if (room.room_template_id) {
             const { data: defaultTasks } = await supabase
               .from("default_task_room_templates")
               .select(`
-                default_task_id,
                 default_room_tasks (
                   id,
                   description,
                   inventory_quantity,
-                  inventory_type_id
+                  inventory_type_id,
+                  applies_to_all_rooms
                 )
               `)
               .eq("room_template_id", room.room_template_id);
@@ -293,6 +300,24 @@ export default function AddInspectionDialog({
                     inventory_type_id: dt.default_room_tasks.inventory_type_id,
                   });
                 }
+              }
+            }
+          }
+
+          // Add global default tasks that apply to all rooms (only for first room to avoid duplicates)
+          if (room === rooms[0]) {
+            const { data: globalTasks } = await supabase
+              .from("default_room_tasks")
+              .select("*")
+              .eq("applies_to_all_rooms", true);
+
+            if (globalTasks) {
+              for (const task of globalTasks) {
+                allItems.push({
+                  description: task.description,
+                  inventory_quantity: task.inventory_quantity || 0,
+                  inventory_type_id: task.inventory_type_id,
+                });
               }
             }
           }
@@ -335,6 +360,8 @@ export default function AddInspectionDialog({
     } catch (error: any) {
       console.error("Error creating inspection:", error);
       toast.error("Failed to create inspection");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -610,7 +637,12 @@ export default function AddInspectionDialog({
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>Add Inspection</Button>
+          <Button 
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Creating..." : "Add Inspection"}
+          </Button>
           </DialogFooter>
         </div>
       </DialogContent>
