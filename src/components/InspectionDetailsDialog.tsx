@@ -182,7 +182,7 @@ export default function InspectionDetailsDialog({
   }>>([]);
   const [showCompleted, setShowCompleted] = useState<'to-do' | 'completed' | 'all'>('to-do');
   const [subtaskNotes, setSubtaskNotes] = useState<Record<string, string>>({});
-  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -245,66 +245,39 @@ export default function InspectionDetailsDialog({
     // Get all subtasks from the entire inspection chain
     const allSubtasks = await getAllSubtasksInChain(inspectionId);
 
-    // Fetch profiles for assigned users and creators
-    const subtasksWithProfiles = await Promise.all(
-      allSubtasks.map(async (subtask) => {
-        let assignedProfiles = [];
-        let creatorProfile = null;
-        let completedByProfile = null;
+    // Collect all unique user IDs that we need profiles for
+    const userIds = new Set<string>();
+    allSubtasks.forEach(subtask => {
+      if (subtask.assigned_users) {
+        subtask.assigned_users.forEach((id: string) => userIds.add(id));
+      }
+      if (subtask.created_by) userIds.add(subtask.created_by);
+      if (subtask.completed_by) userIds.add(subtask.completed_by);
+      if (subtask.status_changed_by) userIds.add(subtask.status_changed_by);
+    });
 
-        // Fetch assigned user profiles
-        if (subtask.assigned_users && subtask.assigned_users.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("full_name, email, avatar_url")
-            .in("id", subtask.assigned_users);
+    // Fetch all profiles in a single query
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, avatar_url")
+      .in("id", Array.from(userIds));
 
-          assignedProfiles = profiles || [];
-        }
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-        // Fetch creator profile
-        if (subtask.created_by) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name, email, avatar_url")
-            .eq("id", subtask.created_by)
-            .maybeSingle();
-
-          creatorProfile = profile;
-        }
-
-        // Fetch completed by profile
-        if (subtask.completed_by) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name, email, avatar_url")
-            .eq("id", subtask.completed_by)
-            .maybeSingle();
-
-          completedByProfile = profile;
-        }
-
-        // Fetch status changed by profile
-        let statusChangedByProfile = null;
-        if (subtask.status_changed_by) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("full_name, email, avatar_url")
-            .eq("id", subtask.status_changed_by)
-            .maybeSingle();
-
-          statusChangedByProfile = profile;
-        }
-
-        return { 
-          ...subtask, 
-          assignedProfiles,
-          creatorProfile,
-          completedByProfile,
-          statusChangedByProfile
-        };
-      })
-    );
+    // Map profiles to subtasks
+    const subtasksWithProfiles = allSubtasks.map(subtask => {
+      const assignedProfiles = subtask.assigned_users
+        ?.map((id: string) => profileMap.get(id))
+        .filter(Boolean) || [];
+      
+      return {
+        ...subtask,
+        assignedProfiles,
+        creatorProfile: subtask.created_by ? profileMap.get(subtask.created_by) : null,
+        completedByProfile: subtask.completed_by ? profileMap.get(subtask.completed_by) : null,
+        statusChangedByProfile: subtask.status_changed_by ? profileMap.get(subtask.status_changed_by) : null,
+      };
+    });
 
     // Sort: incomplete tasks first, then completed tasks
     subtasksWithProfiles.sort((a, b) => {
@@ -537,13 +510,14 @@ export default function InspectionDetailsDialog({
   };
 
   const handleStatusChange = async (subtaskId: string, newStatus: 'good' | 'bad', currentStatus?: string) => {
-    // If clicking the same status, toggle it off (set to pending)
+    // If clicking bad and it's already bad, toggle to pending
+    // If clicking good and it's already good, toggle to pending
     const finalStatus = currentStatus === newStatus ? 'pending' : newStatus;
     
-    // Require notes for bad status
-    if (finalStatus === 'bad' && !subtaskNotes[subtaskId]?.trim()) {
-      toast.error("Please add notes before marking as bad");
-      return;
+    // If changing to bad, expand notes for user to add them
+    if (finalStatus === 'bad') {
+      setExpandedNotes(prev => ({ ...prev, [subtaskId]: true }));
+      return; // Don't save yet, let user add notes
     }
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -558,16 +532,59 @@ export default function InspectionDetailsDialog({
         status: finalStatus,
         status_changed_by: user.id,
         status_changed_at: new Date().toISOString(),
-        description: subtaskNotes[subtaskId] || undefined,
+        ...(finalStatus === 'pending' && { attachment_url: null }), // Clear notes when resetting
       })
       .eq("id", subtaskId);
 
     if (error) {
       toast.error("Failed to update status");
     } else {
+      // Close notes when marking as good
+      if (finalStatus === 'good') {
+        setExpandedNotes(prev => ({ ...prev, [subtaskId]: false }));
+      }
       fetchSubtasks();
       toast.success(`Status updated to ${finalStatus}`);
     }
+  };
+
+  const handleSaveNotes = async (subtaskId: string) => {
+    const note = subtaskNotes[subtaskId] || '';
+    
+    if (!note.trim()) {
+      toast.error("Please add notes before marking as bad");
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("subtasks")
+      .update({ 
+        attachment_url: note,
+        status: 'bad',
+        status_changed_by: user.id,
+        status_changed_at: new Date().toISOString()
+      })
+      .eq("id", subtaskId);
+
+    if (error) {
+      console.error('Error saving notes:', error);
+      toast.error('Failed to save notes');
+      return;
+    }
+
+    toast.success('Marked as bad with notes');
+    setExpandedNotes(prev => ({ ...prev, [subtaskId]: false }));
+    fetchSubtasks();
+  };
+
+  const toggleNotes = (subtaskId: string) => {
+    setExpandedNotes(prev => ({ ...prev, [subtaskId]: !prev[subtaskId] }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -975,7 +992,7 @@ export default function InspectionDetailsDialog({
 
                 return (
                   <div key={roomName} className="border rounded-lg overflow-hidden">
-                    {/* Room Header */}
+                    {/* Room Header - Sticky */}
                     <button
                       onClick={() => {
                         setCollapsedRooms(prev => {
@@ -988,7 +1005,7 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors ${
+                      className={`sticky top-0 z-10 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
                       }`}
                     >
@@ -1014,11 +1031,12 @@ export default function InspectionDetailsDialog({
                           return (
                             <div
                               key={subtask.id}
-                              className={`flex items-start gap-2 p-2 border rounded transition-colors ${
+                              onClick={() => !isInherited && !subtask.completed && toggleNotes(subtask.id)}
+                              className={`flex items-start gap-2 p-2 border rounded transition-colors cursor-pointer ${
                                 isGood
-                                  ? "bg-green-50 dark:bg-green-950/20"
+                                  ? "bg-green-50 dark:bg-green-950/20 border-l-4 border-l-green-600"
                                   : isBad
-                                  ? "bg-red-50 dark:bg-red-950/20"
+                                  ? "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-600"
                                   : subtask.completed
                                   ? "bg-muted/30 opacity-60"
                                   : isInherited
@@ -1045,18 +1063,14 @@ export default function InspectionDetailsDialog({
 
                                 {/* Good/Bad Buttons */}
                                 {!isInherited && !subtask.completed && (
-                                  <div className="space-y-2 mb-2">
+                                  <div className="space-y-2 mb-2" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex gap-1">
                                       <Button
                                         variant={isGood ? "default" : "outline"}
                                         size="sm"
-                                        onClick={() => {
+                                        onClick={(e) => {
+                                          e.stopPropagation();
                                           handleStatusChange(subtask.id, 'good', subtask.status);
-                                          setExpandedNotes(prev => {
-                                            const next = new Set(prev);
-                                            next.delete(subtask.id);
-                                            return next;
-                                          });
                                         }}
                                         className={`h-6 text-[10px] px-2 ${isGood ? 'bg-green-600 hover:bg-green-700' : ''}`}
                                       >
@@ -1065,73 +1079,59 @@ export default function InspectionDetailsDialog({
                                       <Button
                                         variant={isBad ? "destructive" : "outline"}
                                         size="sm"
-                                        onClick={() => {
-                                          if (!isBad) {
-                                            setExpandedNotes(prev => new Set(prev).add(subtask.id));
-                                          } else {
-                                            handleStatusChange(subtask.id, 'bad', subtask.status);
-                                          }
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStatusChange(subtask.id, 'bad', subtask.status);
                                         }}
                                         className="h-6 text-[10px] px-2"
                                       >
                                         Bad
                                       </Button>
-                                      {!isBad && !isGood && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => {
-                                            setExpandedNotes(prev => {
-                                              const next = new Set(prev);
-                                              if (next.has(subtask.id)) {
-                                                next.delete(subtask.id);
-                                              } else {
-                                                next.add(subtask.id);
-                                              }
-                                              return next;
-                                            });
-                                          }}
-                                          className="h-6 text-[10px] px-2"
-                                        >
-                                          {expandedNotes.has(subtask.id) ? 'Hide' : 'Notes'}
-                                        </Button>
-                                      )}
                                     </div>
                                     
-                                    {/* Assign dropdown and Notes (for Bad or expanded items) */}
-                                    {(isBad || expandedNotes.has(subtask.id)) && (
+                                    {/* Notes section (visible when expanded or bad status) */}
+                                    {(isBad || expandedNotes[subtask.id]) && (
                                       <>
-                                        {isBad && (
-                                          <Select
-                                            value=""
-                                            onValueChange={(userId) => handleAssignUser(subtask.id, userId)}
-                                          >
-                                            <SelectTrigger className="h-7 text-xs">
-                                              <SelectValue placeholder="Assign to..." />
-                                            </SelectTrigger>
-                                            <SelectContent className="max-h-48">
-                                              {users.map((user) => (
-                                                <SelectItem key={user.id} value={user.id} className="text-xs">
-                                                  {user.full_name || user.email}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                        )}
                                         <Textarea
-                                          placeholder={isBad ? "Notes (required for Bad)" : "Add notes..."}
-                                          value={subtaskNotes[subtask.id] || subtask.description}
-                                          onChange={(e) => setSubtaskNotes({...subtaskNotes, [subtask.id]: e.target.value})}
+                                          placeholder="Add notes (required for Bad)..."
+                                          value={subtaskNotes[subtask.id] || subtask.attachment_url || ''}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            setSubtaskNotes({...subtaskNotes, [subtask.id]: e.target.value});
+                                          }}
+                                          onClick={(e) => e.stopPropagation()}
                                           className="h-16 text-xs"
                                         />
                                         {isBad && (
-                                          <Button
-                                            size="sm"
-                                            onClick={() => handleStatusChange(subtask.id, 'bad', subtask.status)}
-                                            className="h-7 text-xs w-full"
-                                          >
-                                            Save
-                                          </Button>
+                                          <>
+                                            <Select
+                                              value=""
+                                              onValueChange={(userId) => {
+                                                handleAssignUser(subtask.id, userId);
+                                              }}
+                                            >
+                                              <SelectTrigger className="h-7 text-xs" onClick={(e) => e.stopPropagation()}>
+                                                <SelectValue placeholder="Assign to..." />
+                                              </SelectTrigger>
+                                              <SelectContent className="max-h-48">
+                                                {users.map((user) => (
+                                                  <SelectItem key={user.id} value={user.id} className="text-xs">
+                                                    {user.full_name || user.email}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                            <Button
+                                              size="sm"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSaveNotes(subtask.id);
+                                              }}
+                                              className="h-7 text-xs w-full"
+                                            >
+                                              Save
+                                            </Button>
+                                          </>
                                         )}
                                       </>
                                     )}
@@ -1183,7 +1183,10 @@ export default function InspectionDetailsDialog({
                                   variant="ghost"
                                   size="icon"
                                   className="h-6 w-6 flex-shrink-0"
-                                  onClick={() => handleDeleteSubtask(subtask.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSubtask(subtask.id);
+                                  }}
                                 >
                                   <Trash2 className="h-3 w-3 text-destructive" />
                                 </Button>
