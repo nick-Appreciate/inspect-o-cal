@@ -1090,8 +1090,7 @@ export default function InspectionDetailsDialog({
                           return (
                             <div
                               key={subtask.id}
-                              onClick={() => !isInherited && !subtask.completed && toggleActivity(subtask.id)}
-                              className={`flex items-start gap-2 p-2 border rounded transition-colors cursor-pointer ${
+                              className={`flex items-start gap-2 p-2 border rounded transition-colors ${
                                 isGood
                                   ? "bg-green-50 dark:bg-green-950/20 border-l-4 border-l-green-600"
                                   : isBad
@@ -1104,7 +1103,13 @@ export default function InspectionDetailsDialog({
                               }`}
                             >
                               <div className="flex-1 min-w-0 text-xs">
-                                <div className="flex items-start gap-2 flex-wrap mb-2">
+                                <div 
+                                  className="flex items-start gap-2 flex-wrap mb-2 cursor-pointer hover:bg-muted/30 rounded p-1 -m-1"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleActivity(subtask.id);
+                                  }}
+                                >
                                   <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
                                     {subtask.description}
                                   </p>
@@ -1119,6 +1124,35 @@ export default function InspectionDetailsDialog({
                                     </Badge>
                                   )}
                                 </div>
+
+                                {/* Activity Feed (visible when expanded) */}
+                                {expandedActivity[subtask.id] && subtaskActivities[subtask.id] && (
+                                  <div className="border-l-2 border-muted pl-3 space-y-2 max-h-48 overflow-y-auto mb-2">
+                                    {subtaskActivities[subtask.id].map((activity: any) => (
+                                      <div key={activity.id} className="text-xs">
+                                        <div className="flex items-start gap-2">
+                                          <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
+                                          <div className="flex-1">
+                                            <div className="font-medium">
+                                              {activity.activity_type === 'created' && 'Created'}
+                                              {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
+                                              {activity.activity_type === 'note_added' && 'Note added'}
+                                              {activity.activity_type === 'completed' && 'Marked complete'}
+                                              {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
+                                            </div>
+                                            {activity.notes && (
+                                              <div className="text-muted-foreground mt-1">{activity.notes}</div>
+                                            )}
+                                            <div className="text-muted-foreground text-[10px] mt-0.5">
+                                              {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
+                                              {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
 
                                 {/* Good/Bad Buttons */}
                                 {!isInherited && !subtask.completed && (
@@ -1148,124 +1182,90 @@ export default function InspectionDetailsDialog({
                                       </Button>
                                     </div>
                                     
-                                    {/* Activity Feed (visible when expanded or bad status) */}
-                                    {(isBad || expandedActivity[subtask.id]) && (
+                                    {/* Add note form when bad status */}
+                                    {isBad && (
                                       <div className="space-y-2 relative">
-                                        {/* Activity timeline */}
-                                        {expandedActivity[subtask.id] && subtaskActivities[subtask.id] && (
-                                          <div className="border-l-2 border-muted pl-3 space-y-2 max-h-48 overflow-y-auto">
-                                            {subtaskActivities[subtask.id].map((activity: any) => (
-                                              <div key={activity.id} className="text-xs">
-                                                <div className="flex items-start gap-2">
-                                                  <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
-                                                  <div className="flex-1">
-                                                    <div className="font-medium">
-                                                      {activity.activity_type === 'created' && 'Created'}
-                                                      {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
-                                                      {activity.activity_type === 'note_added' && 'Note added'}
-                                                      {activity.activity_type === 'completed' && 'Marked complete'}
-                                                      {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
-                                                    </div>
-                                                    {activity.notes && (
-                                                      <div className="text-muted-foreground mt-1">{activity.notes}</div>
-                                                    )}
-                                                    <div className="text-muted-foreground text-[10px] mt-0.5">
-                                                      {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
-                                                      {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            ))}
+                                        <Textarea
+                                          placeholder="Type @ to assign and enter notes (required for Bad)…"
+                                          value={subtaskNotes[subtask.id] || ''}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            const value = e.target.value;
+                                            setSubtaskNotes({ ...subtaskNotes, [subtask.id]: value });
+                                            const lastAt = value.lastIndexOf('@');
+                                            if (lastAt !== -1) {
+                                              const after = value.slice(lastAt + 1);
+                                              if (!after.includes(' ') && after.length >= 0) {
+                                                setSubtaskMention(prev => ({ ...prev, [subtask.id]: { query: after.toLowerCase(), atIndex: lastAt } }));
+                                              } else {
+                                                setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                              }
+                                            } else {
+                                              setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                            }
+                                          }}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="h-16 text-xs"
+                                        />
+
+                                        {/* Mentions dropdown */}
+                                        {subtaskMention[subtask.id]?.query && (
+                                          <div className="absolute left-0 top-full mt-1 w-56 bg-background border border-border rounded-md shadow z-50">
+                                            <ul className="max-h-40 overflow-auto text-xs">
+                                              {users
+                                                .filter(u => (u.full_name || u.email).toLowerCase().includes(subtaskMention[subtask.id]!.query))
+                                                .slice(0, 5)
+                                                .map(u => (
+                                                  <li
+                                                    key={u.id}
+                                                    className="px-2 py-1 hover:bg-accent cursor-pointer"
+                                                    onMouseDown={(e) => {
+                                                      e.preventDefault();
+                                                      const current = subtaskNotes[subtask.id] || '';
+                                                      const atIndex = subtaskMention[subtask.id]!.atIndex;
+                                                      const before = current.slice(0, atIndex);
+                                                      const after = current.slice(atIndex + subtaskMention[subtask.id]!.query.length + 1);
+                                                      const name = u.full_name || u.email;
+                                                      const next = `${before}@${name} ${after}`;
+                                                      setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
+                                                      setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                                      handleAssignUser(subtask.id, u.id);
+                                                    }}
+                                                  >
+                                                    {u.full_name || u.email}
+                                                  </li>
+                                                ))}
+                                            </ul>
                                           </div>
                                         )}
 
-                                        {/* Add note form when bad status */}
-                                        {isBad && (
-                                          <>
-                                            <Textarea
-                                              placeholder="Type @ to assign and enter notes (required for Bad)…"
-                                              value={subtaskNotes[subtask.id] || ''}
-                                              onChange={(e) => {
-                                                e.stopPropagation();
-                                                const value = e.target.value;
-                                                setSubtaskNotes({ ...subtaskNotes, [subtask.id]: value });
-                                                const lastAt = value.lastIndexOf('@');
-                                                if (lastAt !== -1) {
-                                                  const after = value.slice(lastAt + 1);
-                                                  if (!after.includes(' ') && after.length >= 0) {
-                                                    setSubtaskMention(prev => ({ ...prev, [subtask.id]: { query: after.toLowerCase(), atIndex: lastAt } }));
-                                                  } else {
-                                                    setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
-                                                  }
-                                                } else {
-                                                  setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
-                                                }
-                                              }}
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="h-16 text-xs"
-                                            />
-
-                                            {/* Mentions dropdown */}
-                                            {subtaskMention[subtask.id]?.query && (
-                                              <div className="absolute left-0 top-full mt-1 w-56 bg-background border border-border rounded-md shadow z-50">
-                                                <ul className="max-h-40 overflow-auto text-xs">
-                                                  {users
-                                                    .filter(u => (u.full_name || u.email).toLowerCase().includes(subtaskMention[subtask.id]!.query))
-                                                    .slice(0, 5)
-                                                    .map(u => (
-                                                      <li
-                                                        key={u.id}
-                                                        className="px-2 py-1 hover:bg-accent cursor-pointer"
-                                                        onMouseDown={(e) => {
-                                                          e.preventDefault();
-                                                          const current = subtaskNotes[subtask.id] || '';
-                                                          const atIndex = subtaskMention[subtask.id]!.atIndex;
-                                                          const before = current.slice(0, atIndex);
-                                                          const after = current.slice(atIndex + subtaskMention[subtask.id]!.query.length + 1);
-                                                          const name = u.full_name || u.email;
-                                                          const next = `${before}@${name} ${after}`;
-                                                          setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
-                                                          setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
-                                                          handleAssignUser(subtask.id, u.id);
-                                                        }}
-                                                      >
-                                                        {u.full_name || u.email}
-                                                      </li>
-                                                    ))}
-                                                </ul>
-                                              </div>
-                                            )}
-
-                                            <Select
-                                              value=""
-                                              onValueChange={(userId) => {
-                                                handleAssignUser(subtask.id, userId);
-                                              }}
-                                            >
-                                              <SelectTrigger className="h-7 text-xs" onClick={(e) => e.stopPropagation()}>
-                                                <SelectValue placeholder="Assign to..." />
-                                              </SelectTrigger>
-                                              <SelectContent className="max-h-48 z-50 bg-background">
-                                                {users.map((user) => (
-                                                  <SelectItem key={user.id} value={user.id} className="text-xs">
-                                                    {user.full_name || user.email}
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
-                                            <Button
-                                              size="sm"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleSaveNotes(subtask.id);
-                                              }}
-                                              className="h-7 text-xs w-full"
-                                            >
-                                              Submit
-                                            </Button>
-                                          </>
-                                        )}
+                                        <Select
+                                          value=""
+                                          onValueChange={(userId) => {
+                                            handleAssignUser(subtask.id, userId);
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-7 text-xs" onClick={(e) => e.stopPropagation()}>
+                                            <SelectValue placeholder="Assign to..." />
+                                          </SelectTrigger>
+                                          <SelectContent className="max-h-48 z-50 bg-background">
+                                            {users.map((user) => (
+                                              <SelectItem key={user.id} value={user.id} className="text-xs">
+                                                {user.full_name || user.email}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <Button
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSaveNotes(subtask.id);
+                                          }}
+                                          className="h-7 text-xs w-full"
+                                        >
+                                          Submit
+                                        </Button>
                                       </div>
                                     )}
                                   </div>
