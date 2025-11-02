@@ -258,6 +258,7 @@ export default function AddInspectionDialog({
             description: string;
             inventory_quantity: number;
             inventory_type_id: string | null;
+            vendor_type_id?: string | null;
           }> = [];
 
           // Fetch template_items for this room
@@ -272,6 +273,7 @@ export default function AddInspectionDialog({
               description: item.description,
               inventory_quantity: item.inventory_quantity || 0,
               inventory_type_id: item.inventory_type_id,
+              vendor_type_id: item.vendor_type_id,
             })));
           } else {
             // Fallback: derive from room_template_items if template_items don't exist
@@ -288,6 +290,7 @@ export default function AddInspectionDialog({
                   description: rt.description,
                   inventory_quantity: rt.inventory_quantity || 0,
                   inventory_type_id: rt.inventory_type_id,
+                  vendor_type_id: rt.vendor_type_id,
                 })));
 
                 // Populate template_items to fix the template for future use
@@ -318,6 +321,7 @@ export default function AddInspectionDialog({
                   description,
                   inventory_quantity,
                   inventory_type_id,
+                  vendor_type_id,
                   applies_to_all_rooms
                 )
               `)
@@ -330,6 +334,7 @@ export default function AddInspectionDialog({
                     description: dt.default_room_tasks.description,
                     inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
                     inventory_type_id: dt.default_room_tasks.inventory_type_id,
+                    vendor_type_id: dt.default_room_tasks.vendor_type_id,
                   });
                 }
               }
@@ -349,6 +354,7 @@ export default function AddInspectionDialog({
                   description: task.description,
                   inventory_quantity: task.inventory_quantity || 0,
                   inventory_type_id: task.inventory_type_id,
+                  vendor_type_id: task.vendor_type_id,
                 });
               }
             }
@@ -362,6 +368,7 @@ export default function AddInspectionDialog({
               description: item.description,
               room_name: room.name,
               inventory_type_id: item.inventory_type_id,
+              vendor_type_id: item.vendor_type_id,
               inventory_quantity: item.inventory_quantity || 0,
               status: 'pending',
               completed: false,

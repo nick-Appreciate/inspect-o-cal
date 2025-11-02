@@ -598,9 +598,22 @@ export default function InspectionDetailsDialog({
       return;
     }
 
+    // Find the current subtask to check its status
+    const currentSubtask = subtasks.find(s => s.id === subtaskId);
+
     const updateData = completed
       ? { completed: false, completed_at: null, completed_by: null }
-      : { completed: true, completed_at: new Date().toISOString(), completed_by: user.id };
+      : { 
+          completed: true, 
+          completed_at: new Date().toISOString(), 
+          completed_by: user.id,
+          // If marking as complete and status is 'bad', change it to 'good'
+          ...(currentSubtask?.status === 'bad' ? { 
+            status: 'good',
+            status_changed_by: user.id,
+            status_changed_at: new Date().toISOString()
+          } : {})
+        };
 
     const { error } = await supabase
       .from("subtasks")
