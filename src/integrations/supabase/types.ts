@@ -448,6 +448,47 @@ export type Database = {
         }
         Relationships: []
       }
+      subtask_activity: {
+        Row: {
+          activity_type: string
+          created_at: string
+          created_by: string
+          id: string
+          new_value: string | null
+          notes: string | null
+          old_value: string | null
+          subtask_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          created_by: string
+          id?: string
+          new_value?: string | null
+          notes?: string | null
+          old_value?: string | null
+          subtask_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          new_value?: string | null
+          notes?: string | null
+          old_value?: string | null
+          subtask_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtask_activity_subtask_id_fkey"
+            columns: ["subtask_id"]
+            isOneToOne: false
+            referencedRelation: "subtasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subtasks: {
         Row: {
           assigned_users: string[] | null

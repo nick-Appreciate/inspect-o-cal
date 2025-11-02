@@ -180,11 +180,12 @@ export default function InspectionDetailsDialog({
     type: string;
     subtaskCount: number;
   }>>([]);
-  const [showCompleted, setShowCompleted] = useState<'to-do' | 'completed' | 'all'>('to-do');
+  const [showCompleted, setShowCompleted] = useState<'to-do' | 'bad' | 'completed'>('to-do');
   const [subtaskNotes, setSubtaskNotes] = useState<Record<string, string>>({});
-  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [expandedActivity, setExpandedActivity] = useState<Record<string, boolean>>({});
   const [localStatus, setLocalStatus] = useState<Record<string, 'good' | 'bad' | 'pending'>>({});
   const [subtaskMention, setSubtaskMention] = useState<Record<string, { query: string; atIndex: number }>>({});
+  const [subtaskActivities, setSubtaskActivities] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -196,6 +197,46 @@ export default function InspectionDetailsDialog({
       fetchHistoricalInspections();
     }
   }, [inspectionId, open]);
+
+  // Setup realtime subscription for subtask activities
+  useEffect(() => {
+    if (!open) return;
+
+    const channel = supabase
+      .channel('subtask-activity-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subtask_activity'
+        },
+        (payload) => {
+          // Refresh activities for the affected subtask
+          if (payload.new && 'subtask_id' in payload.new) {
+            const subtaskId = (payload.new as any).subtask_id;
+            if (expandedActivity[subtaskId]) {
+              // Refetch activities for this subtask
+              supabase
+                .from('subtask_activity')
+                .select('*, created_by_profile:created_by(full_name, email, avatar_url)')
+                .eq('subtask_id', subtaskId)
+                .order('created_at', { ascending: true })
+                .then(({ data }) => {
+                  if (data) {
+                    setSubtaskActivities(prev => ({ ...prev, [subtaskId]: data }));
+                  }
+                });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, expandedActivity]);
 
   const fetchInspectionDetails = async () => {
     if (!inspectionId) return;
@@ -516,7 +557,7 @@ export default function InspectionDetailsDialog({
 
     if (finalStatus === 'bad') {
       setLocalStatus(prev => ({ ...prev, [subtaskId]: 'bad' }));
-      setExpandedNotes(prev => ({ ...prev, [subtaskId]: true }));
+      setExpandedActivity(prev => ({ ...prev, [subtaskId]: true }));
       return; // wait for submit
     }
 
@@ -546,7 +587,7 @@ export default function InspectionDetailsDialog({
 
     // Clear local override after backend confirms (UI already updated)
     setLocalStatus(prev => { const { [subtaskId]: _, ...rest } = prev; return rest; });
-    if (finalStatus === 'good') setExpandedNotes(prev => ({ ...prev, [subtaskId]: false }));
+    if (finalStatus === 'good') setExpandedActivity(prev => ({ ...prev, [subtaskId]: false }));
     fetchSubtasks();
   };
 
@@ -581,13 +622,27 @@ export default function InspectionDetailsDialog({
     }
 
     toast.success('Submitted');
-    setExpandedNotes(prev => ({ ...prev, [subtaskId]: false }));
+    setExpandedActivity(prev => ({ ...prev, [subtaskId]: false }));
     setLocalStatus(prev => { const { [subtaskId]: _, ...rest } = prev; return rest; });
     fetchSubtasks();
   };
 
-  const toggleNotes = (subtaskId: string) => {
-    setExpandedNotes(prev => ({ ...prev, [subtaskId]: !prev[subtaskId] }));
+  const toggleActivity = async (subtaskId: string) => {
+    const isExpanding = !expandedActivity[subtaskId];
+    setExpandedActivity(prev => ({ ...prev, [subtaskId]: !prev[subtaskId] }));
+    
+    // Fetch activities if expanding and not already loaded
+    if (isExpanding && !subtaskActivities[subtaskId]) {
+      const { data, error } = await supabase
+        .from('subtask_activity')
+        .select('*, created_by_profile:created_by(full_name, email, avatar_url)')
+        .eq('subtask_id', subtaskId)
+        .order('created_at', { ascending: true });
+      
+      if (!error && data) {
+        setSubtaskActivities(prev => ({ ...prev, [subtaskId]: data }));
+      }
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -951,20 +1006,20 @@ export default function InspectionDetailsDialog({
                 To-Do
               </Button>
               <Button
+                variant={showCompleted === 'bad' ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowCompleted('bad')}
+                className="flex-1 h-8 text-xs"
+              >
+                Bad
+              </Button>
+              <Button
                 variant={showCompleted === 'completed' ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowCompleted('completed')}
                 className="flex-1 h-8 text-xs"
               >
                 Completed
-              </Button>
-              <Button
-                variant={showCompleted === 'all' ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowCompleted('all')}
-                className="flex-1 h-8 text-xs"
-              >
-                All
               </Button>
             </div>
 
@@ -974,7 +1029,7 @@ export default function InspectionDetailsDialog({
               {(() => {
                 // Filter subtasks based on mode
                 const filteredSubtasks = subtasks.filter(s => {
-                  if (showCompleted === 'all') return true;
+                  if (showCompleted === 'bad') return s.status === 'bad';
                   if (showCompleted === 'completed') return s.status === 'good' || s.completed;
                   if (showCompleted === 'to-do') return (s.status === 'bad' || s.status === 'pending' || !s.status) && !s.completed;
                   return true;
@@ -1035,7 +1090,7 @@ export default function InspectionDetailsDialog({
                           return (
                             <div
                               key={subtask.id}
-                              onClick={() => !isInherited && !subtask.completed && toggleNotes(subtask.id)}
+                              onClick={() => !isInherited && !subtask.completed && toggleActivity(subtask.id)}
                               className={`flex items-start gap-2 p-2 border rounded transition-colors cursor-pointer ${
                                 isGood
                                   ? "bg-green-50 dark:bg-green-950/20 border-l-4 border-l-green-600"
@@ -1093,65 +1148,95 @@ export default function InspectionDetailsDialog({
                                       </Button>
                                     </div>
                                     
-                                    {/* Notes section (visible when expanded or bad status) */}
-                                    {(isBad || expandedNotes[subtask.id]) && (
+                                    {/* Activity Feed (visible when expanded or bad status) */}
+                                    {(isBad || expandedActivity[subtask.id]) && (
                                       <div className="space-y-2 relative">
-                                        <Textarea
-                                          placeholder="Type @ to assign and enter notes (required for Bad)…"
-                                          value={subtaskNotes[subtask.id] || ''}
-                                          onChange={(e) => {
-                                            e.stopPropagation();
-                                            const value = e.target.value;
-                                            setSubtaskNotes({ ...subtaskNotes, [subtask.id]: value });
-                                            const lastAt = value.lastIndexOf('@');
-                                            if (lastAt !== -1) {
-                                              const after = value.slice(lastAt + 1);
-                                              if (!after.includes(' ') && after.length >= 0) {
-                                                setSubtaskMention(prev => ({ ...prev, [subtask.id]: { query: after.toLowerCase(), atIndex: lastAt } }));
-                                              } else {
-                                                setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
-                                              }
-                                            } else {
-                                              setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
-                                            }
-                                          }}
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="h-16 text-xs"
-                                        />
-
-                                        {/* Mentions dropdown */}
-                                        {subtaskMention[subtask.id]?.query && (
-                                          <div className="absolute left-0 top-full mt-1 w-56 bg-background border border-border rounded-md shadow z-50">
-                                            <ul className="max-h-40 overflow-auto text-xs">
-                                              {users
-                                                .filter(u => (u.full_name || u.email).toLowerCase().includes(subtaskMention[subtask.id]!.query))
-                                                .slice(0, 5)
-                                                .map(u => (
-                                                  <li
-                                                    key={u.id}
-                                                    className="px-2 py-1 hover:bg-accent cursor-pointer"
-                                                    onMouseDown={(e) => {
-                                                      e.preventDefault();
-                                                      const current = subtaskNotes[subtask.id] || '';
-                                                      const atIndex = subtaskMention[subtask.id]!.atIndex;
-                                                      const before = current.slice(0, atIndex);
-                                                      const after = current.slice(atIndex + subtaskMention[subtask.id]!.query.length + 1);
-                                                      const name = u.full_name || u.email;
-                                                      const next = `${before}@${name} ${after}`;
-                                                      setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
-                                                      setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
-                                                      handleAssignUser(subtask.id, u.id);
-                                                    }}
-                                                  >
-                                                    {u.full_name || u.email}
-                                                  </li>
-                                                ))}
-                                            </ul>
+                                        {/* Activity timeline */}
+                                        {expandedActivity[subtask.id] && subtaskActivities[subtask.id] && (
+                                          <div className="border-l-2 border-muted pl-3 space-y-2 max-h-48 overflow-y-auto">
+                                            {subtaskActivities[subtask.id].map((activity: any) => (
+                                              <div key={activity.id} className="text-xs">
+                                                <div className="flex items-start gap-2">
+                                                  <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
+                                                  <div className="flex-1">
+                                                    <div className="font-medium">
+                                                      {activity.activity_type === 'created' && 'Created'}
+                                                      {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
+                                                      {activity.activity_type === 'note_added' && 'Note added'}
+                                                      {activity.activity_type === 'completed' && 'Marked complete'}
+                                                      {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
+                                                    </div>
+                                                    {activity.notes && (
+                                                      <div className="text-muted-foreground mt-1">{activity.notes}</div>
+                                                    )}
+                                                    <div className="text-muted-foreground text-[10px] mt-0.5">
+                                                      {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
+                                                      {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))}
                                           </div>
                                         )}
 
+                                        {/* Add note form when bad status */}
                                         {isBad && (
                                           <>
+                                            <Textarea
+                                              placeholder="Type @ to assign and enter notes (required for Bad)…"
+                                              value={subtaskNotes[subtask.id] || ''}
+                                              onChange={(e) => {
+                                                e.stopPropagation();
+                                                const value = e.target.value;
+                                                setSubtaskNotes({ ...subtaskNotes, [subtask.id]: value });
+                                                const lastAt = value.lastIndexOf('@');
+                                                if (lastAt !== -1) {
+                                                  const after = value.slice(lastAt + 1);
+                                                  if (!after.includes(' ') && after.length >= 0) {
+                                                    setSubtaskMention(prev => ({ ...prev, [subtask.id]: { query: after.toLowerCase(), atIndex: lastAt } }));
+                                                  } else {
+                                                    setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                                  }
+                                                } else {
+                                                  setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                                }
+                                              }}
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="h-16 text-xs"
+                                            />
+
+                                            {/* Mentions dropdown */}
+                                            {subtaskMention[subtask.id]?.query && (
+                                              <div className="absolute left-0 top-full mt-1 w-56 bg-background border border-border rounded-md shadow z-50">
+                                                <ul className="max-h-40 overflow-auto text-xs">
+                                                  {users
+                                                    .filter(u => (u.full_name || u.email).toLowerCase().includes(subtaskMention[subtask.id]!.query))
+                                                    .slice(0, 5)
+                                                    .map(u => (
+                                                      <li
+                                                        key={u.id}
+                                                        className="px-2 py-1 hover:bg-accent cursor-pointer"
+                                                        onMouseDown={(e) => {
+                                                          e.preventDefault();
+                                                          const current = subtaskNotes[subtask.id] || '';
+                                                          const atIndex = subtaskMention[subtask.id]!.atIndex;
+                                                          const before = current.slice(0, atIndex);
+                                                          const after = current.slice(atIndex + subtaskMention[subtask.id]!.query.length + 1);
+                                                          const name = u.full_name || u.email;
+                                                          const next = `${before}@${name} ${after}`;
+                                                          setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
+                                                          setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                                          handleAssignUser(subtask.id, u.id);
+                                                        }}
+                                                      >
+                                                        {u.full_name || u.email}
+                                                      </li>
+                                                    ))}
+                                                </ul>
+                                              </div>
+                                            )}
+
                                             <Select
                                               value=""
                                               onValueChange={(userId) => {
@@ -1205,25 +1290,6 @@ export default function InspectionDetailsDialog({
                                     )}
                                   </div>
                                 )}
-
-                                {/* Creation and Completion Metadata */}
-                                <div className="mt-1 text-[10px] text-muted-foreground space-y-0.5">
-                                  {subtask.creatorProfile && (
-                                    <div>
-                                      Created by {subtask.creatorProfile.full_name || subtask.creatorProfile.email} • {formatDistanceToNow(new Date(subtask.created_at), { addSuffix: true })}
-                                    </div>
-                                  )}
-                                  {subtask.completed && subtask.completedByProfile && subtask.completed_at && (
-                                    <div className="text-green-600 dark:text-green-400">
-                                      Completed by {subtask.completedByProfile.full_name || subtask.completedByProfile.email} • {formatDistanceToNow(new Date(subtask.completed_at), { addSuffix: true })}
-                                    </div>
-                                  )}
-                                  {subtask.status_changed_at && subtask.statusChangedByProfile && (
-                                    <div>
-                                      Status: {subtask.status} • {subtask.statusChangedByProfile.full_name || subtask.statusChangedByProfile.email} • {formatDistanceToNow(new Date(subtask.status_changed_at), { addSuffix: true })}
-                                    </div>
-                                  )}
-                                </div>
                               </div>
                               
                               {!isInherited && !subtask.completed && (
