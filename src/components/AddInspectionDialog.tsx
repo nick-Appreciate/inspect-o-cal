@@ -231,7 +231,13 @@ export default function AddInspectionDialog({
 
       if (rooms) {
         for (const room of rooms) {
-          // Fetch items for this room
+          const allItems: Array<{
+            description: string;
+            inventory_quantity: number;
+            inventory_type_id: string | null;
+          }> = [];
+
+          // Fetch template_items for this room
           const { data: items } = await supabase
             .from("template_items")
             .select("*")
@@ -239,8 +245,61 @@ export default function AddInspectionDialog({
             .order("order_index");
 
           if (items && items.length > 0) {
+            allItems.push(...items.map(item => ({
+              description: item.description,
+              inventory_quantity: item.inventory_quantity || 0,
+              inventory_type_id: item.inventory_type_id,
+            })));
+          } else {
+            // Fallback: derive from room_template_items if template_items don't exist
+            if (room.room_template_id) {
+              const { data: rtItems } = await supabase
+                .from("room_template_items")
+                .select("*")
+                .eq("room_template_id", room.room_template_id)
+                .order("order_index");
+
+              if (rtItems) {
+                allItems.push(...rtItems.map(rt => ({
+                  description: rt.description,
+                  inventory_quantity: rt.inventory_quantity || 0,
+                  inventory_type_id: rt.inventory_type_id,
+                })));
+              }
+            }
+          }
+
+          // Add default tasks for this room template
+          if (room.room_template_id) {
+            const { data: defaultTasks } = await supabase
+              .from("default_task_room_templates")
+              .select(`
+                default_task_id,
+                default_room_tasks (
+                  id,
+                  description,
+                  inventory_quantity,
+                  inventory_type_id
+                )
+              `)
+              .eq("room_template_id", room.room_template_id);
+
+            if (defaultTasks) {
+              for (const dt of defaultTasks) {
+                if (dt.default_room_tasks) {
+                  allItems.push({
+                    description: dt.default_room_tasks.description,
+                    inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
+                    inventory_type_id: dt.default_room_tasks.inventory_type_id,
+                  });
+                }
+              }
+            }
+          }
+
+          if (allItems.length > 0) {
             // Create subtasks for each item
-            const subtasks = items.map(item => ({
+            const subtasks = allItems.map(item => ({
               inspection_id: inspection.id,
               original_inspection_id: inspection.id,
               description: item.description,
