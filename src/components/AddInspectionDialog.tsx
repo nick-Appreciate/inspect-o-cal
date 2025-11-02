@@ -260,64 +260,37 @@ export default function AddInspectionDialog({
 
       if (rooms) {
         for (const room of rooms) {
-          const allItems: Array<{
-            description: string;
-            inventory_quantity: number;
-            inventory_type_id: string | null;
-            vendor_type_id?: string | null;
-          }> = [];
-
-          // Fetch template_items for this room
+          // SINGLE SOURCE OF TRUTH: Fetch template_items only
           const { data: items } = await supabase
             .from("template_items")
             .select("*")
             .eq("room_id", room.id)
             .order("order_index");
 
+          // Map to deduplicated items by description (case-insensitive)
+          const itemsMap = new Map<string, {
+            description: string;
+            inventory_quantity: number;
+            inventory_type_id: string | null;
+            vendor_type_id: string | null;
+          }>();
+
+          // Add template items (primary source)
           if (items && items.length > 0) {
-            allItems.push(...items.map(item => ({
-              description: item.description,
-              inventory_quantity: item.inventory_quantity || 0,
-              inventory_type_id: item.inventory_type_id,
-              vendor_type_id: item.vendor_type_id,
-            })));
-          } else {
-            // Fallback: derive from room_template_items if template_items don't exist
-            // AND populate the template_items table to fix it for future use
-            if (room.room_template_id) {
-              const { data: rtItems } = await supabase
-                .from("room_template_items")
-                .select("*")
-                .eq("room_template_id", room.room_template_id)
-                .order("order_index");
-
-              if (rtItems && rtItems.length > 0) {
-                allItems.push(...rtItems.map(rt => ({
-                  description: rt.description,
-                  inventory_quantity: rt.inventory_quantity || 0,
-                  inventory_type_id: rt.inventory_type_id,
-                  vendor_type_id: rt.vendor_type_id,
-                })));
-
-                // Populate template_items to fix the template for future use
-                const templateItemsToInsert = rtItems.map(rt => ({
-                  room_id: room.id,
-                  description: rt.description,
-                  inventory_type_id: rt.inventory_type_id,
-                  inventory_quantity: rt.inventory_quantity || 0,
-                  order_index: rt.order_index,
-                  source_room_template_item_id: rt.id,
-                  vendor_type_id: rt.vendor_type_id,
-                }));
-
-                await supabase
-                  .from("template_items")
-                  .insert(templateItemsToInsert);
+            items.forEach(item => {
+              const key = item.description.toLowerCase().trim();
+              if (!itemsMap.has(key)) {
+                itemsMap.set(key, {
+                  description: item.description,
+                  inventory_quantity: item.inventory_quantity || 0,
+                  inventory_type_id: item.inventory_type_id,
+                  vendor_type_id: item.vendor_type_id,
+                });
               }
-            }
+            });
           }
 
-          // Add room-specific default tasks for this room template
+          // Add room-specific default tasks (marked separately)
           if (room.room_template_id) {
             const { data: defaultTasks } = await supabase
               .from("default_task_room_templates")
@@ -336,31 +309,39 @@ export default function AddInspectionDialog({
             if (defaultTasks) {
               for (const dt of defaultTasks) {
                 if (dt.default_room_tasks) {
-                  allItems.push({
-                    description: dt.default_room_tasks.description,
-                    inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
-                    inventory_type_id: dt.default_room_tasks.inventory_type_id,
-                    vendor_type_id: dt.default_room_tasks.vendor_type_id,
-                  });
+                  const key = dt.default_room_tasks.description.toLowerCase().trim();
+                  if (!itemsMap.has(key)) {
+                    itemsMap.set(key, {
+                      description: dt.default_room_tasks.description,
+                      inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
+                      inventory_type_id: dt.default_room_tasks.inventory_type_id,
+                      vendor_type_id: dt.default_room_tasks.vendor_type_id,
+                    });
+                  }
                 }
               }
             }
           }
 
-          // Add global default tasks that apply to all rooms (apply per room)
+          // Add global default tasks (apply per room, deduplicated)
           if (globalTasks) {
             for (const task of globalTasks) {
-              allItems.push({
-                description: task.description,
-                inventory_quantity: task.inventory_quantity || 0,
-                inventory_type_id: task.inventory_type_id,
-                vendor_type_id: task.vendor_type_id,
-              });
+              const key = task.description.toLowerCase().trim();
+              if (!itemsMap.has(key)) {
+                itemsMap.set(key, {
+                  description: task.description,
+                  inventory_quantity: task.inventory_quantity || 0,
+                  inventory_type_id: task.inventory_type_id,
+                  vendor_type_id: task.vendor_type_id,
+                });
+              }
             }
           }
 
+          // Convert map to array and create subtasks
+          const allItems = Array.from(itemsMap.values());
+
           if (allItems.length > 0) {
-            // Create subtasks for each item
             const subtasks = allItems.map(item => ({
               inspection_id: inspection.id,
               original_inspection_id: inspection.id,
