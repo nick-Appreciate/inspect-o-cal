@@ -212,6 +212,18 @@ export default function AddInspectionDialog({
     }
 
     try {
+      /* 
+       * CLEAN ARCHITECTURE - 1-1 DATA FLOW:
+       * 
+       * Room Template Items → (manual copy) → Template Items → (manual copy) → Inspection Subtasks
+       * 
+       * 1. Room templates define reusable task lists
+       * 2. When adding a room to a template, items are copied once (with deduplication)
+       * 3. When creating an inspection, template items are copied to subtasks (with deduplication)
+       * 4. Default tasks are added separately and clearly marked
+       * 
+       * No automatic triggers - all copies are explicit and deduplicated
+       */
       // Upload attachment if provided and get URL
       let attachmentUrl: string | undefined;
       if (attachment) {
@@ -245,122 +257,129 @@ export default function AddInspectionDialog({
 
       if (inspectionError) throw inspectionError;
 
-      // Fetch template rooms and items
+      // CLEAN ARCHITECTURE: Template Items → Subtasks (1-1 deduplicated flow)
       const { data: rooms } = await supabase
         .from("template_rooms")
         .select("*")
         .eq("template_id", selectedTemplate)
         .order("order_index");
 
-      // Fetch global default tasks (applies to all rooms)
-      const { data: globalTasks } = await supabase
-        .from("default_room_tasks")
-        .select("*")
-        .eq("applies_to_all_rooms", true);
+      if (rooms && rooms.length > 0) {
+        // Collect ALL subtasks across all rooms with deduplication
+        const allSubtasksMap = new Map<string, {
+          inspection_id: string;
+          original_inspection_id: string;
+          description: string;
+          room_name: string;
+          inventory_type_id: string | null;
+          vendor_type_id: string | null;
+          inventory_quantity: number;
+          status: string;
+          completed: boolean;
+          created_by: string;
+        }>();
 
-      if (rooms) {
+        // Fetch global default tasks once (will be added to first room only)
+        const { data: globalTasks } = await supabase
+          .from("default_room_tasks")
+          .select("*")
+          .eq("applies_to_all_rooms", true);
+
         for (const room of rooms) {
-          // SINGLE SOURCE OF TRUTH: Fetch template_items only
-          const { data: items } = await supabase
+          // PRIMARY SOURCE: template_items (1-1 from room template)
+          const { data: templateItems } = await supabase
             .from("template_items")
             .select("*")
             .eq("room_id", room.id)
             .order("order_index");
 
-          // Map to deduplicated items by description (case-insensitive)
-          const itemsMap = new Map<string, {
-            description: string;
-            inventory_quantity: number;
-            inventory_type_id: string | null;
-            vendor_type_id: string | null;
-          }>();
-
-          // Add template items (primary source)
-          if (items && items.length > 0) {
-            items.forEach(item => {
-              const key = item.description.toLowerCase().trim();
-              if (!itemsMap.has(key)) {
-                itemsMap.set(key, {
+          if (templateItems && templateItems.length > 0) {
+            templateItems.forEach(item => {
+              const key = `${room.name}:${item.description.toLowerCase().trim()}`;
+              if (!allSubtasksMap.has(key)) {
+                allSubtasksMap.set(key, {
+                  inspection_id: inspection.id,
+                  original_inspection_id: inspection.id,
                   description: item.description,
-                  inventory_quantity: item.inventory_quantity || 0,
+                  room_name: room.name,
                   inventory_type_id: item.inventory_type_id,
                   vendor_type_id: item.vendor_type_id,
+                  inventory_quantity: item.inventory_quantity || 0,
+                  status: 'pending',
+                  completed: false,
+                  created_by: user.id,
                 });
               }
             });
           }
 
-          // Add room-specific default tasks (marked separately)
+          // SECONDARY SOURCE: Room-specific default tasks
           if (room.room_template_id) {
             const { data: defaultTasks } = await supabase
               .from("default_task_room_templates")
               .select(`
                 default_room_tasks (
-                  id,
                   description,
                   inventory_quantity,
                   inventory_type_id,
-                  vendor_type_id,
-                  applies_to_all_rooms
+                  vendor_type_id
                 )
               `)
               .eq("room_template_id", room.room_template_id);
 
             if (defaultTasks) {
-              for (const dt of defaultTasks) {
+              defaultTasks.forEach(dt => {
                 if (dt.default_room_tasks) {
-                  const key = dt.default_room_tasks.description.toLowerCase().trim();
-                  if (!itemsMap.has(key)) {
-                    itemsMap.set(key, {
+                  const key = `${room.name}:${dt.default_room_tasks.description.toLowerCase().trim()}`;
+                  if (!allSubtasksMap.has(key)) {
+                    allSubtasksMap.set(key, {
+                      inspection_id: inspection.id,
+                      original_inspection_id: inspection.id,
                       description: dt.default_room_tasks.description,
-                      inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
+                      room_name: room.name,
                       inventory_type_id: dt.default_room_tasks.inventory_type_id,
                       vendor_type_id: dt.default_room_tasks.vendor_type_id,
+                      inventory_quantity: dt.default_room_tasks.inventory_quantity || 0,
+                      status: 'pending',
+                      completed: false,
+                      created_by: user.id,
                     });
                   }
                 }
-              }
+              });
             }
           }
 
-          // Add global default tasks (apply per room, deduplicated)
-          if (globalTasks) {
-            for (const task of globalTasks) {
-              const key = task.description.toLowerCase().trim();
-              if (!itemsMap.has(key)) {
-                itemsMap.set(key, {
+          // TERTIARY SOURCE: Global default tasks (only for first room)
+          if (room === rooms[0] && globalTasks) {
+            globalTasks.forEach(task => {
+              const key = `${room.name}:${task.description.toLowerCase().trim()}`;
+              if (!allSubtasksMap.has(key)) {
+                allSubtasksMap.set(key, {
+                  inspection_id: inspection.id,
+                  original_inspection_id: inspection.id,
                   description: task.description,
-                  inventory_quantity: task.inventory_quantity || 0,
+                  room_name: room.name,
                   inventory_type_id: task.inventory_type_id,
                   vendor_type_id: task.vendor_type_id,
+                  inventory_quantity: task.inventory_quantity || 0,
+                  status: 'pending',
+                  completed: false,
+                  created_by: user.id,
                 });
               }
-            }
+            });
           }
+        }
 
-          // Convert map to array and create subtasks
-          const allItems = Array.from(itemsMap.values());
+        // Single batch insert of all deduplicated subtasks
+        const allSubtasks = Array.from(allSubtasksMap.values());
+        if (allSubtasks.length > 0) {
+          const { error: subtasksError } = await supabase
+            .from("subtasks")
+            .insert(allSubtasks);
 
-          if (allItems.length > 0) {
-            const subtasks = allItems.map(item => ({
-              inspection_id: inspection.id,
-              original_inspection_id: inspection.id,
-              description: item.description,
-              room_name: room.name,
-              inventory_type_id: item.inventory_type_id,
-              vendor_type_id: item.vendor_type_id,
-              inventory_quantity: item.inventory_quantity || 0,
-              status: 'pending',
-              completed: false,
-              created_by: user.id,
-            }));
-
-            const { error: subtasksError } = await supabase
-              .from("subtasks")
-              .insert(subtasks);
-
-            if (subtasksError) throw subtasksError;
-          }
+          if (subtasksError) throw subtasksError;
         }
       }
 

@@ -372,6 +372,12 @@ export function TemplateBuilder({
     const roomTemplate = roomTemplates.find(rt => rt.id === selectedRoomTemplate);
     if (!roomTemplate) return;
 
+    /* 
+     * CLEAN ARCHITECTURE: Room Template Items → Template Items (1-1 manual copy)
+     * When adding a room from a template, we copy tasks once with deduplication.
+     * No automatic triggers - this is the single source of truth.
+     */
+
     // Check for existing rooms with the same name and append number if needed
     const existingRoomsWithSameName = rooms.filter(r => 
       r.name === roomTemplate.name || r.name.match(new RegExp(`^${roomTemplate.name} \\d+$`))
