@@ -478,11 +478,11 @@ export default function Tasks() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-6">
         {loading ? (
           <p className="text-center text-muted-foreground">Loading tasks...</p>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* Global Inventory Summary */}
             {(() => {
               const allFailedTasks = tasks.filter(t => t.status === 'fail' && t.inventory_type_id);
@@ -500,25 +500,25 @@ export default function Tasks() {
 
               return (
                 <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="inventory" className="border rounded-lg px-4 bg-card">
-                    <AccordionTrigger className="hover:no-underline">
+                  <AccordionItem value="inventory" className="border rounded-lg px-3 bg-card">
+                    <AccordionTrigger className="hover:no-underline py-2">
                       <div className="flex items-center gap-2">
-                        <Package className="h-5 w-5 text-destructive" />
-                        <span className="font-semibold text-base">Total Items Needed</span>
-                        <Badge variant="destructive" className="ml-2">{globalTotalItemsNeeded}</Badge>
+                        <Package className="h-4 w-4 text-destructive" />
+                        <span className="font-semibold text-sm">Total Items Needed</span>
+                        <Badge variant="destructive" className="ml-1 text-xs">{globalTotalItemsNeeded}</Badge>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="pt-2 space-y-2">
+                    <AccordionContent className="pb-2">
+                      <div className="space-y-1">
                         {Object.entries(globalItemsByType)
                           .sort(([, a], [, b]) => b - a)
                           .map(([typeId, qty]) => {
                             const type = inventoryTypes.find(t => t.id === typeId);
                             if (!type) return null;
                             return (
-                              <div key={typeId} className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                              <div key={typeId} className="flex justify-between items-center px-2 py-1 bg-muted/30 rounded text-sm">
                                 <span className="font-medium">{type.name}</span>
-                                <Badge variant="outline" className="text-destructive border-destructive">{qty}</Badge>
+                                <Badge variant="outline" className="text-destructive border-destructive text-xs">{qty}</Badge>
                               </div>
                             );
                           })}
