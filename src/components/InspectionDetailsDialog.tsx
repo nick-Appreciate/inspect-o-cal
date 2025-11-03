@@ -190,6 +190,8 @@ export default function InspectionDetailsDialog({
   const [subtaskMention, setSubtaskMention] = useState<Record<string, { query: string; atIndex: number }>>({});
   const [subtaskActivities, setSubtaskActivities] = useState<Record<string, any[]>>({});
   const [pendingFailSubtask, setPendingFailSubtask] = useState<string | null>(null);
+  const [failDialogNote, setFailDialogNote] = useState("");
+  const [failDialogAssignee, setFailDialogAssignee] = useState<string>("");
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -634,18 +636,12 @@ export default function InspectionDetailsDialog({
   };
 
   const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail', currentStatus?: string) => {
-    // If clicking fail, prepare UI and require note + assignment before persisting
+    // If clicking fail, open the fail modal and block closing until submitted or canceled
     if (newStatus === 'fail' && currentStatus !== 'fail') {
-      setLocalStatus(prev => ({ ...prev, [subtaskId]: 'fail' }));
+      const st = subtasks.find((s) => s.id === subtaskId);
+      setFailDialogAssignee(st?.assigned_users?.[0] || "");
+      setFailDialogNote("");
       setPendingFailSubtask(subtaskId);
-      setExpandedActivity(prev => ({ ...prev, [subtaskId]: true }));
-      setTimeout(() => {
-        const textarea = document.querySelector(`textarea[data-subtask-id="${subtaskId}"]`) as HTMLTextAreaElement;
-        if (textarea) {
-          textarea.focus();
-          textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 100);
       return;
     }
 
@@ -677,6 +673,67 @@ export default function InspectionDetailsDialog({
 
     // Clear local override after backend confirms
     setLocalStatus(prev => { const { [subtaskId]: _, ...rest } = prev; return rest; });
+    fetchSubtasks();
+  };
+
+  // Fail confirmation dialog handlers
+  const handleFailDialogCancel = () => {
+    setPendingFailSubtask(null);
+    setFailDialogNote("");
+    setFailDialogAssignee("");
+  };
+
+  const handleFailDialogSubmit = async () => {
+    if (!pendingFailSubtask) return;
+    const note = failDialogNote.trim();
+    if (!note) {
+      toast.error("Please enter a note");
+      return;
+    }
+    if (!failDialogAssignee) {
+      toast.error("Please select an assignee");
+      return;
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
+    const currentSubtask = subtasks.find(s => s.id === pendingFailSubtask);
+    const existing = currentSubtask?.assigned_users || [];
+    const updatedAssignees = Array.from(new Set([...existing, failDialogAssignee]));
+
+    const { error: updateError } = await supabase
+      .from("subtasks")
+      .update({
+        assigned_users: updatedAssignees,
+        status: "fail",
+        status_changed_by: user.id,
+        status_changed_at: new Date().toISOString(),
+      })
+      .eq("id", pendingFailSubtask);
+
+    if (updateError) {
+      toast.error("Failed to update task");
+      return;
+    }
+
+    const { error: noteError } = await supabase
+      .from("subtask_activity")
+      .insert({
+        subtask_id: pendingFailSubtask,
+        activity_type: "note_added",
+        notes: note,
+        created_by: user.id,
+      });
+
+    if (noteError) {
+      toast.error("Failed to add note");
+      return;
+    }
+
+    toast.success("Task marked as failed");
+    handleFailDialogCancel();
     fetchSubtasks();
   };
 
@@ -1031,8 +1088,12 @@ export default function InspectionDetailsDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen && pendingFailSubtask) { toast.error("Complete or cancel the fail action first."); return; } onOpenChange(nextOpen); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] h-[90vh] sm:max-h-[85vh] sm:h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Inspection Details</DialogTitle>
+            <DialogDescription>View and manage inspection subtasks</DialogDescription>
+          </DialogHeader>
           {/* Compact Header */}
           <div className="p-3 sm:p-4 pb-2 flex-shrink-0 border-b">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -1630,6 +1691,45 @@ export default function InspectionDetailsDialog({
             title="Add Task"
             description="Add a new task to this inspection"
           />
+
+          <Dialog open={!!pendingFailSubtask} onOpenChange={(o) => { if (!o) handleFailDialogCancel(); }}>
+            <DialogContent className="max-w-md" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+              <DialogHeader>
+                <DialogTitle>Mark task as Failed</DialogTitle>
+                <DialogDescription>Assign a user and add notes to confirm failure.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium">Assign to</label>
+                  <Select value={failDialogAssignee} onValueChange={setFailDialogAssignee}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select a user" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50 bg-background">
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={u.id} className="text-sm">
+                          {u.full_name || u.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Notes</label>
+                  <Textarea
+                    value={failDialogNote}
+                    onChange={(e) => setFailDialogNote(e.target.value)}
+                    placeholder="Describe why this failed..."
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={handleFailDialogCancel}>Cancel</Button>
+                  <Button className="bg-destructive hover:bg-destructive/90" onClick={handleFailDialogSubmit}>Submit</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
         </>
       )}
