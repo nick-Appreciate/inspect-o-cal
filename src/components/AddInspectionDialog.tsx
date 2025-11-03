@@ -257,8 +257,16 @@ export default function AddInspectionDialog({
 
       if (inspectionError) throw inspectionError;
 
-      // CLEAN ARCHITECTURE: Template Items → Subtasks (1-1 deduplicated flow)
-      const { data: rooms, error: roomsError } = await supabase
+      /* 
+       * CLEAN ARCHITECTURE - COMPLETE REBUILD:
+       * Template Rooms → Inspection Rooms (preserve order)
+       * Template Items → Subtasks (preserve order within rooms)
+       * 
+       * This ensures inspections perfectly mirror templates with exact ordering
+       */
+      
+      // Step 1: Fetch template rooms with ordering
+      const { data: templateRooms, error: roomsError } = await supabase
         .from("template_rooms")
         .select("*")
         .eq("template_id", selectedTemplate)
@@ -269,59 +277,93 @@ export default function AddInspectionDialog({
         throw new Error("Failed to load inspection template rooms");
       }
 
-      if (!rooms || rooms.length === 0) {
+      if (!templateRooms || templateRooms.length === 0) {
         console.warn("No rooms found in template:", selectedTemplate);
         throw new Error("This template has no rooms configured. Please add rooms to the template first.");
       }
 
-      console.log(`Creating inspection with ${rooms.length} rooms from template`);
+      console.log(`Creating inspection with ${templateRooms.length} rooms from template`);
 
-      // CLEAN ARCHITECTURE: Template items are the ONLY source of truth
-      // Default tasks have already been copied to template_items during template creation
+      // Step 2: Create inspection_rooms instances (preserves room order)
+      const inspectionRoomsToInsert = templateRooms.map(room => ({
+        inspection_id: inspection.id,
+        name: room.name,
+        order_index: room.order_index,
+        created_by: user.id,
+      }));
+
+      const { data: createdInspectionRooms, error: createRoomsError } = await supabase
+        .from("inspection_rooms")
+        .insert(inspectionRoomsToInsert)
+        .select();
+
+      if (createRoomsError || !createdInspectionRooms) {
+        console.error("Failed to create inspection rooms:", createRoomsError);
+        throw new Error("Failed to create inspection room structure");
+      }
+
+      // Map template room IDs to inspection room IDs
+      const roomIdMap = new Map<string, string>();
+      templateRooms.forEach((templateRoom, idx) => {
+        roomIdMap.set(templateRoom.id, createdInspectionRooms[idx].id);
+      });
+
+      console.log(`Created ${createdInspectionRooms.length} inspection rooms`);
+
+      // Step 3: Copy template_items to subtasks with proper ordering
       const allSubtasks: {
         inspection_id: string;
         original_inspection_id: string;
+        inspection_room_id: string;
         description: string;
         room_name: string;
         inventory_type_id: string | null;
         vendor_type_id: string | null;
         inventory_quantity: number;
+        order_index: number;
         status: string;
         completed: boolean;
         created_by: string;
       }[] = [];
 
-      for (const room of rooms) {
-        // ONLY SOURCE: template_items (already contains default tasks from template creation)
+      for (const templateRoom of templateRooms) {
         const { data: templateItems, error: itemsError } = await supabase
           .from("template_items")
           .select("*")
-          .eq("room_id", room.id)
+          .eq("room_id", templateRoom.id)
           .order("order_index");
 
         if (itemsError) {
-          console.error(`Failed to fetch items for room ${room.name}:`, itemsError);
-          continue; // Skip this room but continue with others
+          console.error(`Failed to fetch items for room ${templateRoom.name}:`, itemsError);
+          continue;
         }
 
         if (templateItems && templateItems.length > 0) {
+          const inspectionRoomId = roomIdMap.get(templateRoom.id);
+          if (!inspectionRoomId) {
+            console.error(`Missing inspection_room_id for template room ${templateRoom.id}`);
+            continue;
+          }
+
           const roomSubtasks = templateItems.map(item => ({
             inspection_id: inspection.id,
             original_inspection_id: inspection.id,
+            inspection_room_id: inspectionRoomId,
             description: item.description,
-            room_name: room.name,
+            room_name: templateRoom.name,
             inventory_type_id: item.inventory_type_id,
             vendor_type_id: item.vendor_type_id,
             inventory_quantity: item.inventory_quantity || 0,
+            order_index: item.order_index,
             status: 'pending',
             completed: false,
             created_by: user.id,
           }));
           
           allSubtasks.push(...roomSubtasks);
-          console.log(`Room "${room.name}": ${roomSubtasks.length} tasks copied from template`);
+          console.log(`Room "${templateRoom.name}": ${roomSubtasks.length} tasks copied (ordered)`);
         } else {
-          console.warn(`Room "${room.name}" has no template items`);
+          console.warn(`Room "${templateRoom.name}" has no template items`);
         }
       }
 
@@ -330,7 +372,7 @@ export default function AddInspectionDialog({
         throw new Error("No tasks found in template. Please add tasks to the template rooms.");
       }
 
-      console.log(`Inserting ${allSubtasks.length} total subtasks from ${rooms.length} rooms`);
+      console.log(`Inserting ${allSubtasks.length} total subtasks from ${templateRooms.length} rooms`);
 
       const { error: subtasksError } = await supabase
         .from("subtasks")

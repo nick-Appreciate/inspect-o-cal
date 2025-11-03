@@ -119,6 +119,41 @@ export type Database = {
         }
         Relationships: []
       }
+      inspection_rooms: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          inspection_id: string
+          name: string
+          order_index: number
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          inspection_id: string
+          name: string
+          order_index?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          inspection_id?: string
+          name?: string
+          order_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_rooms_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inspection_runs: {
         Row: {
           completed_at: string | null
@@ -501,9 +536,11 @@ export type Database = {
           description: string
           id: string
           inspection_id: string
+          inspection_room_id: string | null
           inspection_run_id: string | null
           inventory_quantity: number | null
           inventory_type_id: string | null
+          order_index: number
           original_inspection_id: string
           room_name: string | null
           status: string | null
@@ -522,9 +559,11 @@ export type Database = {
           description: string
           id?: string
           inspection_id: string
+          inspection_room_id?: string | null
           inspection_run_id?: string | null
           inventory_quantity?: number | null
           inventory_type_id?: string | null
+          order_index?: number
           original_inspection_id: string
           room_name?: string | null
           status?: string | null
@@ -543,9 +582,11 @@ export type Database = {
           description?: string
           id?: string
           inspection_id?: string
+          inspection_room_id?: string | null
           inspection_run_id?: string | null
           inventory_quantity?: number | null
           inventory_type_id?: string | null
+          order_index?: number
           original_inspection_id?: string
           room_name?: string | null
           status?: string | null
@@ -559,6 +600,13 @@ export type Database = {
             columns: ["inspection_id"]
             isOneToOne: false
             referencedRelation: "inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subtasks_inspection_room_id_fkey"
+            columns: ["inspection_room_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_rooms"
             referencedColumns: ["id"]
           },
           {

@@ -106,30 +106,71 @@ export default function AddFollowUpDialog({
 
   const copySubtasksFromChain = async (parentId: string, newInspectionId: string) => {
     /* 
-     * COMPLETE REBUILD: Copy ALL subtasks from parent chain with FULL data
-     * This ensures follow-up inspections have complete room and task information
+     * COMPLETE REBUILD: Copy inspection_rooms and subtasks from parent chain
+     * Preserves room structure and ordering exactly as in parent inspection
      */
-    const subtasks = await getAllSubtasksInChain(parentId);
+    
+    // Step 1: Fetch parent inspection_rooms
+    const { data: parentInspectionRooms } = await supabase
+      .from("inspection_rooms")
+      .select("*")
+      .eq("inspection_id", parentId)
+      .order("order_index");
 
-    if (subtasks.length > 0) {
-      // Copy COMPLETE subtask data (not just description and assignments)
-      const subtasksToInsert = subtasks.map((subtask) => ({
+    if (parentInspectionRooms && parentInspectionRooms.length > 0) {
+      // Create inspection_rooms for the new inspection
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const newInspectionRooms = parentInspectionRooms.map(room => ({
         inspection_id: newInspectionId,
-        original_inspection_id: subtask.original_inspection_id,
-        description: subtask.description,
-        room_name: subtask.room_name, // CRITICAL: Room name for grouping
-        inventory_type_id: subtask.inventory_type_id, // CRITICAL: For inventory tracking
-        vendor_type_id: subtask.vendor_type_id, // CRITICAL: For vendor assignments
-        inventory_quantity: subtask.inventory_quantity || 0, // CRITICAL: Quantity needed
-        assigned_users: subtask.assigned_users,
-        attachment_url: subtask.attachment_url,
-        status: 'pending', // CRITICAL: Reset status for new inspection
-        completed: false, // Reset completion for new inspection
-        created_by: subtask.created_by,
+        name: room.name,
+        order_index: room.order_index,
+        created_by: user.id,
       }));
 
-      const { error } = await supabase.from("subtasks").insert(subtasksToInsert);
-      if (error) throw error;
+      const { data: createdRooms, error: roomsError } = await supabase
+        .from("inspection_rooms")
+        .insert(newInspectionRooms)
+        .select();
+
+      if (roomsError || !createdRooms) {
+        console.error("Failed to copy inspection rooms:", roomsError);
+        throw roomsError;
+      }
+
+      // Map old room IDs to new room IDs
+      const roomIdMap = new Map<string, string>();
+      parentInspectionRooms.forEach((oldRoom, idx) => {
+        roomIdMap.set(oldRoom.id, createdRooms[idx].id);
+      });
+
+      // Step 2: Fetch and copy subtasks with full data
+      const subtasks = await getAllSubtasksInChain(parentId);
+
+      if (subtasks.length > 0) {
+        const subtasksToInsert = subtasks.map((subtask) => ({
+          inspection_id: newInspectionId,
+          original_inspection_id: subtask.original_inspection_id,
+          inspection_room_id: subtask.inspection_room_id 
+            ? (roomIdMap.get(subtask.inspection_room_id) || null)
+            : null,
+          description: subtask.description,
+          room_name: subtask.room_name,
+          inventory_type_id: subtask.inventory_type_id,
+          vendor_type_id: subtask.vendor_type_id,
+          inventory_quantity: subtask.inventory_quantity || 0,
+          order_index: subtask.order_index || 0,
+          assigned_users: subtask.assigned_users,
+          attachment_url: subtask.attachment_url,
+          status: 'pending',
+          completed: false,
+          created_by: subtask.created_by,
+        }));
+
+        const { error } = await supabase.from("subtasks").insert(subtasksToInsert);
+        if (error) throw error;
+      }
     }
   };
 

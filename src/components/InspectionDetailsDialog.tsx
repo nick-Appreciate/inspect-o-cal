@@ -332,44 +332,22 @@ export default function InspectionDetailsDialog({
 
     const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-    // Get current inspection template details if exists
-    const { data: currentInspection } = await supabase
-      .from("inspections")
-      .select("inspection_template_id")
-      .eq("id", inspectionId)
-      .maybeSingle();
+    // Fetch inspection_rooms for ordering (preserves template structure)
+    const { data: inspectionRooms } = await supabase
+      .from("inspection_rooms")
+      .select("id, name, order_index")
+      .eq("inspection_id", inspectionId)
+      .order("order_index");
 
-    let roomOrder: Map<string, number> = new Map();
-    let itemOrderInRoom: Map<string, number> = new Map();
-
-    if (currentInspection?.inspection_template_id) {
-      // Fetch template room order
-      const { data: templateRooms } = await supabase
-        .from("template_rooms")
-        .select("id, name, order_index")
-        .eq("template_id", currentInspection.inspection_template_id)
-        .order("order_index");
-
-      if (templateRooms) {
-        templateRooms.forEach((room, idx) => {
-          roomOrder.set(room.name, idx);
-        });
-
-        // Fetch template items order for each room
-        for (const room of templateRooms) {
-          const { data: roomItems } = await supabase
-            .from("template_items")
-            .select("id, description, order_index")
-            .eq("room_id", room.id)
-            .order("order_index");
-
-          if (roomItems) {
-            roomItems.forEach(item => {
-              itemOrderInRoom.set(`${room.name}:${item.description}`, item.order_index);
-            });
-          }
-        }
-      }
+    // Build room ordering maps
+    const roomNameToOrder = new Map<string, number>();
+    const roomIdToOrder = new Map<string, number>();
+    
+    if (inspectionRooms) {
+      inspectionRooms.forEach((room) => {
+        roomNameToOrder.set(room.name, room.order_index);
+        roomIdToOrder.set(room.id, room.order_index);
+      });
     }
 
     // Map profiles to subtasks
@@ -387,36 +365,35 @@ export default function InspectionDetailsDialog({
       };
     });
 
-    // Sort by template order (room, then item), then by creation date for unmatched
+    // Sort by room order, then task order within room
     subtasksWithProfiles.sort((a, b) => {
       // First sort by completion status
       if (a.completed !== b.completed) {
         return a.completed ? 1 : -1;
       }
 
-      const roomA = a.room_name || "No Room";
-      const roomB = b.room_name || "No Room";
-      
-      const roomOrderA = roomOrder.get(roomA) ?? 999;
-      const roomOrderB = roomOrder.get(roomB) ?? 999;
+      // Then by room order (using inspection_room_id or room_name)
+      const roomOrderA = a.inspection_room_id 
+        ? (roomIdToOrder.get(a.inspection_room_id) ?? 999)
+        : (roomNameToOrder.get(a.room_name || "No Room") ?? 999);
+      const roomOrderB = b.inspection_room_id 
+        ? (roomIdToOrder.get(b.inspection_room_id) ?? 999)
+        : (roomNameToOrder.get(b.room_name || "No Room") ?? 999);
 
       if (roomOrderA !== roomOrderB) {
         return roomOrderA - roomOrderB;
       }
 
-      // Same room, sort by item order
-      const itemKeyA = `${roomA}:${a.description}`;
-      const itemKeyB = `${roomB}:${b.description}`;
-      
-      const itemOrderA = itemOrderInRoom.get(itemKeyA) ?? 999;
-      const itemOrderB = itemOrderInRoom.get(itemKeyB) ?? 999;
+      // Then by task order within room
+      const taskOrderA = a.order_index ?? 999;
+      const taskOrderB = b.order_index ?? 999;
 
-      if (itemOrderA !== itemOrderB) {
-        return itemOrderA - itemOrderB;
+      if (taskOrderA !== taskOrderB) {
+        return taskOrderA - taskOrderB;
       }
 
       // Fallback to creation date
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     });
 
     setSubtasks(subtasksWithProfiles);
