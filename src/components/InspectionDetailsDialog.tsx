@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
 import { UserAvatar } from "./UserAvatar";
 import { AddTaskDialog } from "./AddTaskDialog";
-import MarkFailDialog from "./MarkFailDialog";
+import { AlertCircle } from "lucide-react";
 
 interface Inspection {
   id: string;
@@ -189,8 +189,7 @@ export default function InspectionDetailsDialog({
   const [localStatus, setLocalStatus] = useState<Record<string, 'pass' | 'fail' | 'pending'>>({});
   const [subtaskMention, setSubtaskMention] = useState<Record<string, { query: string; atIndex: number }>>({});
   const [subtaskActivities, setSubtaskActivities] = useState<Record<string, any[]>>({});
-  const [failDialogOpen, setFailDialogOpen] = useState(false);
-  const [selectedSubtaskForFail, setSelectedSubtaskForFail] = useState<string | null>(null);
+  const [pendingFailSubtask, setPendingFailSubtask] = useState<string | null>(null);
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -635,6 +634,22 @@ export default function InspectionDetailsDialog({
   };
 
   const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail', currentStatus?: string) => {
+    // If clicking fail, expand accordion and highlight notes
+    if (newStatus === 'fail' && currentStatus !== 'fail') {
+      setPendingFailSubtask(subtaskId);
+      setExpandedActivity(prev => ({ ...prev, [subtaskId]: true }));
+      
+      // Scroll to notes and focus
+      setTimeout(() => {
+        const textarea = document.querySelector(`textarea[data-subtask-id="${subtaskId}"]`) as HTMLTextAreaElement;
+        if (textarea) {
+          textarea.focus();
+          textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+      return;
+    }
+
     const finalStatus = currentStatus === newStatus ? 'pending' : newStatus;
 
     // Optimistic update
@@ -680,6 +695,32 @@ export default function InspectionDetailsDialog({
       return;
     }
 
+    // Check if this is a pending fail - require user assignment
+    if (pendingFailSubtask === subtaskId) {
+      const currentSubtask = subtasks.find(s => s.id === subtaskId);
+      if (!currentSubtask?.assigned_users || currentSubtask.assigned_users.length === 0) {
+        toast.error("Please assign a user (use @mention) before marking as failed");
+        return;
+      }
+
+      // Mark as failed
+      const { error: statusError } = await supabase
+        .from("subtasks")
+        .update({
+          status: 'fail',
+          status_changed_by: user.id,
+          status_changed_at: new Date().toISOString(),
+        })
+        .eq("id", subtaskId);
+
+      if (statusError) {
+        toast.error("Failed to update status");
+        return;
+      }
+
+      setPendingFailSubtask(null);
+    }
+
     // Insert new note activity
     const { error } = await supabase
       .from("subtask_activity")
@@ -696,7 +737,7 @@ export default function InspectionDetailsDialog({
       return;
     }
 
-    toast.success('Note added');
+    toast.success(pendingFailSubtask === subtaskId ? 'Task marked as failed with note' : 'Note added');
     
     // Clear the note input
     setSubtaskNotes(prev => ({ ...prev, [subtaskId]: '' }));
@@ -1271,8 +1312,7 @@ export default function InspectionDetailsDialog({
                                       variant={isFail ? "destructive" : "outline"}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setSelectedSubtaskForFail(subtask.id);
-                                        setFailDialogOpen(true);
+                                        handleStatusChange(subtask.id, 'fail', subtask.status);
                                       }}
                                       className={`flex-1 h-8 font-semibold transition-all ${
                                         isFail 
@@ -1292,8 +1332,15 @@ export default function InspectionDetailsDialog({
                                     {/* Add Note Form */}
                                     {!isInherited && (
                                       <div className="space-y-2 relative" onClick={(e) => e.stopPropagation()}>
+                                        {pendingFailSubtask === subtask.id && (
+                                          <div className="text-xs font-semibold text-destructive mb-2 flex items-center gap-2">
+                                            <AlertCircle className="h-4 w-4" />
+                                            Add notes and assign a user to mark as failed
+                                          </div>
+                                        )}
                                         <Textarea
-                                          placeholder="Add a note... (Type @ to mention users)"
+                                          data-subtask-id={subtask.id}
+                                          placeholder="Add a note... (Type @ to mention and assign users)"
                                           value={subtaskNotes[subtask.id] || ''}
                                           onChange={(e) => {
                                             e.stopPropagation();
@@ -1305,14 +1352,26 @@ export default function InspectionDetailsDialog({
                                               if (!after.includes(' ') && after.length >= 0) {
                                                 setSubtaskMention(prev => ({ ...prev, [subtask.id]: { query: after.toLowerCase(), atIndex: lastAt } }));
                                               } else {
-                                                setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                                setSubtaskMention(prev => {
+                                                  const newMention = { ...prev };
+                                                  delete newMention[subtask.id];
+                                                  return newMention;
+                                                });
                                               }
                                             } else {
-                                              setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                              setSubtaskMention(prev => {
+                                                const newMention = { ...prev };
+                                                delete newMention[subtask.id];
+                                                return newMention;
+                                              });
                                             }
                                           }}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="h-16 text-xs"
+                                          className={`h-16 text-xs ${
+                                            pendingFailSubtask === subtask.id 
+                                              ? 'border-destructive border-2 focus-visible:ring-destructive' 
+                                              : ''
+                                          }`}
                                         />
 
                                         {/* Mentions dropdown */}
@@ -1325,9 +1384,10 @@ export default function InspectionDetailsDialog({
                                                 .map(u => (
                                                   <li
                                                     key={u.id}
-                                                    className="px-2 py-1 hover:bg-accent cursor-pointer"
+                                                    className="px-2 py-1.5 hover:bg-accent cursor-pointer flex items-center gap-2"
                                                     onMouseDown={(e) => {
                                                       e.preventDefault();
+                                                      e.stopPropagation();
                                                       const current = subtaskNotes[subtask.id] || '';
                                                       const atIndex = subtaskMention[subtask.id]!.atIndex;
                                                       const before = current.slice(0, atIndex);
@@ -1335,10 +1395,19 @@ export default function InspectionDetailsDialog({
                                                       const name = u.full_name || u.email;
                                                       const next = `${before}@${name} ${after}`;
                                                       setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
-                                                      setSubtaskMention(prev => ({ ...prev, [subtask.id]: undefined as any }));
+                                                      setSubtaskMention(prev => {
+                                                        const newMention = { ...prev };
+                                                        delete newMention[subtask.id];
+                                                        return newMention;
+                                                      });
                                                       handleAssignUser(subtask.id, u.id);
                                                     }}
                                                   >
+                                                    <UserAvatar
+                                                      avatarUrl={u.avatar_url}
+                                                      name={u.full_name}
+                                                      size="sm"
+                                                    />
                                                     {u.full_name || u.email}
                                                   </li>
                                                 ))}
@@ -1352,9 +1421,13 @@ export default function InspectionDetailsDialog({
                                             e.stopPropagation();
                                             handleSaveNotes(subtask.id);
                                           }}
-                                          className="h-7 text-xs w-full"
+                                          className={`h-7 text-xs w-full ${
+                                            pendingFailSubtask === subtask.id 
+                                              ? 'bg-destructive hover:bg-destructive/90' 
+                                              : ''
+                                          }`}
                                         >
-                                          Add Note
+                                          {pendingFailSubtask === subtask.id ? 'Save Note & Mark as Failed' : 'Add Note'}
                                         </Button>
                                       </div>
                                     )}
@@ -1514,18 +1587,6 @@ export default function InspectionDetailsDialog({
             title="Add Task"
             description="Add a new task to this inspection"
           />
-
-          {selectedSubtaskForFail && (
-            <MarkFailDialog
-              subtaskId={selectedSubtaskForFail}
-              open={failDialogOpen}
-              onOpenChange={setFailDialogOpen}
-              onSuccess={() => {
-                fetchSubtasks();
-                setSelectedSubtaskForFail(null);
-              }}
-            />
-          )}
 
         </>
       )}
