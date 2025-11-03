@@ -284,31 +284,31 @@ export default function AddInspectionDialog({
 
       console.log(`Creating inspection with ${templateRooms.length} rooms from template`);
 
-      // Step 2: Create inspection_rooms instances (preserves room order)
-      const inspectionRoomsToInsert = templateRooms.map(room => ({
-        inspection_id: inspection.id,
-        name: room.name,
-        order_index: room.order_index,
-        created_by: user.id,
-      }));
+      // Step 2: Create inspection_rooms one by one to ensure all are created
+      const roomIdMap = new Map<string, string>();
+      
+      for (const templateRoom of templateRooms) {
+        const { data: newRoom, error: roomError } = await supabase
+          .from("inspection_rooms")
+          .insert({
+            inspection_id: inspection.id,
+            name: templateRoom.name,
+            order_index: templateRoom.order_index,
+            created_by: user.id,
+          })
+          .select()
+          .single();
 
-      const { data: createdInspectionRooms, error: createRoomsError } = await supabase
-        .from("inspection_rooms")
-        .insert(inspectionRoomsToInsert)
-        .select();
+        if (roomError || !newRoom) {
+          console.error(`Failed to create room "${templateRoom.name}":`, roomError);
+          throw new Error(`Failed to create room "${templateRoom.name}"`);
+        }
 
-      if (createRoomsError || !createdInspectionRooms) {
-        console.error("Failed to create inspection rooms:", createRoomsError);
-        throw new Error("Failed to create inspection room structure");
+        roomIdMap.set(templateRoom.id, newRoom.id);
+        console.log(`Created room "${templateRoom.name}" (${templateRoom.order_index})`);
       }
 
-      // Map template room IDs to inspection room IDs
-      const roomIdMap = new Map<string, string>();
-      templateRooms.forEach((templateRoom, idx) => {
-        roomIdMap.set(templateRoom.id, createdInspectionRooms[idx].id);
-      });
-
-      console.log(`Created ${createdInspectionRooms.length} inspection rooms`);
+      console.log(`Created ${roomIdMap.size} inspection rooms successfully`);
 
       // Step 3: Copy template_items to subtasks with proper ordering
       const allSubtasks: {
@@ -342,7 +342,7 @@ export default function AddInspectionDialog({
           const inspectionRoomId = roomIdMap.get(templateRoom.id);
           if (!inspectionRoomId) {
             console.error(`Missing inspection_room_id for template room ${templateRoom.id}`);
-            continue;
+            throw new Error(`Room mapping error for "${templateRoom.name}"`);
           }
 
           const roomSubtasks = templateItems.map(item => ({
