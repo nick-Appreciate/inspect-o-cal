@@ -303,6 +303,7 @@ export default function InspectionDetailsDialog({
         .from("inspections")
         .select("*, properties(name, address), units(id, name)")
         .eq("parent_inspection_id", inspectionId)
+        .eq("archived", false)
         .order("date", { ascending: true });
       
       if (childData) {
@@ -497,6 +498,7 @@ export default function InspectionDetailsDialog({
       .from("inspections")
       .select("id, date, time, type")
       .eq("completed", true)
+      .eq("archived", false)
       .eq("property_id", currentInspection.property_id)
       .neq("id", inspectionId)
       .order("date", { ascending: false })

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { format } from "date-fns";
 
 interface Property {
@@ -38,7 +39,7 @@ interface DeleteInspectionDialogProps {
   onOpenChange: (open: boolean) => void;
   mainInspection: Inspection | null;
   connectedInspections: Inspection[];
-  onConfirm: (inspectionIds: string[]) => void;
+  onConfirm: (inspectionIds: string[], keepForAnalytics: boolean) => void;
 }
 
 export function DeleteInspectionDialog({
@@ -49,11 +50,13 @@ export function DeleteInspectionDialog({
   onConfirm,
 }: DeleteInspectionDialogProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [keepForAnalytics, setKeepForAnalytics] = useState<string>("yes");
 
   useEffect(() => {
     // Reset selections when dialog opens with new inspection
     if (open && mainInspection) {
       setSelectedIds(new Set());
+      setKeepForAnalytics("yes");
     }
   }, [open, mainInspection]);
 
@@ -78,7 +81,7 @@ export function DeleteInspectionDialog({
   const handleConfirm = () => {
     if (!mainInspection) return;
     const idsToDelete = [mainInspection.id, ...Array.from(selectedIds)];
-    onConfirm(idsToDelete);
+    onConfirm(idsToDelete, keepForAnalytics === "yes");
     onOpenChange(false);
   };
 
@@ -151,6 +154,28 @@ export function DeleteInspectionDialog({
               </ScrollArea>
             </div>
           )}
+
+          {/* Analytics option */}
+          <div className="space-y-3 pt-2 border-t">
+            <Label className="text-base font-semibold">Analytics Data</Label>
+            <p className="text-sm text-muted-foreground">
+              Should this inspection data be included in analytics reports?
+            </p>
+            <RadioGroup value={keepForAnalytics} onValueChange={setKeepForAnalytics}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="yes" id="analytics-yes" />
+                <Label htmlFor="analytics-yes" className="font-normal cursor-pointer">
+                  Yes, keep for analytics (data will be hidden from regular views)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="no" id="analytics-no" />
+                <Label htmlFor="analytics-no" className="font-normal cursor-pointer">
+                  No, permanently delete all data
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
         </div>
 
         <DialogFooter>

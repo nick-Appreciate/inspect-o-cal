@@ -77,6 +77,7 @@ const Index = () => {
       const { data, error } = await supabase
         .from("inspections")
         .select("*, properties(id, name, address), units(id, name)")
+        .eq("archived", false)
         .order("date", { ascending: true });
 
       if (error) {

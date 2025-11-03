@@ -1,4 +1,4 @@
-import { Calendar, CheckSquare, FileText, List, Building2, Menu } from "lucide-react";
+import { Calendar, CheckSquare, FileText, List, Building2, Menu, BarChart3 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -24,6 +24,7 @@ const menuItems = [
   { title: "Properties", url: "/properties", icon: Building2 },
   { title: "Templates", url: "/templates", icon: FileText },
   { title: "Inspections", url: "/inspections", icon: List },
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
 export function AppSidebar() {

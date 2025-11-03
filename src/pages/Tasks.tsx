@@ -172,6 +172,7 @@ export default function Tasks() {
           type,
           date,
           time,
+          archived,
           properties (
             name,
             address
@@ -192,9 +193,12 @@ export default function Tasks() {
       return;
     }
 
+    // Filter out tasks from archived inspections
+    const nonArchivedTasks = (data || []).filter(task => task.inspections && !task.inspections.archived);
+
     // Fetch profiles for assigned users and activities with notes
     const tasksWithProfiles = await Promise.all(
-      (data || []).map(async (task) => {
+      nonArchivedTasks.map(async (task) => {
         const promises = [];
         
         // Fetch assigned user profiles

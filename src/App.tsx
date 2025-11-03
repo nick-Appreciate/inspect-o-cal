@@ -15,6 +15,7 @@ import Templates from "./pages/Templates";
 import Inspections from "./pages/Inspections";
 import Properties from "./pages/Properties";
 import ImportProperties from "./pages/ImportProperties";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 
@@ -73,6 +74,7 @@ function AppContent() {
               <Route path="/import-properties" element={<ImportProperties />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/inspections" element={<Inspections />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

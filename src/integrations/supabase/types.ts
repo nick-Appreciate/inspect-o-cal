@@ -260,6 +260,7 @@ export type Database = {
       }
       inspections: {
         Row: {
+          archived: boolean
           attachment_url: string | null
           completed: boolean | null
           completed_by: string | null
@@ -276,6 +277,7 @@ export type Database = {
           unit_id: string | null
         }
         Insert: {
+          archived?: boolean
           attachment_url?: string | null
           completed?: boolean | null
           completed_by?: string | null
@@ -292,6 +294,7 @@ export type Database = {
           unit_id?: string | null
         }
         Update: {
+          archived?: boolean
           attachment_url?: string | null
           completed?: boolean | null
           completed_by?: string | null

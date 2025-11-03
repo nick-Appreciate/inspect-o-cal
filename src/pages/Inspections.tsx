@@ -75,6 +75,7 @@ const Inspections = () => {
       const { data, error } = await supabase
         .from("inspections")
         .select("*, properties(id, name, address), units(id, name)")
+        .eq("archived", false)
         .order("date", { ascending: true })
         .order("time", { ascending: true });
 
@@ -124,31 +125,52 @@ const Inspections = () => {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirm = async (inspectionIdsToDelete: string[]) => {
+  const handleDeleteConfirm = async (inspectionIdsToDelete: string[], keepForAnalytics: boolean) => {
     try {
-      const { data, error } = await supabase
-        .from("inspections")
-        .delete()
-        .in("id", inspectionIdsToDelete)
-        .select();
+      if (keepForAnalytics) {
+        // Soft delete - set archived to true
+        const { error } = await supabase
+          .from("inspections")
+          .update({ archived: true })
+          .in("id", inspectionIdsToDelete);
 
-      if (error) {
-        console.error("Delete error:", error);
-        toast.error("Failed to delete inspection(s)");
-        return;
+        if (error) {
+          console.error("Archive error:", error);
+          toast.error("Failed to archive inspection(s)");
+          return;
+        }
+
+        toast.success(
+          inspectionIdsToDelete.length > 1 
+            ? `${inspectionIdsToDelete.length} inspections archived (kept for analytics)` 
+            : "Inspection archived (kept for analytics)"
+        );
+      } else {
+        // Hard delete
+        const { data, error } = await supabase
+          .from("inspections")
+          .delete()
+          .in("id", inspectionIdsToDelete)
+          .select();
+
+        if (error) {
+          console.error("Delete error:", error);
+          toast.error("Failed to delete inspection(s)");
+          return;
+        }
+
+        if (!data || data.length === 0) {
+          console.error("No inspection deleted - possibly due to permissions");
+          toast.error("Cannot delete this inspection. You may not have permission.");
+          return;
+        }
+
+        toast.success(
+          data.length > 1 
+            ? `${data.length} inspections deleted successfully` 
+            : "Inspection deleted successfully"
+        );
       }
-
-      if (!data || data.length === 0) {
-        console.error("No inspection deleted - possibly due to permissions");
-        toast.error("Cannot delete this inspection. You may not have permission.");
-        return;
-      }
-
-      toast.success(
-        data.length > 1 
-          ? `${data.length} inspections deleted successfully` 
-          : "Inspection deleted successfully"
-      );
       setInspections(inspections.filter((i) => !inspectionIdsToDelete.includes(i.id)));
       fetchInspections(); // Refresh the list
     } catch (err) {
