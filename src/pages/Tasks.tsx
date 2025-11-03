@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users, Plus, Check, X, FileText } from "lucide-react";
+import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users, Plus, Check, X, FileText, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 interface SubtaskActivity {
   id: string;
@@ -482,6 +483,52 @@ export default function Tasks() {
           <p className="text-center text-muted-foreground">Loading tasks...</p>
         ) : (
           <div className="space-y-8">
+            {/* Global Inventory Summary */}
+            {(() => {
+              const allFailedTasks = tasks.filter(t => t.status === 'fail' && t.inventory_type_id);
+              const globalItemsByType: Record<string, number> = {};
+              let globalTotalItemsNeeded = 0;
+              
+              allFailedTasks.forEach(task => {
+                if (task.inventory_type_id && task.inventory_quantity) {
+                  globalItemsByType[task.inventory_type_id] = (globalItemsByType[task.inventory_type_id] || 0) + task.inventory_quantity;
+                  globalTotalItemsNeeded += task.inventory_quantity;
+                }
+              });
+
+              if (globalTotalItemsNeeded === 0) return null;
+
+              return (
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="inventory" className="border rounded-lg px-4 bg-card">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-5 w-5 text-destructive" />
+                        <span className="font-semibold text-base">Total Items Needed</span>
+                        <Badge variant="destructive" className="ml-2">{globalTotalItemsNeeded}</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pt-2 space-y-2">
+                        {Object.entries(globalItemsByType)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([typeId, qty]) => {
+                            const type = inventoryTypes.find(t => t.id === typeId);
+                            if (!type) return null;
+                            return (
+                              <div key={typeId} className="flex justify-between items-center p-2 bg-muted/30 rounded">
+                                <span className="font-medium">{type.name}</span>
+                                <Badge variant="outline" className="text-destructive border-destructive">{qty}</Badge>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              );
+            })()}
+
             {/* Upcoming Tasks */}
             {groupedUpcoming.length > 0 && (
               <div>
