@@ -192,6 +192,7 @@ export default function InspectionDetailsDialog({
   const [pendingFailSubtask, setPendingFailSubtask] = useState<string | null>(null);
   const [failDialogNote, setFailDialogNote] = useState("");
   const [failDialogAssignee, setFailDialogAssignee] = useState<string>("");
+  const [failDialogInventoryQuantity, setFailDialogInventoryQuantity] = useState<string>("");
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -681,6 +682,7 @@ export default function InspectionDetailsDialog({
     setPendingFailSubtask(null);
     setFailDialogNote("");
     setFailDialogAssignee("");
+    setFailDialogInventoryQuantity("");
   };
 
   const handleFailDialogSubmit = async () => {
@@ -694,23 +696,40 @@ export default function InspectionDetailsDialog({
       toast.error("Please select an assignee");
       return;
     }
+    const currentSubtask = subtasks.find(s => s.id === pendingFailSubtask);
+    
+    // Validate inventory quantity if the subtask has an inventory type
+    if (currentSubtask?.inventory_type_id) {
+      const qty = parseInt(failDialogInventoryQuantity);
+      if (!failDialogInventoryQuantity || isNaN(qty) || qty <= 0) {
+        toast.error("Please enter a valid quantity for the inventory item");
+        return;
+      }
+    }
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast.error("You must be logged in");
       return;
     }
-    const currentSubtask = subtasks.find(s => s.id === pendingFailSubtask);
     const existing = currentSubtask?.assigned_users || [];
     const updatedAssignees = Array.from(new Set([...existing, failDialogAssignee]));
 
+    const updateData: any = {
+      assigned_users: updatedAssignees,
+      status: "fail",
+      status_changed_by: user.id,
+      status_changed_at: new Date().toISOString(),
+    };
+
+    // Add inventory quantity if applicable
+    if (currentSubtask?.inventory_type_id && failDialogInventoryQuantity) {
+      updateData.inventory_quantity = parseInt(failDialogInventoryQuantity);
+    }
+
     const { error: updateError } = await supabase
       .from("subtasks")
-      .update({
-        assigned_users: updatedAssignees,
-        status: "fail",
-        status_changed_by: user.id,
-        status_changed_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", pendingFailSubtask);
 
     if (updateError) {
@@ -1714,6 +1733,21 @@ export default function InspectionDetailsDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                {pendingFailSubtask && subtasks.find(s => s.id === pendingFailSubtask)?.inventory_type_id && (
+                  <div>
+                    <label className="text-sm font-medium">
+                      Quantity Needed ({inventoryTypes.find(t => t.id === subtasks.find(s => s.id === pendingFailSubtask)?.inventory_type_id)?.name})
+                    </label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={failDialogInventoryQuantity}
+                      onChange={(e) => setFailDialogInventoryQuantity(e.target.value)}
+                      placeholder="Enter quantity needed"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="text-sm font-medium">Notes</label>
                   <Textarea
