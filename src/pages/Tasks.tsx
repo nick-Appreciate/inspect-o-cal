@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users, Plus } from "lucide-react";
+import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users, Plus, Check, X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, isPast, parseISO } from "date-fns";
@@ -12,6 +11,10 @@ import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import EditSubtaskDialog from "@/components/EditSubtaskDialog";
 import { UserAvatar } from "@/components/UserAvatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface SubtaskWithInspection {
   id: string;
@@ -20,6 +23,10 @@ interface SubtaskWithInspection {
   attachment_url?: string;
   assigned_users?: string[];
   inspection_id: string;
+  status?: string;
+  inventory_type_id?: string;
+  inventory_quantity?: number;
+  room_name?: string;
   inspections: {
     id: string;
     type: string;
@@ -60,6 +67,11 @@ export default function Tasks() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [addTaskDialogOpen, setAddTaskDialogOpen] = useState(false);
   const [inventoryTypes, setInventoryTypes] = useState<Array<{ id: string; name: string }>>([]);
+  const [users, setUsers] = useState<Array<{ id: string; full_name: string; email: string }>>([]);
+  const [pendingFailSubtask, setPendingFailSubtask] = useState<string | null>(null);
+  const [failDialogNote, setFailDialogNote] = useState("");
+  const [failDialogAssignee, setFailDialogAssignee] = useState<string>("");
+  const [failDialogInventoryQuantity, setFailDialogInventoryQuantity] = useState<string>("");
 
   useEffect(() => {
     const {
@@ -89,8 +101,17 @@ export default function Tasks() {
     if (user) {
       fetchTasks();
       fetchInventoryTypes();
+      fetchUsers();
     }
   }, [user, showAllTasks, showCompleted]);
+
+  const fetchUsers = async () => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .order("full_name");
+    setUsers(data || []);
+  };
 
   const fetchInventoryTypes = async () => {
     const { data } = await supabase
@@ -191,46 +212,117 @@ export default function Tasks() {
     setLoading(false);
   };
 
-  const handleToggleComplete = async (taskId: string, completed: boolean) => {
-    // Get current user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail' | 'pending') => {
+    if (newStatus === 'fail') {
+      setPendingFailSubtask(subtaskId);
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast.error("Not authenticated");
+      toast.error("You must be logged in");
       return;
     }
 
-    // First, get the original_inspection_id of this subtask
-    const { data: currentTask } = await supabase
-      .from("subtasks")
-      .select("original_inspection_id, description")
-      .eq("id", taskId)
-      .maybeSingle();
+    const updateData: any = {
+      status: newStatus,
+      status_changed_by: user.id,
+      status_changed_at: new Date().toISOString(),
+    };
 
-    if (!currentTask) {
-      toast.error("Failed to find task");
-      return;
+    if (newStatus === 'pass') {
+      updateData.completed = true;
+      updateData.completed_at = new Date().toISOString();
+      updateData.completed_by = user.id;
     }
 
-    const updateData = completed
-      ? { completed: false, completed_at: null, completed_by: null }
-      : { completed: true, completed_at: new Date().toISOString(), completed_by: user.id };
-
-    // Update all subtasks with the same original_inspection_id
-    // This keeps linked subtasks in sync across follow-up inspections
     const { error } = await supabase
       .from("subtasks")
       .update(updateData)
-      .eq("original_inspection_id", currentTask.original_inspection_id)
-      .eq("description", currentTask.description);
+      .eq("id", subtaskId);
 
     if (error) {
       toast.error("Failed to update task");
     } else {
-      toast.success(completed ? "Task marked incomplete" : "Task completed");
+      toast.success(`Task marked as ${newStatus}`);
       fetchTasks();
     }
+  };
+
+  const handleFailDialogCancel = () => {
+    setPendingFailSubtask(null);
+    setFailDialogNote("");
+    setFailDialogAssignee("");
+    setFailDialogInventoryQuantity("");
+  };
+
+  const handleFailDialogSubmit = async () => {
+    if (!pendingFailSubtask) return;
+    const note = failDialogNote.trim();
+    if (!note) {
+      toast.error("Please enter a note");
+      return;
+    }
+    if (!failDialogAssignee) {
+      toast.error("Please select an assignee");
+      return;
+    }
+    const currentSubtask = tasks.find(s => s.id === pendingFailSubtask);
+    
+    if (currentSubtask?.inventory_type_id) {
+      const qty = parseInt(failDialogInventoryQuantity);
+      if (!failDialogInventoryQuantity || isNaN(qty) || qty <= 0) {
+        toast.error("Please enter a valid quantity for the inventory item");
+        return;
+      }
+    }
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
+    const existing = currentSubtask?.assigned_users || [];
+    const updatedAssignees = Array.from(new Set([...existing, failDialogAssignee]));
+
+    const updateData: any = {
+      assigned_users: updatedAssignees,
+      status: "fail",
+      status_changed_by: user.id,
+      status_changed_at: new Date().toISOString(),
+    };
+
+    if (currentSubtask?.inventory_type_id && failDialogInventoryQuantity) {
+      updateData.inventory_quantity = parseInt(failDialogInventoryQuantity);
+    }
+
+    const { error: updateError } = await supabase
+      .from("subtasks")
+      .update(updateData)
+      .eq("id", pendingFailSubtask);
+
+    if (updateError) {
+      toast.error("Failed to update task");
+      return;
+    }
+
+    const { error: noteError } = await supabase
+      .from("subtask_activity")
+      .insert({
+        subtask_id: pendingFailSubtask,
+        activity_type: "note_added",
+        notes: note,
+        created_by: user.id,
+      });
+
+    if (noteError) {
+      toast.error("Failed to add note");
+      return;
+    }
+
+    toast.success("Task marked as failed");
+    handleFailDialogCancel();
+    fetchTasks();
   };
 
   const handleSignOut = async () => {
@@ -353,89 +445,134 @@ export default function Tasks() {
               <div>
                 <h2 className="text-xl font-semibold mb-4">Upcoming Tasks</h2>
                 <div className="space-y-6">
-                  {groupedUpcoming.map((group) => (
-                    <div key={group.inspection.id} className="space-y-3">
-                      {/* Inspection Header */}
-                      <div className="flex items-center gap-3 pb-2 border-b">
-                        <Badge
-                          className={`${getInspectionColor(
-                            group.inspection.type
-                          )} text-white`}
-                        >
-                          {group.inspection.type}
-                        </Badge>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {format(parseISO(group.inspection.date), "MMM d, yyyy")} at{" "}
-                            {group.inspection.time}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span>{group.inspection.properties.name}</span>
-                        </div>
-                      </div>
+                   {groupedUpcoming.map((group) => {
+                      // Calculate inventory needed
+                      const failedTasks = group.tasks.filter(t => t.status === 'fail' && t.inventory_type_id);
+                      const itemsByType: Record<string, number> = {};
+                      let totalItemsNeeded = 0;
+                      failedTasks.forEach(task => {
+                        if (task.inventory_type_id && task.inventory_quantity) {
+                          itemsByType[task.inventory_type_id] = (itemsByType[task.inventory_type_id] || 0) + task.inventory_quantity;
+                          totalItemsNeeded += task.inventory_quantity;
+                        }
+                      });
 
-                      {/* Tasks for this inspection */}
-                      <div className="space-y-2 ml-4">
-                        {group.tasks.map((task) => (
-                          <Card 
-                            key={task.id} 
-                            className="p-3 cursor-pointer hover:bg-accent/50 transition-colors"
-                            onClick={() => setEditingTaskId(task.id)}
-                          >
-                            <div className="flex items-start gap-3">
-                              <Checkbox
-                                checked={task.completed}
-                                onCheckedChange={() =>
-                                  handleToggleComplete(task.id, task.completed)
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                className="mt-1"
-                              />
-                              <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium">{task.description}</p>
-
-                                {task.assignedProfiles && task.assignedProfiles.length > 0 && (
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <div className="flex items-center gap-1">
-                                      {task.assignedProfiles.map((profile, idx) => (
-                                        <UserAvatar
-                                          key={idx}
-                                          avatarUrl={profile.avatar_url}
-                                          name={profile.full_name}
-                                          email={profile.email}
-                                          size="sm"
-                                        />
-                                      ))}
-                                    </div>
-                                    <span>
-                                      {task.assignedProfiles
-                                        .map((p) => p.full_name || p.email)
-                                        .join(", ")}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {task.attachment_url && (
-                                  <a
-                                    href={task.attachment_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-primary hover:underline"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    View Attachment
-                                  </a>
-                                )}
+                      return (
+                        <div key={group.inspection.id} className="space-y-2">
+                          {/* Inspection Header */}
+                          <div className="flex flex-col gap-2 pb-2 border-b">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs`}>
+                                {group.inspection.type}
+                              </Badge>
+                              <div className="flex items-center gap-1 text-xs">
+                                <Calendar className="h-3 w-3 text-muted-foreground" />
+                                <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs">
+                                <MapPin className="h-3 w-3 text-muted-foreground" />
+                                <span>{group.inspection.properties.name}</span>
                               </div>
                             </div>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                            
+                            {/* Inventory Summary */}
+                            {totalItemsNeeded > 0 && (
+                              <div className="p-2 bg-destructive/10 border border-destructive/30 rounded text-xs">
+                                <div className="font-semibold text-destructive mb-1">Items Needed: {totalItemsNeeded}</div>
+                                <div className="space-y-0.5 pl-2">
+                                  {Object.entries(itemsByType).map(([typeId, qty]) => {
+                                    const type = inventoryTypes.find(t => t.id === typeId);
+                                    if (!type) return null;
+                                    return (
+                                      <div key={typeId} className="flex justify-between">
+                                        <span className="text-muted-foreground">{type.name}</span>
+                                        <span className="font-semibold text-destructive">{qty}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Tasks for this inspection */}
+                          <div className="space-y-1.5 ml-2">
+                            {group.tasks.map((task) => {
+                              const isPass = task.status === 'pass';
+                              const isFail = task.status === 'fail';
+                              const isPending = !task.status || task.status === 'pending';
+
+                              return (
+                                <Card 
+                                  key={task.id} 
+                                  className={`p-2 transition-colors ${
+                                    isPass ? 'bg-green-50 dark:bg-green-950/20 border-green-200' :
+                                    isFail ? 'bg-destructive/5 border-destructive/30' :
+                                    'hover:bg-accent/50'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                                        <p className="text-sm font-medium flex-1">{task.description}</p>
+                                        <div className="flex gap-1 flex-shrink-0">
+                                          <Button
+                                            size="sm"
+                                            variant={isPass ? "default" : "outline"}
+                                            className={`h-6 px-2 ${isPass ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pass'); }}
+                                          >
+                                            <Check className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={isFail ? "destructive" : "outline"}
+                                            className="h-6 px-2"
+                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'fail'); }}
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={isPending ? "secondary" : "outline"}
+                                            className="h-6 px-2"
+                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
+                                          >
+                                            <Clock className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                                        {task.room_name && (
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{task.room_name}</Badge>
+                                        )}
+                                        {task.assignedProfiles && task.assignedProfiles.length > 0 && (
+                                          <div className="flex items-center gap-1">
+                                            {task.assignedProfiles.slice(0, 2).map((profile, idx) => (
+                                              <UserAvatar
+                                                key={idx}
+                                                avatarUrl={profile.avatar_url}
+                                                name={profile.full_name}
+                                                email={profile.email}
+                                                size="sm"
+                                              />
+                                            ))}
+                                            {task.assignedProfiles.length > 2 && (
+                                              <span className="text-muted-foreground">+{task.assignedProfiles.length - 2}</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -447,91 +584,136 @@ export default function Tasks() {
                   Overdue Tasks
                 </h2>
                 <div className="space-y-6">
-                  {groupedOverdue.map((group) => (
-                    <div key={group.inspection.id} className="space-y-3">
-                      {/* Inspection Header */}
-                      <div className="flex items-center gap-3 pb-2 border-b border-destructive/30">
-                        <Badge
-                          className={`${getInspectionColor(
-                            group.inspection.type
-                          )} text-white`}
-                        >
-                          {group.inspection.type}
-                        </Badge>
-                        <div className="flex items-center gap-1 text-sm text-destructive">
-                          <Calendar className="h-4 w-4" />
-                          <span>
-                            {format(parseISO(group.inspection.date), "MMM d, yyyy")} at{" "}
-                            {group.inspection.time}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span>{group.inspection.properties.name}</span>
-                        </div>
-                      </div>
+                  {groupedOverdue.map((group) => {
+                      // Calculate inventory needed
+                      const failedTasks = group.tasks.filter(t => t.status === 'fail' && t.inventory_type_id);
+                      const itemsByType: Record<string, number> = {};
+                      let totalItemsNeeded = 0;
+                      failedTasks.forEach(task => {
+                        if (task.inventory_type_id && task.inventory_quantity) {
+                          itemsByType[task.inventory_type_id] = (itemsByType[task.inventory_type_id] || 0) + task.inventory_quantity;
+                          totalItemsNeeded += task.inventory_quantity;
+                        }
+                      });
 
-                      {/* Tasks for this inspection */}
-                      <div className="space-y-2 ml-4">
-                        {group.tasks.map((task) => (
-                          <Card
-                            key={task.id}
-                            className="p-3 border-destructive bg-destructive/5 cursor-pointer hover:bg-destructive/10 transition-colors"
-                            onClick={() => setEditingTaskId(task.id)}
-                          >
-                            <div className="flex items-start gap-3">
-                              <Checkbox
-                                checked={task.completed}
-                                onCheckedChange={() =>
-                                  handleToggleComplete(task.id, task.completed)
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                className="mt-1"
-                              />
-                              <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium text-destructive">
-                                  {task.description}
-                                </p>
-
-                                {task.assignedProfiles && task.assignedProfiles.length > 0 && (
-                                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <div className="flex items-center gap-1">
-                                      {task.assignedProfiles.map((profile, idx) => (
-                                        <UserAvatar
-                                          key={idx}
-                                          avatarUrl={profile.avatar_url}
-                                          name={profile.full_name}
-                                          email={profile.email}
-                                          size="sm"
-                                        />
-                                      ))}
-                                    </div>
-                                    <span>
-                                      {task.assignedProfiles
-                                        .map((p) => p.full_name || p.email)
-                                        .join(", ")}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {task.attachment_url && (
-                                  <a
-                                    href={task.attachment_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-primary hover:underline"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    View Attachment
-                                  </a>
-                                )}
+                      return (
+                        <div key={group.inspection.id} className="space-y-2">
+                          {/* Inspection Header */}
+                          <div className="flex flex-col gap-2 pb-2 border-b border-destructive/30">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs`}>
+                                {group.inspection.type}
+                              </Badge>
+                              <div className="flex items-center gap-1 text-xs text-destructive">
+                                <Calendar className="h-3 w-3" />
+                                <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs">
+                                <MapPin className="h-3 w-3 text-muted-foreground" />
+                                <span>{group.inspection.properties.name}</span>
                               </div>
                             </div>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                            
+                            {/* Inventory Summary */}
+                            {totalItemsNeeded > 0 && (
+                              <div className="p-2 bg-destructive/10 border border-destructive/30 rounded text-xs">
+                                <div className="font-semibold text-destructive mb-1">Items Needed: {totalItemsNeeded}</div>
+                                <div className="space-y-0.5 pl-2">
+                                  {Object.entries(itemsByType).map(([typeId, qty]) => {
+                                    const type = inventoryTypes.find(t => t.id === typeId);
+                                    if (!type) return null;
+                                    return (
+                                      <div key={typeId} className="flex justify-between">
+                                        <span className="text-muted-foreground">{type.name}</span>
+                                        <span className="font-semibold text-destructive">{qty}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Tasks for this inspection */}
+                          <div className="space-y-1.5 ml-2">
+                            {group.tasks.map((task) => {
+                              const isPass = task.status === 'pass';
+                              const isFail = task.status === 'fail';
+                              const isPending = !task.status || task.status === 'pending';
+
+                              return (
+                                <Card 
+                                  key={task.id} 
+                                  className={`p-2 transition-colors ${
+                                    isPass ? 'bg-green-50 dark:bg-green-950/20 border-green-200' :
+                                    isFail ? 'bg-destructive/5 border-destructive/30' :
+                                    'hover:bg-accent/50'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                                        <p className={`text-sm font-medium flex-1 ${isFail ? 'text-destructive' : ''}`}>
+                                          {task.description}
+                                        </p>
+                                        <div className="flex gap-1 flex-shrink-0">
+                                          <Button
+                                            size="sm"
+                                            variant={isPass ? "default" : "outline"}
+                                            className={`h-6 px-2 ${isPass ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pass'); }}
+                                          >
+                                            <Check className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={isFail ? "destructive" : "outline"}
+                                            className="h-6 px-2"
+                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'fail'); }}
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={isPending ? "secondary" : "outline"}
+                                            className="h-6 px-2"
+                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
+                                          >
+                                            <Clock className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                                        {task.room_name && (
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{task.room_name}</Badge>
+                                        )}
+                                        {task.assignedProfiles && task.assignedProfiles.length > 0 && (
+                                          <div className="flex items-center gap-1">
+                                            {task.assignedProfiles.slice(0, 2).map((profile, idx) => (
+                                              <UserAvatar
+                                                key={idx}
+                                                avatarUrl={profile.avatar_url}
+                                                name={profile.full_name}
+                                                email={profile.email}
+                                                size="sm"
+                                              />
+                                            ))}
+                                            {task.assignedProfiles.length > 2 && (
+                                              <span className="text-muted-foreground">+{task.assignedProfiles.length - 2}</span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -565,6 +747,71 @@ export default function Tasks() {
         inventoryTypes={inventoryTypes}
         onCreateInventoryType={handleCreateInventoryType}
       />
+
+      {/* Fail Confirmation Dialog */}
+      <Dialog open={!!pendingFailSubtask} onOpenChange={(open) => !open && handleFailDialogCancel()}>
+        <DialogContent 
+          className="sm:max-w-md"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Mark Task as Failed</DialogTitle>
+            <DialogDescription>
+              Please provide details about why this task failed and assign someone to address it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div>
+              <label className="text-sm font-medium">Assign To</label>
+              <Select value={failDialogAssignee} onValueChange={setFailDialogAssignee}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.full_name || u.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {pendingFailSubtask && tasks.find(s => s.id === pendingFailSubtask)?.inventory_type_id && (
+              <div>
+                <label className="text-sm font-medium">
+                  Quantity Needed ({inventoryTypes.find(t => t.id === tasks.find(s => s.id === pendingFailSubtask)?.inventory_type_id)?.name})
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={failDialogInventoryQuantity}
+                  onChange={(e) => setFailDialogInventoryQuantity(e.target.value)}
+                  placeholder="Enter quantity needed"
+                  className="mt-1"
+                />
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Notes</label>
+              <Textarea
+                value={failDialogNote}
+                onChange={(e) => setFailDialogNote(e.target.value)}
+                placeholder="Explain why this task failed and what needs to be done..."
+                className="mt-1 min-h-[100px]"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={handleFailDialogCancel}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleFailDialogSubmit}>
+                Submit
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
