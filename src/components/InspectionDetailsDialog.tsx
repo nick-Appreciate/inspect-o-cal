@@ -634,35 +634,11 @@ export default function InspectionDetailsDialog({
   };
 
   const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail', currentStatus?: string) => {
-    // If clicking fail, mark as failed immediately and expand accordion
+    // If clicking fail, prepare UI and require note + assignment before persisting
     if (newStatus === 'fail' && currentStatus !== 'fail') {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("You must be logged in");
-        return;
-      }
-
-      // Mark as failed immediately
-      const { error } = await supabase
-        .from("subtasks")
-        .update({
-          status: 'fail',
-          status_changed_by: user.id,
-          status_changed_at: new Date().toISOString(),
-        })
-        .eq("id", subtaskId);
-
-      if (error) {
-        toast.error("Failed to update status");
-        return;
-      }
-
-      // Set pending state for notes requirement
+      setLocalStatus(prev => ({ ...prev, [subtaskId]: 'fail' }));
       setPendingFailSubtask(subtaskId);
       setExpandedActivity(prev => ({ ...prev, [subtaskId]: true }));
-      fetchSubtasks();
-      
-      // Scroll to notes and focus
       setTimeout(() => {
         const textarea = document.querySelector(`textarea[data-subtask-id="${subtaskId}"]`) as HTMLTextAreaElement;
         if (textarea) {
@@ -705,58 +681,75 @@ export default function InspectionDetailsDialog({
   };
 
   const handleSaveNotes = async (subtaskId: string) => {
-    const note = subtaskNotes[subtaskId] || '';
-    
+    const note = subtaskNotes[subtaskId] || "";
+
     if (!note.trim()) {
       toast.error("Please enter a note");
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       toast.error("You must be logged in");
       return;
     }
 
-    // Check if this is a pending fail - require user assignment
+    // If this is completing a pending fail, require assignment and persist the fail now
     if (pendingFailSubtask === subtaskId) {
-      const currentSubtask = subtasks.find(s => s.id === subtaskId);
+      const currentSubtask = subtasks.find((s) => s.id === subtaskId);
       if (!currentSubtask?.assigned_users || currentSubtask.assigned_users.length === 0) {
         toast.error("Please assign a user (use @mention) before completing the fail");
         return;
       }
 
+      const { error: statusError } = await supabase
+        .from("subtasks")
+        .update({
+          status: "fail",
+          status_changed_by: user.id,
+          status_changed_at: new Date().toISOString(),
+        })
+        .eq("id", subtaskId);
+
+      if (statusError) {
+        toast.error("Failed to update status");
+        return;
+      }
+
       setPendingFailSubtask(null);
-      toast.success('Task marked as failed with note');
-    } else {
-      toast.success('Note added');
     }
 
     // Insert new note activity
     const { error } = await supabase
       .from("subtask_activity")
-      .insert({ 
+      .insert({
         subtask_id: subtaskId,
-        activity_type: 'note_added',
+        activity_type: "note_added",
         notes: note,
-        created_by: user.id
+        created_by: user.id,
       });
 
     if (error) {
-      console.error('Error saving note:', error);
-      toast.error('Failed to add note');
+      console.error("Error saving note:", error);
+      toast.error("Failed to add note");
       return;
     }
-    
+
+    toast.success(
+      pendingFailSubtask === subtaskId ? "Task marked as failed with note" : "Note added"
+    );
+
     // Clear the note input
-    setSubtaskNotes(prev => ({ ...prev, [subtaskId]: '' }));
-    
+    setSubtaskNotes((prev) => ({ ...prev, [subtaskId]: "" }));
+
     // Reload activities to show the new note
     const { data: activities, error: fetchError } = await supabase
-      .from('subtask_activity')
-      .select('*')
-      .eq('subtask_id', subtaskId)
-      .order('created_at', { ascending: true });
+      .from("subtask_activity")
+      .select("*")
+      .eq("subtask_id", subtaskId)
+      .order("created_at", { ascending: true });
 
     if (!fetchError && activities) {
       const creatorIds = [...new Set(activities.map(a => a.created_by))];
