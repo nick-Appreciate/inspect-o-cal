@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users, Plus, Check, X, Clock } from "lucide-react";
+import { ClipboardCheck, LogOut, Calendar, MapPin, User, Users, Plus, Check, X, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface SubtaskActivity {
+  id: string;
+  activity_type: string;
+  notes?: string;
+  created_at: string;
+  created_by: string;
+  profiles?: {
+    full_name: string;
+    email: string;
+  };
+}
 
 interface SubtaskWithInspection {
   id: string;
@@ -42,6 +54,7 @@ interface SubtaskWithInspection {
     email: string;
     avatar_url?: string | null;
   }>;
+  activities?: SubtaskActivity[];
 }
 
 const getInspectionColor = (type: string): string => {
@@ -178,18 +191,47 @@ export default function Tasks() {
       return;
     }
 
-    // Fetch profiles for assigned users
+    // Fetch profiles for assigned users and activities with notes
     const tasksWithProfiles = await Promise.all(
       (data || []).map(async (task) => {
+        const promises = [];
+        
+        // Fetch assigned user profiles
         if (task.assigned_users && task.assigned_users.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("full_name, email, avatar_url")
-            .in("id", task.assigned_users);
-
-          return { ...task, assignedProfiles: profiles || [] };
+          promises.push(
+            supabase
+              .from("profiles")
+              .select("full_name, email, avatar_url")
+              .in("id", task.assigned_users)
+          );
+        } else {
+          promises.push(Promise.resolve({ data: [] }));
         }
-        return task;
+
+        // Fetch activities with notes
+        promises.push(
+          supabase
+            .from("subtask_activity")
+            .select(`
+              id,
+              activity_type,
+              notes,
+              created_at,
+              created_by,
+              profiles:created_by (full_name, email)
+            `)
+            .eq("subtask_id", task.id)
+            .not("notes", "is", null)
+            .order("created_at", { ascending: false })
+        );
+
+        const [profilesResult, activitiesResult] = await Promise.all(promises);
+
+        return {
+          ...task,
+          assignedProfiles: profilesResult.data || [],
+          activities: activitiesResult.data || [],
+        };
       })
     );
 
@@ -212,7 +254,7 @@ export default function Tasks() {
     setLoading(false);
   };
 
-  const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail' | 'pending') => {
+  const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail') => {
     if (newStatus === 'fail') {
       setPendingFailSubtask(subtaskId);
       return;
@@ -500,7 +542,6 @@ export default function Tasks() {
                             {group.tasks.map((task) => {
                               const isPass = task.status === 'pass';
                               const isFail = task.status === 'fail';
-                              const isPending = !task.status || task.status === 'pending';
 
                               return (
                                 <Card 
@@ -512,8 +553,8 @@ export default function Tasks() {
                                   }`}
                                 >
                                   <div className="flex items-start gap-2">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                      <div className="flex items-start justify-between gap-2">
                                         <p className="text-sm font-medium flex-1">{task.description}</p>
                                         <div className="flex gap-1 flex-shrink-0">
                                           <Button
@@ -531,14 +572,6 @@ export default function Tasks() {
                                             onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'fail'); }}
                                           >
                                             <X className="h-3 w-3" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={isPending ? "secondary" : "outline"}
-                                            className="h-6 px-2"
-                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
-                                          >
-                                            <Clock className="h-3 w-3" />
                                           </Button>
                                         </div>
                                       </div>
@@ -564,6 +597,23 @@ export default function Tasks() {
                                           </div>
                                         )}
                                       </div>
+
+                                      {/* Display notes */}
+                                      {task.activities && task.activities.length > 0 && (
+                                        <div className="space-y-1 pt-1 border-t">
+                                          {task.activities.map((activity) => (
+                                            <div key={activity.id} className="flex items-start gap-1 text-xs">
+                                              <FileText className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                              <div className="flex-1">
+                                                <p className="text-muted-foreground">{activity.notes}</p>
+                                                <p className="text-[10px] text-muted-foreground/70">
+                                                  {activity.profiles?.full_name || activity.profiles?.email} • {format(parseISO(activity.created_at), "MMM d, h:mm a")}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </Card>
@@ -639,7 +689,6 @@ export default function Tasks() {
                             {group.tasks.map((task) => {
                               const isPass = task.status === 'pass';
                               const isFail = task.status === 'fail';
-                              const isPending = !task.status || task.status === 'pending';
 
                               return (
                                 <Card 
@@ -651,8 +700,8 @@ export default function Tasks() {
                                   }`}
                                 >
                                   <div className="flex items-start gap-2">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                      <div className="flex items-start justify-between gap-2">
                                         <p className={`text-sm font-medium flex-1 ${isFail ? 'text-destructive' : ''}`}>
                                           {task.description}
                                         </p>
@@ -672,14 +721,6 @@ export default function Tasks() {
                                             onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'fail'); }}
                                           >
                                             <X className="h-3 w-3" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant={isPending ? "secondary" : "outline"}
-                                            className="h-6 px-2"
-                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task.id, 'pending'); }}
-                                          >
-                                            <Clock className="h-3 w-3" />
                                           </Button>
                                         </div>
                                       </div>
@@ -705,6 +746,23 @@ export default function Tasks() {
                                           </div>
                                         )}
                                       </div>
+
+                                      {/* Display notes */}
+                                      {task.activities && task.activities.length > 0 && (
+                                        <div className="space-y-1 pt-1 border-t">
+                                          {task.activities.map((activity) => (
+                                            <div key={activity.id} className="flex items-start gap-1 text-xs">
+                                              <FileText className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                              <div className="flex-1">
+                                                <p className="text-muted-foreground">{activity.notes}</p>
+                                                <p className="text-[10px] text-muted-foreground/70">
+                                                  {activity.profiles?.full_name || activity.profiles?.email} • {format(parseISO(activity.created_at), "MMM d, h:mm a")}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </Card>
