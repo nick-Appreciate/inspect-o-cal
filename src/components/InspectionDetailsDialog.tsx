@@ -1076,26 +1076,27 @@ export default function InspectionDetailsDialog({
 
           {/* Scrollable Content */}
           <div className="overflow-y-auto px-3 sm:px-4 py-3 flex-1">
-            {/* Compact Inventory Summary */}
-            {(totalItemsNeeded > 0 || Object.keys(completedItemsByType).length > 0) && (
-              <div className="mb-3 p-2 bg-primary/5 border border-primary/20 rounded text-xs">
-                <div className="font-semibold flex items-center gap-1 mb-1">
-                  <ClipboardList className="h-3 w-3" />
-                  Items: {totalItemsNeeded} needed
+            {/* Compact Inventory Summary - Items Needed from Failed Tasks */}
+            {totalItemsNeeded > 0 && (
+              <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                <div className="font-semibold flex items-center gap-2 mb-2 text-destructive">
+                  <ClipboardList className="h-4 w-4" />
+                  <span className="text-base">Items Needed: {totalItemsNeeded} total</span>
                 </div>
                 {Object.keys(itemsByType).length > 0 && (
-                  <div className="space-y-0.5">
-                    {Array.from(allInventoryTypeIds).slice(0, 3).map((typeId) => {
-                      const type = inventoryTypes.find(t => t.id === typeId);
-                      const neededQty = itemsByType[typeId] || 0;
-                      if (!type || neededQty === 0) return null;
-                      return (
-                        <div key={typeId} className="flex justify-between">
-                          <span>{type.name}</span>
-                          <span className="font-medium">{neededQty}</span>
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-1 pl-6">
+                    {Object.entries(itemsByType)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([typeId, qty]) => {
+                        const type = inventoryTypes.find(t => t.id === typeId);
+                        if (!type || qty === 0) return null;
+                        return (
+                          <div key={typeId} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{type.name}</span>
+                            <span className="font-semibold text-destructive">{qty}</span>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>
