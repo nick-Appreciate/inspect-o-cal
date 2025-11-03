@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import type { User, Session } from "@supabase/supabase-js";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -22,6 +23,8 @@ const Index = () => {
   const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  const [dayDialogOpen, setDayDialogOpen] = useState(false);
+  const [dayDialogInspections, setDayDialogInspections] = useState<Inspection[]>([]);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -166,15 +169,17 @@ const Index = () => {
   };
 
   const handleDateClick = (date: Date) => {
-    // Compare dates in America/Chicago
     const clicked = formatInTimeZone(date, 'America/Chicago', 'yyyy-MM-dd');
     const dayInspections = inspections.filter((inspection) =>
       formatInTimeZone(inspection.date, 'America/Chicago', 'yyyy-MM-dd') === clicked
     );
 
-    if (dayInspections.length > 0) {
+    if (dayInspections.length === 1) {
       setSelectedInspectionId(dayInspections[0].id);
       setDetailsDialogOpen(true);
+    } else if (dayInspections.length > 1) {
+      setDayDialogInspections(dayInspections);
+      setDayDialogOpen(true);
     }
   };
 
@@ -265,6 +270,30 @@ const Index = () => {
           />
         )}
       </main>
+
+      <Dialog open={dayDialogOpen} onOpenChange={setDayDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Select an inspection</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {dayDialogInspections.map((insp) => (
+              <button
+                key={insp.id}
+                className="w-full text-left p-3 border rounded-lg hover:bg-accent transition-colors"
+                onClick={() => {
+                  setDayDialogOpen(false);
+                  setSelectedInspectionId(insp.id);
+                  setDetailsDialogOpen(true);
+                }}
+              >
+                <div className="font-medium">{insp.time} - {insp.property.name}{insp.unitName ? ` (${insp.unitName})` : ""}</div>
+                <div className="text-sm text-muted-foreground">{insp.type}</div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <InspectionDetailsDialog
         inspectionId={selectedInspectionId}

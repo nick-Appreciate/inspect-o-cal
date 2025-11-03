@@ -427,7 +427,7 @@ export default function InspectionDetailsDialog({
     const uniqueSubtasks = Array.from(
       new Map(
         allSubtasks.map((task) => [
-          `${task.original_inspection_id}-${task.description}`,
+          `${task.original_inspection_id}-${task.inspection_room_id || task.room_name || 'no-room'}-${task.description}`,
           task,
         ])
       ).values()
