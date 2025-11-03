@@ -81,18 +81,25 @@ export default function AddInspectionDialog({
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch units and templates when property is selected
+  // Fetch units when property is selected
   useEffect(() => {
     if (selectedProperty?.id) {
       fetchUnits(selectedProperty.id);
-      fetchTemplates();
     } else {
       setUnits([]);
       setSelectedUnit(undefined);
+    }
+  }, [selectedProperty]);
+
+  // Fetch templates when property or unit changes
+  useEffect(() => {
+    if (selectedProperty?.id) {
+      fetchTemplates();
+    } else {
       setTemplates([]);
       setSelectedTemplate("");
     }
-  }, [selectedProperty]);
+  }, [selectedProperty, selectedUnit]);
 
   const fetchTemplates = async () => {
     if (!selectedProperty?.id) return;

@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
 import { UserAvatar } from "./UserAvatar";
 import { AddTaskDialog } from "./AddTaskDialog";
+import MarkFailDialog from "./MarkFailDialog";
 
 interface Inspection {
   id: string;
@@ -63,7 +64,7 @@ interface Subtask {
   completed_at?: string | null;
   completed_by?: string | null;
   room_name?: string;
-  status?: 'good' | 'bad' | 'pending';
+  status?: 'pass' | 'fail' | 'pending';
   status_changed_by?: string | null;
   status_changed_at?: string | null;
   assignedProfiles?: Array<{
@@ -182,12 +183,14 @@ export default function InspectionDetailsDialog({
     type: string;
     subtaskCount: number;
   }>>([]);
-  const [showCompleted, setShowCompleted] = useState<'to-do' | 'bad' | 'completed'>('to-do');
+  const [showCompleted, setShowCompleted] = useState<'to-do' | 'fail' | 'completed'>('to-do');
   const [subtaskNotes, setSubtaskNotes] = useState<Record<string, string>>({});
   const [expandedActivity, setExpandedActivity] = useState<Record<string, boolean>>({});
-  const [localStatus, setLocalStatus] = useState<Record<string, 'good' | 'bad' | 'pending'>>({});
+  const [localStatus, setLocalStatus] = useState<Record<string, 'pass' | 'fail' | 'pending'>>({});
   const [subtaskMention, setSubtaskMention] = useState<Record<string, { query: string; atIndex: number }>>({});
   const [subtaskActivities, setSubtaskActivities] = useState<Record<string, any[]>>({});
+  const [failDialogOpen, setFailDialogOpen] = useState(false);
+  const [selectedSubtaskForFail, setSelectedSubtaskForFail] = useState<string | null>(null);
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -567,7 +570,7 @@ export default function InspectionDetailsDialog({
         assigned_users: null,
         attachment_url: null,
         created_by: user.id,
-        status: 'bad',
+        status: 'fail',
       });
 
       if (error) throw error;
@@ -597,9 +600,9 @@ export default function InspectionDetailsDialog({
           completed: true, 
           completed_at: new Date().toISOString(), 
           completed_by: user.id,
-          // If marking as complete and status is 'bad', change it to 'good'
-          ...(currentSubtask?.status === 'bad' ? { 
-            status: 'good',
+          // If marking as complete and status is 'fail', change it to 'pass'
+          ...(currentSubtask?.status === 'fail' ? { 
+            status: 'pass',
             status_changed_by: user.id,
             status_changed_at: new Date().toISOString()
           } : {})
@@ -631,7 +634,7 @@ export default function InspectionDetailsDialog({
     }
   };
 
-  const handleStatusChange = async (subtaskId: string, newStatus: 'good' | 'bad', currentStatus?: string) => {
+  const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail', currentStatus?: string) => {
     const finalStatus = currentStatus === newStatus ? 'pending' : newStatus;
 
     // Optimistic update
@@ -947,13 +950,13 @@ export default function InspectionDetailsDialog({
     return acc;
   }, {} as Record<string, Subtask[]>);
 
-  // Calculate total items needed from subtasks marked as bad
+  // Calculate total items needed from subtasks marked as fail
   const totalItemsNeeded = subtasks
-    .filter(s => s.status === 'bad' && s.inventory_quantity && s.inventory_quantity > 0)
+    .filter(s => s.status === 'fail' && s.inventory_quantity && s.inventory_quantity > 0)
     .reduce((sum, s) => sum + (s.inventory_quantity || 0), 0);
 
   const itemsByType = subtasks
-    .filter(s => s.status === 'bad' && s.inventory_quantity && s.inventory_quantity > 0 && s.inventory_type_id)
+    .filter(s => s.status === 'fail' && s.inventory_quantity && s.inventory_quantity > 0 && s.inventory_type_id)
     .reduce((acc, s) => {
       const typeId = s.inventory_type_id!;
       if (!acc[typeId]) {
@@ -1121,12 +1124,12 @@ export default function InspectionDetailsDialog({
                 To-Do
               </Button>
               <Button
-                variant={showCompleted === 'bad' ? "default" : "outline"}
+                variant={showCompleted === 'fail' ? "default" : "outline"}
                 size="sm"
-                onClick={() => setShowCompleted('bad')}
+                onClick={() => setShowCompleted('fail')}
                 className="flex-1 h-8 text-xs"
               >
-                Bad
+                Failed
               </Button>
               <Button
                 variant={showCompleted === 'completed' ? "default" : "outline"}
@@ -1144,9 +1147,9 @@ export default function InspectionDetailsDialog({
               {(() => {
                 // Filter subtasks based on mode
                 const filteredSubtasks = subtasks.filter(s => {
-                  if (showCompleted === 'bad') return s.status === 'bad';
-                  if (showCompleted === 'completed') return s.status === 'good' || s.completed;
-                  if (showCompleted === 'to-do') return (s.status === 'bad' || s.status === 'pending' || !s.status) && !s.completed;
+                  if (showCompleted === 'fail') return s.status === 'fail';
+                  if (showCompleted === 'completed') return s.status === 'pass' || s.completed;
+                  if (showCompleted === 'to-do') return (s.status === 'fail' || s.status === 'pending' || !s.status) && !s.completed;
                   return true;
                 });
 
@@ -1198,17 +1201,17 @@ export default function InspectionDetailsDialog({
                         {roomSubtasks.map((subtask) => {
                           const isInherited = subtask.original_inspection_id !== inspectionId;
                           const effectiveStatus = localStatus[subtask.id] ?? subtask.status;
-                          const isGood = effectiveStatus === 'good';
-                          const isBad = effectiveStatus === 'bad';
+                          const isPass = effectiveStatus === 'pass';
+                          const isFail = effectiveStatus === 'fail';
                           const isPending = !effectiveStatus || effectiveStatus === 'pending';
 
                           return (
                             <div
                               key={subtask.id}
                               className={`flex items-start gap-2 p-2 border rounded transition-colors ${
-                                isGood
+                                isPass
                                   ? "bg-green-50 dark:bg-green-950/20 border-l-4 border-l-green-600"
-                                  : isBad
+                                  : isFail
                                   ? "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-600"
                                   : subtask.completed
                                   ? "bg-muted/30 opacity-60"
@@ -1233,45 +1236,53 @@ export default function InspectionDetailsDialog({
                                   <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
                                     {subtask.description}
                                   </p>
-                                  {isGood && (
-                                    <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">
-                                      Good
+                                  {isPass && (
+                                    <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600 hover:bg-green-600">
+                                      Pass
                                     </Badge>
                                   )}
-                                  {isBad && (
+                                  {isFail && (
                                     <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                                      Issue
+                                      Fail
                                     </Badge>
                                   )}
                                 </div>
 
-                                {/* Good/Bad Buttons - Always at top */}
+                                {/* Pass/Fail Buttons - Modern Design */}
                                 {!isInherited && !subtask.completed && (
-                                  <div className="mb-2" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex gap-1">
-                                      <Button
-                                        variant={isGood ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleStatusChange(subtask.id, 'good', subtask.status);
-                                        }}
-                                        className={`h-6 text-[10px] px-2 ${isGood ? 'bg-green-600 hover:bg-green-700' : ''}`}
-                                      >
-                                        Good
-                                      </Button>
-                                      <Button
-                                        variant={isBad ? "destructive" : "outline"}
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleStatusChange(subtask.id, 'bad', subtask.status);
-                                        }}
-                                        className="h-6 text-[10px] px-2"
-                                      >
-                                        Bad
-                                      </Button>
-                                    </div>
+                                  <div className="mb-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <Button
+                                      variant={isPass ? "default" : "outline"}
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStatusChange(subtask.id, 'pass', subtask.status);
+                                      }}
+                                      className={`flex-1 h-8 font-semibold transition-all ${
+                                        isPass 
+                                          ? 'bg-green-600 hover:bg-green-700 text-white shadow-md' 
+                                          : 'hover:bg-green-50 hover:text-green-700 hover:border-green-300'
+                                      }`}
+                                    >
+                                      <Check className="h-3.5 w-3.5 mr-1" />
+                                      Pass
+                                    </Button>
+                                    <Button
+                                      variant={isFail ? "destructive" : "outline"}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedSubtaskForFail(subtask.id);
+                                        setFailDialogOpen(true);
+                                      }}
+                                      className={`flex-1 h-8 font-semibold transition-all ${
+                                        isFail 
+                                          ? 'shadow-md' 
+                                          : 'hover:bg-red-50 hover:text-red-700 hover:border-red-300'
+                                      }`}
+                                    >
+                                      <X className="h-3.5 w-3.5 mr-1" />
+                                      Fail
+                                    </Button>
                                   </div>
                                 )}
 
@@ -1503,6 +1514,18 @@ export default function InspectionDetailsDialog({
             title="Add Task"
             description="Add a new task to this inspection"
           />
+
+          {selectedSubtaskForFail && (
+            <MarkFailDialog
+              subtaskId={selectedSubtaskForFail}
+              open={failDialogOpen}
+              onOpenChange={setFailDialogOpen}
+              onSuccess={() => {
+                fetchSubtasks();
+                setSelectedSubtaskForFail(null);
+              }}
+            />
+          )}
 
         </>
       )}
