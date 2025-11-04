@@ -1698,7 +1698,7 @@ export default function InspectionDetailsDialog({
                               return next;
                             });
                           }}
-                          className={`${isUnitExpanded ? "sticky top-0 z-20 " : ""}w-full px-4 py-3 flex items-center justify-between text-sm font-semibold hover:bg-accent/50 transition-colors ${
+                          className={`${isUnitExpanded ? "sticky top-[86px] z-20 " : ""}w-full px-4 py-3 flex items-center justify-between text-sm font-semibold hover:bg-accent/50 transition-colors ${
                             allCompleted ? "bg-green-100 dark:bg-green-950/30" : "bg-accent"
                           }`}
                         >
@@ -1739,7 +1739,7 @@ export default function InspectionDetailsDialog({
                                         return next;
                                       });
                                     }}
-                                    className={`sticky top-[52px] z-10 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-b ${
+                                    className={`sticky top-[130px] z-10 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-b ${
                                       allRoomCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/50"
                                     }`}
                                   >
