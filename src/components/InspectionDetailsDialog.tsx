@@ -213,6 +213,7 @@ export default function InspectionDetailsDialog({
     template_name: string;
   }>>([]);
   const [expandedUnitTemplates, setExpandedUnitTemplates] = useState<Set<string>>(new Set());
+  const [inspectionRuns, setInspectionRuns] = useState<Map<string, { template_id: string, unit_id: string | null }>>(new Map());
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -652,6 +653,25 @@ export default function InspectionDetailsDialog({
         // Expand first template by default
         if (formatted.length > 0) {
           setExpandedUnitTemplates(new Set([`${formatted[0].unit_id || 'entire'}-${formatted[0].template_id}`]));
+        }
+        
+        // Fetch inspection runs to map run_id to template and unit
+        const { data: runsData } = await supabase
+          .from("inspection_runs")
+          .select("id, template_id")
+          .eq("inspection_id", inspectionId);
+          
+        if (runsData) {
+          const runsMap = new Map<string, { template_id: string, unit_id: string | null }>();
+          runsData.forEach(run => {
+            // Find the matching unit for this template
+            const matchingUnit = formatted.find(ut => ut.template_id === run.template_id);
+            runsMap.set(run.id, {
+              template_id: run.template_id,
+              unit_id: matchingUnit?.unit_id || null
+            });
+          });
+          setInspectionRuns(runsMap);
         }
       } else {
         setIsMultiUnitInspection(false);
@@ -1585,7 +1605,7 @@ export default function InspectionDetailsDialog({
             </div>
 
 
-            {/* Tasks grouped by room */}
+            {/* Tasks grouped by unit/template, then room */}
             <div className="space-y-2">
               {(() => {
                 // Filter subtasks based on mode
@@ -1597,53 +1617,106 @@ export default function InspectionDetailsDialog({
                   return true;
                 });
 
-                // Group subtasks by room
-                const groupedByRoom = filteredSubtasks.reduce((acc, subtask) => {
-                  const room = subtask.room_name || 'No Room';
-                  if (!acc[room]) acc[room] = [];
-                  acc[room].push(subtask);
-                  return acc;
-                }, {} as Record<string, Subtask[]>);
+                // For multi-unit inspections, group by unit/template first
+                if (isMultiUnitInspection && unitTemplates.length > 0) {
+                  return unitTemplates.map(ut => {
+                    const unitKey = `${ut.unit_id || 'entire'}-${ut.template_id}`;
+                    const isUnitExpanded = expandedUnitTemplates.has(unitKey);
+                    
+                    // Filter subtasks for this unit/template
+                    const unitSubtasks = filteredSubtasks.filter(s => {
+                      if (!s.inspection_run_id) return false;
+                      const runInfo = inspectionRuns.get(s.inspection_run_id);
+                      return runInfo?.template_id === ut.template_id && runInfo?.unit_id === ut.unit_id;
+                    });
+                    
+                    if (unitSubtasks.length === 0) return null;
+                    
+                    // Group by room within this unit/template
+                    const groupedByRoom = unitSubtasks.reduce((acc, subtask) => {
+                      const room = subtask.room_name || 'No Room';
+                      if (!acc[room]) acc[room] = [];
+                      acc[room].push(subtask);
+                      return acc;
+                    }, {} as Record<string, Subtask[]>);
+                    
+                    const totalCompleted = unitSubtasks.filter(s => s.completed).length;
+                    const allCompleted = totalCompleted === unitSubtasks.length;
+                    
+                    return (
+                      <div key={unitKey} className="border rounded-lg overflow-hidden">
+                        {/* Unit/Template Header */}
+                        <button
+                          onClick={() => {
+                            setExpandedUnitTemplates(prev => {
+                              const next = new Set(prev);
+                              if (next.has(unitKey)) {
+                                next.delete(unitKey);
+                              } else {
+                                next.add(unitKey);
+                              }
+                              return next;
+                            });
+                          }}
+                          className={`w-full px-4 py-3 flex items-center justify-between text-sm font-semibold hover:bg-accent/50 transition-colors ${
+                            allCompleted ? "bg-green-100 dark:bg-green-950/30" : "bg-accent"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {isUnitExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                            <div className="text-left">
+                              <div className="font-bold">{ut.unit_name}</div>
+                              <div className="text-xs text-muted-foreground font-normal">{ut.template_name}</div>
+                            </div>
+                            <Badge variant="outline" className="text-xs px-2 py-0.5">
+                              {totalCompleted}/{unitSubtasks.length}
+                            </Badge>
+                          </div>
+                          {allCompleted && <Check className="h-5 w-5 text-green-600" />}
+                        </button>
+                        
+                        {/* Rooms within this unit/template */}
+                        {isUnitExpanded && (
+                          <div className="space-y-0">
+                            {Object.entries(groupedByRoom).map(([roomName, roomSubtasks]) => {
+                              const roomKey = `${unitKey}-${roomName}`;
+                              const isCollapsed = collapsedRooms.has(roomKey);
+                              const roomCompletedCount = roomSubtasks.filter(s => s.completed).length;
+                              const allRoomCompleted = roomCompletedCount === roomSubtasks.length;
 
-                return Object.entries(groupedByRoom).map(([roomName, roomSubtasks]) => {
-                const isCollapsed = collapsedRooms.has(roomName);
-                const roomCompletedCount = roomSubtasks.filter(s => s.completed).length;
-                const allCompleted = roomCompletedCount === roomSubtasks.length;
+                              return (
+                                <div key={roomKey}>
+                                  {/* Room Header */}
+                                  <button
+                                    onClick={() => {
+                                      setCollapsedRooms(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(roomKey)) {
+                                          next.delete(roomKey);
+                                        } else {
+                                          next.add(roomKey);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className={`w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-b ${
+                                      allRoomCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/50"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                      <span>{roomName}</span>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                        {roomCompletedCount}/{roomSubtasks.length}
+                                      </Badge>
+                                    </div>
+                                    {allRoomCompleted && <Check className="h-4 w-4 text-green-600" />}
+                                  </button>
 
-                return (
-                  <div key={roomName} className="rounded-lg">
-                    {/* Room Header - Sticky with border and background */}
-                    <button
-                      onClick={() => {
-                        setCollapsedRooms(prev => {
-                          const next = new Set(prev);
-                          if (next.has(roomName)) {
-                            next.delete(roomName);
-                          } else {
-                            next.add(roomName);
-                          }
-                          return next;
-                        });
-                      }}
-                      className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b will-change-transform ${
-                        allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
-                      }`}
-                      style={{ marginTop: '-1px' }}
-                    >
-                      <div className="flex items-center gap-2">
-                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        <span>{roomName}</span>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {roomCompletedCount}/{roomSubtasks.length}
-                        </Badge>
-                      </div>
-                      {allCompleted && <Check className="h-4 w-4 text-green-600" />}
-                    </button>
-
-                    {/* Room Tasks */}
-                    {!isCollapsed && (
-                      <div className="p-2 space-y-2 border-x border-b rounded-b-lg">
-                        {roomSubtasks.map((subtask) => {
+                                   {/* Room Tasks */}
+                                   {!isCollapsed && (
+                                     <div className="p-2 space-y-2 bg-background">
+                                       {roomSubtasks.map((subtask) => {
                           const isInherited = subtask.original_inspection_id !== inspectionId;
                           const effectiveStatus = localStatus[subtask.id] ?? subtask.status;
                           const isPass = effectiveStatus === 'pass';
@@ -1944,15 +2017,147 @@ export default function InspectionDetailsDialog({
                                 >
                                   <Trash2 className="h-3 w-3 text-destructive" />
                                 </Button>
-                              )}
-                            </div>
-                          );
-                        })}
+                               )}
+                             </div>
+                           );
+                         })}
+                       </div>
+                     )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              });
+                    );
+                  });
+                }
+                
+                // For single-unit inspections, group by room only
+                const groupedByRoom = filteredSubtasks.reduce((acc, subtask) => {
+                  const room = subtask.room_name || 'No Room';
+                  if (!acc[room]) acc[room] = [];
+                  acc[room].push(subtask);
+                  return acc;
+                }, {} as Record<string, Subtask[]>);
+
+                return Object.entries(groupedByRoom).map(([roomName, roomSubtasks]) => {
+                  const isCollapsed = collapsedRooms.has(roomName);
+                  const roomCompletedCount = roomSubtasks.filter(s => s.completed).length;
+                  const allCompleted = roomCompletedCount === roomSubtasks.length;
+
+                  return (
+                    <div key={roomName} className="rounded-lg">
+                      {/* Room Header - Sticky with border and background */}
+                      <button
+                        onClick={() => {
+                          setCollapsedRooms(prev => {
+                            const next = new Set(prev);
+                            if (next.has(roomName)) {
+                              next.delete(roomName);
+                            } else {
+                              next.add(roomName);
+                            }
+                            return next;
+                          });
+                        }}
+                        className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b will-change-transform ${
+                          allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
+                        }`}
+                        style={{ marginTop: '-1px' }}
+                      >
+                        <div className="flex items-center gap-2">
+                          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          <span>{roomName}</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            {roomCompletedCount}/{roomSubtasks.length}
+                          </Badge>
+                        </div>
+                        {allCompleted && <Check className="h-4 w-4 text-green-600" />}
+                      </button>
+
+                      {/* Room Tasks */}
+                      {!isCollapsed && (
+                        <div className="p-2 space-y-2 border-x border-b rounded-b-lg">
+                          {roomSubtasks.map((subtask) => {
+                            const isInherited = subtask.original_inspection_id !== inspectionId;
+                            const effectiveStatus = localStatus[subtask.id] ?? subtask.status;
+                            const isPass = effectiveStatus === 'pass';
+                            const isFail = effectiveStatus === 'fail';
+                            const isPending = !effectiveStatus || effectiveStatus === 'pending';
+
+                            return (
+                              <div
+                                key={subtask.id}
+                                className={`flex items-start gap-2 p-2 border rounded transition-colors ${
+                                  isPass
+                                    ? "bg-green-50 dark:bg-green-950/20 border-l-4 border-l-green-600"
+                                    : isFail
+                                    ? "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-600"
+                                    : subtask.completed
+                                    ? "bg-muted/30 opacity-60"
+                                    : isInherited
+                                    ? "bg-accent/20"
+                                    : "hover:bg-accent/30"
+                                }`}
+                              >
+                                 {/* This renders the same as the multi-unit version above */}
+                                 <div className="flex-1 min-w-0 text-xs">
+                                   <div 
+                                     className="flex items-start gap-2 flex-wrap mb-2 cursor-pointer hover:bg-muted/30 rounded p-1 -m-1"
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       toggleActivity(subtask.id);
+                                     }}
+                                   >
+                                     {expandedActivity[subtask.id] ? (
+                                       <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                     ) : (
+                                       <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                     )}
+                                      <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                                        {subtask.description}
+                                      </p>
+                                      {subtask.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0) && (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 bg-amber-50">
+                                          Needs Qty
+                                        </Badge>
+                                      )}
+                                      {isPass && (
+                                        <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600 hover:bg-green-600">
+                                          Pass
+                                        </Badge>
+                                      )}
+                                      {isFail && (
+                                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                          Fail
+                                        </Badge>
+                                      )}
+                                   </div>
+                                   {/* Note: Full subtask content (Pass/Fail buttons, notes, activity) is already rendered above in multi-unit section */}
+                                 </div>
+                                 
+                               {!isInherited && !subtask.completed && (
+                                 <Button
+                                   variant="ghost"
+                                   size="icon"
+                                   className="h-6 w-6 flex-shrink-0"
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     handleDeleteSubtask(subtask.id);
+                                   }}
+                                 >
+                                   <Trash2 className="h-3 w-3 text-destructive" />
+                                 </Button>
+                               )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
               })()}
 
               {/* Add New Task */}
