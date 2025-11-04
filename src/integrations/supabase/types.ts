@@ -258,6 +258,33 @@ export type Database = {
         }
         Relationships: []
       }
+      inspection_unit_templates: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          inspection_id: string
+          template_id: string
+          unit_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          inspection_id: string
+          template_id: string
+          unit_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          inspection_id?: string
+          template_id?: string
+          unit_id?: string | null
+        }
+        Relationships: []
+      }
       inspections: {
         Row: {
           archived: boolean

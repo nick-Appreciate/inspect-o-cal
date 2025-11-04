@@ -20,6 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import AddFollowUpDialog from "./AddFollowUpDialog";
@@ -197,6 +203,16 @@ export default function InspectionDetailsDialog({
   const [failDialogInventoryQuantity, setFailDialogInventoryQuantity] = useState<string>("");
   const [quantityDialogOpen, setQuantityDialogOpen] = useState(false);
   const [selectedQuantitySubtask, setSelectedQuantitySubtask] = useState<Subtask | null>(null);
+  
+  // Multi-unit inspection state
+  const [isMultiUnitInspection, setIsMultiUnitInspection] = useState(false);
+  const [unitTemplates, setUnitTemplates] = useState<Array<{
+    unit_id: string | null;
+    template_id: string;
+    unit_name: string;
+    template_name: string;
+  }>>([]);
+  const [expandedUnitTemplates, setExpandedUnitTemplates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -206,6 +222,7 @@ export default function InspectionDetailsDialog({
       fetchInventoryTypes();
       fetchVendorTypes();
       fetchHistoricalInspections();
+      fetchUnitTemplates();
     }
   }, [inspectionId, open]);
 
@@ -601,6 +618,46 @@ export default function InspectionDetailsDialog({
       );
 
       setHistoricalInspections(inspectionsWithCounts);
+    }
+  };
+  
+  const fetchUnitTemplates = async () => {
+    if (!inspectionId) return;
+    
+    try {
+      const { data: unitTemplateData, error } = await supabase
+        .from("inspection_unit_templates")
+        .select(`
+          unit_id,
+          template_id,
+          units(name),
+          inspection_templates:template_id(name)
+        `)
+        .eq("inspection_id", inspectionId);
+        
+      if (error) {
+        console.error("Failed to fetch unit templates:", error);
+        return;
+      }
+      
+      if (unitTemplateData && unitTemplateData.length > 0) {
+        setIsMultiUnitInspection(true);
+        const formatted = unitTemplateData.map((ut: any) => ({
+          unit_id: ut.unit_id,
+          template_id: ut.template_id,
+          unit_name: ut.unit_id ? ut.units?.name || "Unknown Unit" : "Entire Property",
+          template_name: ut.inspection_templates?.name || "Unknown Template"
+        }));
+        setUnitTemplates(formatted);
+        // Expand first template by default
+        if (formatted.length > 0) {
+          setExpandedUnitTemplates(new Set([`${formatted[0].unit_id || 'entire'}-${formatted[0].template_id}`]));
+        }
+      } else {
+        setIsMultiUnitInspection(false);
+      }
+    } catch (error) {
+      console.error("Error fetching unit templates:", error);
     }
   };
 

@@ -31,6 +31,7 @@ import { CalendarIcon } from "lucide-react";
 import { Inspection, InspectionType, Property } from "@/types/inspection";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import MultiUnitTemplateSelector from "./MultiUnitTemplateSelector";
 
 interface Unit {
   id: string;
@@ -80,6 +81,11 @@ export default function AddInspectionDialog({
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Multi-unit inspection state
+  const [isMultiUnit, setIsMultiUnit] = useState(false);
+  const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
+  const [unitTemplates, setUnitTemplates] = useState<Record<string, string>>({});
 
   // Fetch units when property is selected
   useEffect(() => {
@@ -90,16 +96,31 @@ export default function AddInspectionDialog({
       setSelectedUnit(undefined);
     }
   }, [selectedProperty]);
+  
+  // Detect if inspection type requires multi-unit support
+  useEffect(() => {
+    if (type === "HUD" || type === "Rental License") {
+      setIsMultiUnit(true);
+      setSelectedUnit(undefined);
+      setSelectedTemplate("");
+    } else {
+      setIsMultiUnit(false);
+      setSelectedUnits([]);
+      setUnitTemplates({});
+    }
+  }, [type]);
 
   // Fetch templates when property or unit changes
   useEffect(() => {
-    if (selectedProperty?.id) {
+    if (selectedProperty?.id && !isMultiUnit) {
       fetchTemplates();
     } else {
-      setTemplates([]);
-      setSelectedTemplate("");
+      if (!isMultiUnit) {
+        setTemplates([]);
+        setSelectedTemplate("");
+      }
     }
-  }, [selectedProperty, selectedUnit]);
+  }, [selectedProperty, selectedUnit, isMultiUnit]);
 
   const fetchTemplates = async () => {
     if (!selectedProperty?.id) return;
@@ -184,6 +205,68 @@ export default function AddInspectionDialog({
       setUnits(sortedData);
     }
   };
+  
+  const fetchTemplatesForUnit = async (unitId: string | null) => {
+    if (!selectedProperty?.id) return [];
+    
+    try {
+      let query = supabase
+        .from("inspection_templates")
+        .select("id, name, floorplan_id, template_properties(property_id)");
+
+      if (unitId === "entire-property" || unitId === null) {
+        const { data: propertyTemplates } = await supabase
+          .from("template_properties")
+          .select("template_id")
+          .eq("property_id", selectedProperty.id);
+
+        if (propertyTemplates && propertyTemplates.length > 0) {
+          const templateIds = propertyTemplates.map(pt => pt.template_id);
+          query = query
+            .in("id", templateIds)
+            .is("floorplan_id", null);
+        }
+      } else {
+        const { data: unitData } = await supabase
+          .from("units")
+          .select("floorplan_id")
+          .eq("id", unitId)
+          .single();
+
+        if (unitData?.floorplan_id) {
+          query = query.eq("floorplan_id", unitData.floorplan_id);
+        }
+      }
+
+      const { data } = await query.order("name");
+      return data || [];
+    } catch (error) {
+      console.error("Error fetching templates:", error);
+      return [];
+    }
+  };
+  
+  const handleUnitSelection = (unitId: string) => {
+    setSelectedUnits(prev => {
+      if (prev.includes(unitId)) {
+        // Remove unit and its template selection
+        const newUnits = prev.filter(id => id !== unitId);
+        const newTemplates = { ...unitTemplates };
+        delete newTemplates[unitId];
+        setUnitTemplates(newTemplates);
+        return newUnits;
+      } else {
+        return [...prev, unitId];
+      }
+    });
+  };
+  
+  const handleTemplateForUnit = (unitId: string, templateId: string) => {
+    setUnitTemplates(prev => ({
+      ...prev,
+      [unitId]: templateId
+    }));
+  };
 
   const handleAddUnit = async () => {
     if (!newUnitName.trim() || !selectedProperty?.id) {
@@ -225,9 +308,24 @@ export default function AddInspectionDialog({
       return;
     }
 
-    if (!selectedTemplate) {
-      toast.error("Please select an inspection template");
-      return;
+    // Validation for multi-unit inspections
+    if (isMultiUnit) {
+      if (selectedUnits.length === 0) {
+        toast.error("Please select at least one unit");
+        return;
+      }
+      
+      // Check that all selected units have templates assigned
+      const unitsWithoutTemplates = selectedUnits.filter(unitId => !unitTemplates[unitId]);
+      if (unitsWithoutTemplates.length > 0) {
+        toast.error("Please assign a template to all selected units");
+        return;
+      }
+    } else {
+      if (!selectedTemplate) {
+        toast.error("Please select an inspection template");
+        return;
+      }
     }
 
     if (isSubmitting) {
@@ -243,18 +341,6 @@ export default function AddInspectionDialog({
     }
 
     try {
-      /* 
-       * CLEAN ARCHITECTURE - SINGLE SOURCE OF TRUTH:
-       * 
-       * Room Template Items → (copy with defaults) → Template Items → (direct copy) → Inspection Subtasks
-       * 
-       * 1. Room templates define reusable task lists
-       * 2. When adding a room to a template, items + default tasks are copied once (deduplicated)
-       * 3. Template items become the SINGLE source of truth (no default task additions during inspection)
-       * 4. When creating an inspection, ONLY template_items are copied to subtasks (direct 1-1 mapping)
-       * 
-       * No automatic triggers - all copies are explicit. Default tasks only added during template creation.
-       */
       // Upload attachment if provided and get URL
       let attachmentUrl: string | undefined;
       if (attachment) {
@@ -278,9 +364,9 @@ export default function AddInspectionDialog({
           date: date.toISOString().split('T')[0],
           time,
           property_id: selectedProperty.id,
-          unit_id: selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
+          unit_id: !isMultiUnit && selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
           created_by: user.id,
-          inspection_template_id: selectedTemplate,
+          inspection_template_id: !isMultiUnit ? selectedTemplate : null,
           attachment_url: attachmentUrl,
         })
         .select()
@@ -288,130 +374,31 @@ export default function AddInspectionDialog({
 
       if (inspectionError) throw inspectionError;
 
-      /* 
-       * CLEAN ARCHITECTURE - COMPLETE REBUILD:
-       * Template Rooms → Inspection Rooms (preserve order)
-       * Template Items → Subtasks (preserve order within rooms)
-       * 
-       * This ensures inspections perfectly mirror templates with exact ordering
-       */
-      
-      // Step 1: Fetch template rooms with ordering
-      const { data: templateRooms, error: roomsError } = await supabase
-        .from("template_rooms")
-        .select("*")
-        .eq("template_id", selectedTemplate)
-        .order("order_index");
+      // Handle multi-unit inspections
+      if (isMultiUnit) {
+        // Create inspection_unit_templates associations
+        const associations = selectedUnits.map(unitId => ({
+          inspection_id: inspection.id,
+          unit_id: unitId === "entire-property" ? null : unitId,
+          template_id: unitTemplates[unitId],
+          created_by: user.id,
+        }));
 
-      if (roomsError) {
-        console.error("Failed to fetch template rooms:", roomsError);
-        throw new Error("Failed to load inspection template rooms");
-      }
+        const { error: associationError } = await supabase
+          .from("inspection_unit_templates")
+          .insert(associations);
 
-      if (!templateRooms || templateRooms.length === 0) {
-        console.warn("No rooms found in template:", selectedTemplate);
-        throw new Error("This template has no rooms configured. Please add rooms to the template first.");
-      }
+        if (associationError) throw associationError;
 
-      console.log(`Creating inspection with ${templateRooms.length} rooms from template`);
-
-      // Step 2: Create inspection_rooms one by one to ensure all are created
-      const roomIdMap = new Map<string, string>();
-      
-      for (const templateRoom of templateRooms) {
-        const { data: newRoom, error: roomError } = await supabase
-          .from("inspection_rooms")
-          .insert({
-            inspection_id: inspection.id,
-            name: templateRoom.name,
-            order_index: templateRoom.order_index,
-            created_by: user.id,
-          })
-          .select()
-          .single();
-
-        if (roomError || !newRoom) {
-          console.error(`Failed to create room "${templateRoom.name}":`, roomError);
-          throw new Error(`Failed to create room "${templateRoom.name}"`);
+        // Create subtasks for each unit-template combination
+        for (const unitId of selectedUnits) {
+          const templateId = unitTemplates[unitId];
+          await createSubtasksForTemplate(inspection.id, templateId, user.id, unitId);
         }
-
-        roomIdMap.set(templateRoom.id, newRoom.id);
-        console.log(`Created room "${templateRoom.name}" (${templateRoom.order_index})`);
-      }
-
-      console.log(`Created ${roomIdMap.size} inspection rooms successfully`);
-
-      // Step 3: Copy template_items to subtasks with proper ordering
-      const allSubtasks: {
-        inspection_id: string;
-        original_inspection_id: string;
-        inspection_room_id: string;
-        description: string;
-        room_name: string;
-        inventory_type_id: string | null;
-        vendor_type_id: string | null;
-        inventory_quantity: number;
-        order_index: number;
-        status: string;
-        completed: boolean;
-        created_by: string;
-      }[] = [];
-
-      for (const templateRoom of templateRooms) {
-        const { data: templateItems, error: itemsError } = await supabase
-          .from("template_items")
-          .select("*")
-          .eq("room_id", templateRoom.id)
-          .order("order_index");
-
-        if (itemsError) {
-          console.error(`Failed to fetch items for room ${templateRoom.name}:`, itemsError);
-          continue;
-        }
-
-        if (templateItems && templateItems.length > 0) {
-          const inspectionRoomId = roomIdMap.get(templateRoom.id);
-          if (!inspectionRoomId) {
-            console.error(`Missing inspection_room_id for template room ${templateRoom.id}`);
-            throw new Error(`Room mapping error for "${templateRoom.name}"`);
-          }
-
-          const roomSubtasks = templateItems.map(item => ({
-            inspection_id: inspection.id,
-            original_inspection_id: inspection.id,
-            inspection_room_id: inspectionRoomId,
-            description: item.description,
-            room_name: templateRoom.name,
-            inventory_type_id: item.inventory_type_id,
-            vendor_type_id: item.vendor_type_id,
-            inventory_quantity: item.inventory_quantity || 0,
-            order_index: item.order_index,
-            status: 'pending',
-            completed: false,
-            created_by: user.id,
-          }));
-          
-          allSubtasks.push(...roomSubtasks);
-          console.log(`Room "${templateRoom.name}": ${roomSubtasks.length} tasks copied (ordered)`);
-        } else {
-          console.warn(`Room "${templateRoom.name}" has no template items`);
-        }
-      }
-
-      if (allSubtasks.length === 0) {
-        console.warn("No subtasks created for inspection");
-        throw new Error("No tasks found in template. Please add tasks to the template rooms.");
-      }
-
-      console.log(`Inserting ${allSubtasks.length} total subtasks from ${templateRooms.length} rooms`);
-
-      const { error: subtasksError } = await supabase
-        .from("subtasks")
-        .insert(allSubtasks);
-
-      if (subtasksError) {
-        console.error("Failed to insert subtasks:", subtasksError);
-        throw subtasksError;
+      } else {
+        // Single template inspection - existing logic
+        await createSubtasksForTemplate(inspection.id, selectedTemplate, user.id, 
+          selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null);
       }
 
       console.log("Inspection created successfully with all tasks");
@@ -422,7 +409,7 @@ export default function AddInspectionDialog({
         time,
         property: selectedProperty,
         attachment,
-        unitId: selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
+        unitId: !isMultiUnit && selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
       });
 
       toast.success("Inspection created with checklist items");
@@ -433,6 +420,131 @@ export default function AddInspectionDialog({
       toast.error("Failed to create inspection");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+  
+  const createSubtasksForTemplate = async (
+    inspectionId: string, 
+    templateId: string, 
+    userId: string,
+    unitId: string | null
+  ) => {
+    // Step 1: Fetch template rooms with ordering
+    const { data: templateRooms, error: roomsError } = await supabase
+      .from("template_rooms")
+      .select("*")
+      .eq("template_id", templateId)
+      .order("order_index");
+
+    if (roomsError) {
+      console.error("Failed to fetch template rooms:", roomsError);
+      throw new Error("Failed to load inspection template rooms");
+    }
+
+    if (!templateRooms || templateRooms.length === 0) {
+      console.warn("No rooms found in template:", templateId);
+      throw new Error("This template has no rooms configured. Please add rooms to the template first.");
+    }
+
+    console.log(`Creating inspection with ${templateRooms.length} rooms from template`);
+
+    // Step 2: Create inspection_rooms one by one to ensure all are created
+    const roomIdMap = new Map<string, string>();
+    
+    for (const templateRoom of templateRooms) {
+      const { data: newRoom, error: roomError } = await supabase
+        .from("inspection_rooms")
+        .insert({
+          inspection_id: inspectionId,
+          name: templateRoom.name,
+          order_index: templateRoom.order_index,
+          created_by: userId,
+        })
+        .select()
+        .single();
+
+      if (roomError || !newRoom) {
+        console.error(`Failed to create room "${templateRoom.name}":`, roomError);
+        throw new Error(`Failed to create room "${templateRoom.name}"`);
+      }
+
+      roomIdMap.set(templateRoom.id, newRoom.id);
+      console.log(`Created room "${templateRoom.name}" (${templateRoom.order_index})`);
+    }
+
+    console.log(`Created ${roomIdMap.size} inspection rooms successfully`);
+
+    // Step 3: Copy template_items to subtasks with proper ordering
+    const allSubtasks: {
+      inspection_id: string;
+      original_inspection_id: string;
+      inspection_room_id: string;
+      description: string;
+      room_name: string;
+      inventory_type_id: string | null;
+      vendor_type_id: string | null;
+      inventory_quantity: number;
+      order_index: number;
+      status: string;
+      completed: boolean;
+      created_by: string;
+    }[] = [];
+
+    for (const templateRoom of templateRooms) {
+      const { data: templateItems, error: itemsError } = await supabase
+        .from("template_items")
+        .select("*")
+        .eq("room_id", templateRoom.id)
+        .order("order_index");
+
+      if (itemsError) {
+        console.error(`Failed to fetch items for room ${templateRoom.name}:`, itemsError);
+        continue;
+      }
+
+      if (templateItems && templateItems.length > 0) {
+        const inspectionRoomId = roomIdMap.get(templateRoom.id);
+        if (!inspectionRoomId) {
+          console.error(`Missing inspection_room_id for template room ${templateRoom.id}`);
+          throw new Error(`Room mapping error for "${templateRoom.name}"`);
+        }
+
+        const roomSubtasks = templateItems.map(item => ({
+          inspection_id: inspectionId,
+          original_inspection_id: inspectionId,
+          inspection_room_id: inspectionRoomId,
+          description: item.description,
+          room_name: templateRoom.name,
+          inventory_type_id: item.inventory_type_id,
+          vendor_type_id: item.vendor_type_id,
+          inventory_quantity: item.inventory_quantity || 0,
+          order_index: item.order_index,
+          status: 'pending',
+          completed: false,
+          created_by: userId,
+        }));
+        
+        allSubtasks.push(...roomSubtasks);
+        console.log(`Room "${templateRoom.name}": ${roomSubtasks.length} tasks copied (ordered)`);
+      } else {
+        console.warn(`Room "${templateRoom.name}" has no template items`);
+      }
+    }
+
+    if (allSubtasks.length === 0) {
+      console.warn("No subtasks created for inspection");
+      throw new Error("No tasks found in template. Please add tasks to the template rooms.");
+    }
+
+    console.log(`Inserting ${allSubtasks.length} total subtasks from ${templateRooms.length} rooms`);
+
+    const { error: subtasksError } = await supabase
+      .from("subtasks")
+      .insert(allSubtasks);
+
+    if (subtasksError) {
+      console.error("Failed to insert subtasks:", subtasksError);
+      throw subtasksError;
     }
   };
 
@@ -613,78 +725,91 @@ export default function AddInspectionDialog({
 
           {selectedProperty && !showAddProperty && (
             <>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Unit (Optional)</Label>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={() => setShowAddUnit(!showAddUnit)}
-                    className="h-auto p-0 text-primary"
-                  >
-                    {showAddUnit ? "Cancel" : "+ Add New Unit"}
-                  </Button>
-                </div>
-              
-              {!showAddUnit ? (
-                <Select value={selectedUnit} onValueChange={setSelectedUnit}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a unit (optional)" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50 border shadow-lg">
-                    <SelectItem value="entire-property">Entire Property</SelectItem>
-                    <SelectItem value="none">No unit</SelectItem>
-                    {units.map((unit) => (
-                      <SelectItem key={unit.id} value={unit.id}>
-                        {unit.name}
-                        {unit.floorplan && (
-                          <span className="text-muted-foreground ml-2">
-                            ({unit.floorplan.name})
-                          </span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="space-y-2 p-3 border rounded-lg bg-accent/30">
-                  <Input
-                    placeholder="Unit name (e.g., Unit 101, Apt A)"
-                    value={newUnitName}
-                    onChange={(e) => setNewUnitName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleAddUnit();
-                      }
-                    }}
-                  />
-                  <Button onClick={handleAddUnit} className="w-full" size="sm">
-                    Save Unit
-                  </Button>
-                </div>
-              )}
-              </div>
+              {!isMultiUnit ? (
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Unit (Optional)</Label>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setShowAddUnit(!showAddUnit)}
+                        className="h-auto p-0 text-primary"
+                      >
+                        {showAddUnit ? "Cancel" : "+ Add New Unit"}
+                      </Button>
+                    </div>
+                  
+                  {!showAddUnit ? (
+                    <Select value={selectedUnit} onValueChange={setSelectedUnit}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a unit (optional)" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50 border shadow-lg">
+                        <SelectItem value="entire-property">Entire Property</SelectItem>
+                        <SelectItem value="none">No unit</SelectItem>
+                        {units.map((unit) => (
+                          <SelectItem key={unit.id} value={unit.id}>
+                            {unit.name}
+                            {unit.floorplan && (
+                              <span className="text-muted-foreground ml-2">
+                                ({unit.floorplan.name})
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="space-y-2 p-3 border rounded-lg bg-accent/30">
+                      <Input
+                        placeholder="Unit name (e.g., Unit 101, Apt A)"
+                        value={newUnitName}
+                        onChange={(e) => setNewUnitName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            handleAddUnit();
+                          }
+                        }}
+                      />
+                      <Button onClick={handleAddUnit} className="w-full" size="sm">
+                        Save Unit
+                      </Button>
+                    </div>
+                  )}
+                  </div>
 
-              <div className="space-y-2">
-                <Label>Inspection Template</Label>
-                <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a template" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50 border shadow-lg">
-                    {templates.length === 0 && (
-                      <div className="p-2 text-sm text-muted-foreground">
-                        No templates available for this selection
-                      </div>
-                    )}
-                    {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="space-y-2">
+                    <Label>Inspection Template</Label>
+                    <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a template" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50 border shadow-lg">
+                        {templates.length === 0 && (
+                          <div className="p-2 text-sm text-muted-foreground">
+                            No templates available for this selection
+                          </div>
+                        )}
+                        {templates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <MultiUnitTemplateSelector
+                  units={units}
+                  selectedUnits={selectedUnits}
+                  unitTemplates={unitTemplates}
+                  onUnitSelection={handleUnitSelection}
+                  onTemplateForUnit={handleTemplateForUnit}
+                  fetchTemplatesForUnit={fetchTemplatesForUnit}
+                />
+              )}
             </>
           )}
 
