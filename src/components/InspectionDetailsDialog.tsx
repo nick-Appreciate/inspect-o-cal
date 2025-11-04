@@ -1321,7 +1321,7 @@ export default function InspectionDetailsDialog({
           {/* Scrollable Content */}
           <div className="overflow-y-auto flex-1 relative">
             {/* Pass/Fail Buttons - Sticky */}
-            <div className="sticky top-0 z-30 bg-background border-b">
+            <div className="sticky top-0 z-30 bg-background border-b transform-gpu">
               <div className="flex gap-2 px-3 sm:px-4 py-2">
                 <Button
                   variant={inspection?.status === 'passed' ? "default" : "outline"}
@@ -1453,7 +1453,7 @@ export default function InspectionDetailsDialog({
             )}
 
             {/* Filter Buttons with Counters - Sticky */}
-            <div className="sticky top-[45px] z-30 bg-background border-b">
+            <div className="sticky top-[45px] z-30 bg-background border-b transform-gpu">
               <div className="flex gap-2 px-3 sm:px-4 py-2">
                 <Button
                   variant={showCompleted === 'to-do' ? "default" : "outline"}
@@ -1493,9 +1493,10 @@ export default function InspectionDetailsDialog({
               {(() => {
                 // Filter subtasks based on mode
                 const filteredSubtasks = subtasks.filter(s => {
-                  if (showCompleted === 'fail') return s.status === 'fail';
-                  if (showCompleted === 'completed') return s.status === 'pass' || s.completed;
-                  if (showCompleted === 'to-do') return (s.status === 'fail' || s.status === 'pending' || !s.status) && !s.completed;
+                  const effective = localStatus[s.id] ?? s.status;
+                  if (showCompleted === 'fail') return effective === 'fail';
+                  if (showCompleted === 'completed') return effective === 'pass' || s.completed;
+                  if (showCompleted === 'to-do') return (effective === 'fail' || effective === 'pending' || !effective) && !s.completed;
                   return true;
                 });
 
@@ -1527,7 +1528,7 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border ${
+                      className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b -mt-px transform-gpu ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                       }`}
                     >
