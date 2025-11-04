@@ -1313,30 +1313,31 @@ export default function InspectionDetailsDialog({
             </div>
           </div>
 
-          {/* Pass/Fail Buttons */}
-          <div className="flex gap-2 px-3 sm:px-4 py-3 border-b bg-muted/20">
-            <Button
-              variant={inspection?.status === 'passed' ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleInspectionStatusChange('passed')}
-              className={`flex-1 ${inspection?.status === 'passed' ? 'bg-green-600 hover:bg-green-700' : 'border-green-600 text-green-600 hover:bg-green-50'}`}
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Pass Inspection
-            </Button>
-            <Button
-              variant={inspection?.status === 'failed' ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleInspectionStatusChange('failed')}
-              className={`flex-1 ${inspection?.status === 'failed' ? 'bg-destructive hover:bg-destructive/90' : 'border-destructive text-destructive hover:bg-destructive/10'}`}
-            >
-              <X className="h-4 w-4 mr-2" />
-              Fail Inspection
-            </Button>
-          </div>
-
           {/* Scrollable Content */}
-          <div className="overflow-y-auto px-3 sm:px-4 py-3 flex-1">
+          <div className="overflow-y-auto flex-1 relative">
+            {/* Pass/Fail Buttons - Sticky */}
+            <div className="sticky top-0 z-30 flex gap-2 px-3 sm:px-4 py-2 border-b bg-background">
+              <Button
+                variant={inspection?.status === 'passed' ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleInspectionStatusChange('passed')}
+                className={`flex-1 h-7 ${inspection?.status === 'passed' ? 'bg-green-600 hover:bg-green-700' : 'border-green-600 text-green-600 hover:bg-green-50'}`}
+              >
+                <Check className="h-3 w-3 mr-1" />
+                Pass Inspection
+              </Button>
+              <Button
+                variant={inspection?.status === 'failed' ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleInspectionStatusChange('failed')}
+                className={`flex-1 h-7 ${inspection?.status === 'failed' ? 'bg-destructive hover:bg-destructive/90' : 'border-destructive text-destructive hover:bg-destructive/10'}`}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Fail Inspection
+              </Button>
+            </div>
+
+            <div className="px-3 sm:px-4 py-3">
             {/* Compact Inventory Summary - Items Needed from Failed Tasks */}
             {totalItemsNeeded > 0 && (
               <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
@@ -1444,13 +1445,13 @@ export default function InspectionDetailsDialog({
               </div>
             )}
 
-            {/* Filter Buttons with Counters */}
-            <div className="flex gap-2 mb-3">
+            {/* Filter Buttons with Counters - Sticky */}
+            <div className="sticky top-[41px] z-30 flex gap-2 mb-3 bg-background py-2 -mt-2">
               <Button
                 variant={showCompleted === 'to-do' ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowCompleted('to-do')}
-                className="flex-1 h-8 text-xs"
+                className="flex-1 h-7 text-xs"
               >
                 To-Do
               </Button>
@@ -1458,7 +1459,7 @@ export default function InspectionDetailsDialog({
                 variant={showCompleted === 'fail' ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowCompleted('fail')}
-                className="flex-1 h-8 text-xs relative"
+                className="flex-1 h-7 text-xs relative"
               >
                 Failed
                 {subtasks.filter(s => s.status === 'fail').length > 0 && (
@@ -1471,7 +1472,7 @@ export default function InspectionDetailsDialog({
                 variant={showCompleted === 'completed' ? "default" : "outline"}
                 size="sm"
                 onClick={() => setShowCompleted('completed')}
-                className="flex-1 h-8 text-xs"
+                className="flex-1 h-7 text-xs"
               >
                 Passed
               </Button>
@@ -1517,7 +1518,7 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-0 z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
+                      className={`sticky top-[81px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                       }`}
                     >
@@ -1856,6 +1857,7 @@ export default function InspectionDetailsDialog({
                 <Plus className="h-4 w-4 mr-2" />
                 Add Task
               </Button>
+            </div>
             </div>
           </div>
 
