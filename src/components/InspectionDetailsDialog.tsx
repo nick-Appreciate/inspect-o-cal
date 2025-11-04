@@ -1193,6 +1193,20 @@ export default function InspectionDetailsDialog({
       return acc;
     }, {} as Record<string, number>);
 
+  // Calculate tasks by vendor type from subtasks marked as fail
+  const tasksByVendorType = subtasks
+    .filter(s => s.status === 'fail' && s.vendor_type_id)
+    .reduce((acc, s) => {
+      const vendorTypeId = s.vendor_type_id!;
+      if (!acc[vendorTypeId]) {
+        acc[vendorTypeId] = 0;
+      }
+      acc[vendorTypeId] += 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+  const totalVendorTasks = Object.values(tasksByVendorType).reduce((sum, count) => sum + count, 0);
+
   // Calculate completed items by type
   const completedItemsByType = subtasks
     .filter(s => s.completed && s.inventory_quantity && s.inventory_quantity > 0 && s.inventory_type_id)
@@ -1363,6 +1377,32 @@ export default function InspectionDetailsDialog({
                           <div key={typeId} className="flex justify-between text-sm">
                             <span className="text-muted-foreground">{type.name}</span>
                             <span className="font-semibold text-destructive">{qty}</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Vendor Type Summary - Tasks by Vendor from Failed Tasks */}
+            {totalVendorTasks > 0 && (
+              <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                <div className="font-semibold flex items-center gap-2 mb-2 text-destructive">
+                  <User className="h-4 w-4" />
+                  <span className="text-base">Vendor Tasks: {totalVendorTasks} total</span>
+                </div>
+                {Object.keys(tasksByVendorType).length > 0 && (
+                  <div className="space-y-1 pl-6">
+                    {Object.entries(tasksByVendorType)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([vendorTypeId, count]) => {
+                        const vendor = vendorTypes.find(v => v.id === vendorTypeId);
+                        if (!vendor || count === 0) return null;
+                        return (
+                          <div key={vendorTypeId} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{vendor.name}</span>
+                            <span className="font-semibold text-destructive">{count}</span>
                           </div>
                         );
                       })}
