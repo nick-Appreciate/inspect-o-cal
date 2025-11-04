@@ -26,6 +26,7 @@ import AddFollowUpDialog from "./AddFollowUpDialog";
 import { UserAvatar } from "./UserAvatar";
 import { AddTaskDialog } from "./AddTaskDialog";
 import { AlertCircle } from "lucide-react";
+import SetInventoryQuantityDialog from "./SetInventoryQuantityDialog";
 
 interface Inspection {
   id: string;
@@ -194,6 +195,8 @@ export default function InspectionDetailsDialog({
   const [failDialogNote, setFailDialogNote] = useState("");
   const [failDialogAssignee, setFailDialogAssignee] = useState<string>("");
   const [failDialogInventoryQuantity, setFailDialogInventoryQuantity] = useState<string>("");
+  const [quantityDialogOpen, setQuantityDialogOpen] = useState(false);
+  const [selectedQuantitySubtask, setSelectedQuantitySubtask] = useState<Subtask | null>(null);
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -665,6 +668,15 @@ export default function InspectionDetailsDialog({
   };
 
   const handleStatusChange = async (subtaskId: string, newStatus: 'pass' | 'fail', currentStatus?: string) => {
+    const subtask = subtasks.find((s) => s.id === subtaskId);
+    
+    // Check if subtask has inventory type but no quantity set
+    if (subtask?.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0)) {
+      setSelectedQuantitySubtask(subtask);
+      setQuantityDialogOpen(true);
+      return;
+    }
+
     // If clicking fail, open the fail modal and block closing until submitted or canceled
     if (newStatus === 'fail' && currentStatus !== 'fail') {
       const st = subtasks.find((s) => s.id === subtaskId);
@@ -1133,8 +1145,37 @@ export default function InspectionDetailsDialog({
 
   const unassignedCount = subtasks.filter(s => !s.completed && (!s.assigned_users || s.assigned_users.length === 0)).length;
 
+  const handleSaveInventoryQuantity = async (quantity: number) => {
+    if (!selectedQuantitySubtask) return;
+
+    const { error } = await supabase
+      .from("subtasks")
+      .update({ inventory_quantity: quantity })
+      .eq("id", selectedQuantitySubtask.id);
+
+    if (error) {
+      toast.error("Failed to update quantity");
+    } else {
+      toast.success("Quantity updated");
+      fetchSubtasks();
+    }
+    
+    setSelectedQuantitySubtask(null);
+  };
+
   return (
     <>
+      <SetInventoryQuantityDialog
+        open={quantityDialogOpen}
+        onOpenChange={setQuantityDialogOpen}
+        subtaskDescription={selectedQuantitySubtask?.description || ""}
+        inventoryTypeName={
+          inventoryTypes.find((t) => t.id === selectedQuantitySubtask?.inventory_type_id)?.name || ""
+        }
+        currentQuantity={selectedQuantitySubtask?.inventory_quantity || undefined}
+        onSave={handleSaveInventoryQuantity}
+      />
+      
       <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen && pendingFailSubtask) { toast.error("Complete or cancel the fail action first."); return; } onOpenChange(nextOpen); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] h-[90vh] sm:max-h-[85vh] sm:h-[85vh] flex flex-col p-0 gap-0">
           <DialogHeader className="sr-only">
@@ -1412,19 +1453,24 @@ export default function InspectionDetailsDialog({
                                   ) : (
                                     <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                                   )}
-                                  <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
-                                    {subtask.description}
-                                  </p>
-                                  {isPass && (
-                                    <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600 hover:bg-green-600">
-                                      Pass
-                                    </Badge>
-                                  )}
-                                  {isFail && (
-                                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                                      Fail
-                                    </Badge>
-                                  )}
+                                   <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                                     {subtask.description}
+                                   </p>
+                                   {subtask.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0) && (
+                                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 bg-amber-50">
+                                       Needs Qty
+                                     </Badge>
+                                   )}
+                                   {isPass && (
+                                     <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600 hover:bg-green-600">
+                                       Pass
+                                     </Badge>
+                                   )}
+                                   {isFail && (
+                                     <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                       Fail
+                                     </Badge>
+                                   )}
                                 </div>
 
                                 {/* Pass/Fail Buttons - Modern Design */}
