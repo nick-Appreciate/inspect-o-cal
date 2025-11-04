@@ -1451,7 +1451,7 @@ export default function InspectionDetailsDialog({
             )}
 
             {/* Filter Buttons with Counters - Sticky */}
-            <div className="sticky top-[45px] z-30 flex gap-2 mb-3 bg-background pb-2 border-b">
+            <div className="sticky top-[45px] z-30 flex gap-2 mb-3 bg-background pt-2 pb-2 border-b">
               <Button
                 variant={showCompleted === 'to-do' ? "default" : "outline"}
                 size="sm"
@@ -1523,9 +1523,10 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
+                      className={`sticky top-[88px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                       }`}
+                      style={{ paddingTop: '10px' }}
                     >
                       <div className="flex items-center gap-2">
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
