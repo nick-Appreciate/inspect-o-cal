@@ -210,11 +210,8 @@ export default function AddInspectionDialog({
     if (!selectedProperty?.id) return [];
     
     try {
-      let query = supabase
-        .from("inspection_templates")
-        .select("id, name, floorplan_id, template_properties(property_id)");
-
       if (unitId === "entire-property" || unitId === null) {
+        // For entire property, get templates with null floorplan associated with this property
         const { data: propertyTemplates } = await supabase
           .from("template_properties")
           .select("template_id")
@@ -222,11 +219,18 @@ export default function AddInspectionDialog({
 
         if (propertyTemplates && propertyTemplates.length > 0) {
           const templateIds = propertyTemplates.map(pt => pt.template_id);
-          query = query
+          const { data } = await supabase
+            .from("inspection_templates")
+            .select("id, name, floorplan_id")
             .in("id", templateIds)
-            .is("floorplan_id", null);
+            .is("floorplan_id", null)
+            .order("name");
+          
+          return data || [];
         }
+        return [];
       } else {
+        // For specific units, get templates matching the unit's floorplan
         const { data: unitData } = await supabase
           .from("units")
           .select("floorplan_id")
@@ -234,12 +238,16 @@ export default function AddInspectionDialog({
           .single();
 
         if (unitData?.floorplan_id) {
-          query = query.eq("floorplan_id", unitData.floorplan_id);
+          const { data } = await supabase
+            .from("inspection_templates")
+            .select("id, name, floorplan_id")
+            .eq("floorplan_id", unitData.floorplan_id)
+            .order("name");
+          
+          return data || [];
         }
+        return [];
       }
-
-      const { data } = await query.order("name");
-      return data || [];
     } catch (error) {
       console.error("Error fetching templates:", error);
       return [];
