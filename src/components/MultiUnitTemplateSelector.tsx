@@ -42,21 +42,21 @@ export default function MultiUnitTemplateSelector({
   // Fetch templates when units are selected
   useEffect(() => {
     const fetchAllTemplates = async () => {
-      const allUnitsToFetch = ["entire-property", ...selectedUnits];
+      // Always include entire-property in the fetch, plus any selected units
+      const unitsToFetch = new Set(["entire-property", ...selectedUnits.filter(id => id !== "entire-property")]);
       const newTemplates: Record<string, Template[]> = {};
       
-      for (const unitId of allUnitsToFetch) {
+      for (const unitId of Array.from(unitsToFetch)) {
         const templates = await fetchTemplatesForUnit(unitId === "entire-property" ? "entire-property" : unitId);
+        console.log(`Fetched templates for ${unitId}:`, templates);
         newTemplates[unitId] = templates;
       }
       
       setTemplatesForUnits(newTemplates);
     };
 
-    if (selectedUnits.length > 0 || selectedUnits.includes("entire-property")) {
-      fetchAllTemplates();
-    }
-  }, [selectedUnits, fetchTemplatesForUnit]);
+    fetchAllTemplates();
+  }, [selectedUnits]);
 
   return (
     <div className="space-y-4">
@@ -92,9 +92,9 @@ export default function MultiUnitTemplateSelector({
                   <SelectValue placeholder="Choose a template" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50 border shadow-lg">
-                  {templatesForUnits["entire-property"]?.length === 0 && (
+                  {(!templatesForUnits["entire-property"] || templatesForUnits["entire-property"]?.length === 0) && (
                     <div className="p-2 text-sm text-muted-foreground">
-                      No templates available
+                      No templates available for Entire Property
                     </div>
                   )}
                   {templatesForUnits["entire-property"]?.map((template) => (

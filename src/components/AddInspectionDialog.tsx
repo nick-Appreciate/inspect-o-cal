@@ -207,27 +207,36 @@ export default function AddInspectionDialog({
   };
   
   const fetchTemplatesForUnit = async (unitId: string | null) => {
-    if (!selectedProperty?.id) return [];
+    if (!selectedProperty?.id) {
+      console.log("No property selected");
+      return [];
+    }
     
     try {
       if (unitId === "entire-property" || unitId === null) {
+        console.log("Fetching templates for entire property, property ID:", selectedProperty.id);
+        
         // For entire property, get templates with null floorplan associated with this property
-        const { data: propertyTemplates } = await supabase
+        const { data: propertyTemplates, error: propError } = await supabase
           .from("template_properties")
           .select("template_id")
           .eq("property_id", selectedProperty.id);
 
+        console.log("Property template associations:", propertyTemplates, "Error:", propError);
+
         if (propertyTemplates && propertyTemplates.length > 0) {
           const templateIds = propertyTemplates.map(pt => pt.template_id);
-          const { data } = await supabase
+          const { data, error: templateError } = await supabase
             .from("inspection_templates")
             .select("id, name, floorplan_id")
             .in("id", templateIds)
             .is("floorplan_id", null)
             .order("name");
           
+          console.log("Entire property templates found:", data, "Error:", templateError);
           return data || [];
         }
+        console.log("No property template associations found");
         return [];
       } else {
         // For specific units, get templates matching the unit's floorplan
@@ -244,6 +253,7 @@ export default function AddInspectionDialog({
             .eq("floorplan_id", unitData.floorplan_id)
             .order("name");
           
+          console.log(`Templates for unit ${unitId} with floorplan ${unitData.floorplan_id}:`, data);
           return data || [];
         }
         return [];
