@@ -1698,7 +1698,7 @@ export default function InspectionDetailsDialog({
                               return next;
                             });
                           }}
-                          className={`${isUnitExpanded ? "sticky top-[86px] z-20 " : ""}w-full px-4 py-3 flex items-center justify-between text-sm font-semibold hover:bg-accent/50 transition-colors ${
+                          className={`${isUnitExpanded ? "sticky top-[86px] z-20 " : ""}w-full px-3 py-2 flex items-center justify-between text-sm font-semibold hover:bg-accent/50 transition-colors ${
                             allCompleted ? "bg-green-100 dark:bg-green-950/30" : "bg-accent"
                           }`}
                         >
