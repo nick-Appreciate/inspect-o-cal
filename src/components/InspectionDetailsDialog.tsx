@@ -1319,6 +1319,29 @@ export default function InspectionDetailsDialog({
                     >
                       {parentInspection.type}
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 ml-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={async () => {
+                        if (!window.confirm('Are you sure you want to delete this follow-up inspection?')) {
+                          return;
+                        }
+                        const { error } = await supabase
+                          .from('inspections')
+                          .update({ archived: true })
+                          .eq('id', inspectionId);
+                        
+                        if (error) {
+                          toast.error('Failed to delete follow-up');
+                        } else {
+                          toast.success('Follow-up deleted');
+                          onOpenChange(false);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 )}
               </div>
