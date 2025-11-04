@@ -772,8 +772,8 @@ export function TemplateBuilder({
         room_id: roomId,
         description: description.trim(),
         inventory_quantity: quantity > 0 ? quantity : null,
-        inventory_type_id: typeId && typeId !== "" ? typeId : null,
-        vendor_type_id: vendorTypeId && vendorTypeId !== "" ? vendorTypeId : null,
+        inventory_type_id: typeId && typeId !== "none" ? typeId : null,
+        vendor_type_id: vendorTypeId && vendorTypeId !== "none" ? vendorTypeId : null,
         order_index: (itemsByRoom[roomId] || []).length,
       })
       .select()
@@ -791,8 +791,8 @@ export function TemplateBuilder({
     }));
     setNewItemDescription((prev) => ({ ...prev, [roomId]: "" }));
     setNewItemQuantity((prev) => ({ ...prev, [roomId]: 0 }));
-    setNewItemType((prev) => ({ ...prev, [roomId]: "" }));
-    setNewItemVendorType((prev) => ({ ...prev, [roomId]: "" }));
+    setNewItemType((prev) => ({ ...prev, [roomId]: "none" }));
+    setNewItemVendorType((prev) => ({ ...prev, [roomId]: "none" }));
     toast.success("Item added");
   };
 
@@ -1047,7 +1047,7 @@ export function TemplateBuilder({
                 <div>
                   <Label htmlFor={`type-${room.id}`}>Inventory Type</Label>
                   <Select
-                    value={newItemType[room.id] || ""}
+                    value={newItemType[room.id] || "none"}
                     onValueChange={(value) =>
                       setNewItemType((prev) => ({
                         ...prev,
@@ -1059,7 +1059,7 @@ export function TemplateBuilder({
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {inventoryTypes.map((type) => (
                         <SelectItem key={type.id} value={type.id}>
                           {type.name}
@@ -1072,7 +1072,7 @@ export function TemplateBuilder({
                 <div>
                   <Label htmlFor={`vendor-${room.id}`}>Vendor Type</Label>
                   <Select
-                    value={newItemVendorType[room.id] || ""}
+                    value={newItemVendorType[room.id] || "none"}
                     onValueChange={(value) =>
                       setNewItemVendorType((prev) => ({
                         ...prev,
@@ -1084,7 +1084,7 @@ export function TemplateBuilder({
                       <SelectValue placeholder="Select vendor" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {vendorTypes.map((type) => (
                         <SelectItem key={type.id} value={type.id}>
                           {type.name}
