@@ -10,6 +10,7 @@ import { format, isPast, parseISO } from "date-fns";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import EditSubtaskDialog from "@/components/EditSubtaskDialog";
+import InspectionDetailsDialog from "@/components/InspectionDetailsDialog";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,6 +87,8 @@ export default function Tasks() {
   const [failDialogNote, setFailDialogNote] = useState("");
   const [failDialogAssignee, setFailDialogAssignee] = useState<string>("");
   const [failDialogInventoryQuantity, setFailDialogInventoryQuantity] = useState<string>("");
+  const [selectedInspectionId, setSelectedInspectionId] = useState<string | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
   useEffect(() => {
     const {
@@ -553,16 +556,22 @@ export default function Tasks() {
                       return (
                         <div key={group.inspection.id} className="space-y-2">
                           {/* Inspection Header */}
-                          <div className="flex flex-col gap-2 pb-2 border-b" onClick={(e) => e.stopPropagation()}>
+                          <div 
+                            className="flex flex-col gap-2 pb-2 border-b cursor-pointer hover:bg-accent/50 -mx-2 px-2 py-1 rounded-t transition-colors"
+                            onClick={() => {
+                              setSelectedInspectionId(group.inspection.id);
+                              setDetailsDialogOpen(true);
+                            }}
+                          >
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs pointer-events-none`}>
+                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs`}>
                                 {group.inspection.type}
                               </Badge>
-                              <div className="flex items-center gap-1 text-xs pointer-events-none">
+                              <div className="flex items-center gap-1 text-xs">
                                 <Calendar className="h-3 w-3 text-muted-foreground" />
                                 <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
                               </div>
-                              <div className="flex items-center gap-1 text-xs pointer-events-none">
+                              <div className="flex items-center gap-1 text-xs">
                                 <MapPin className="h-3 w-3 text-muted-foreground" />
                                 <span>{group.inspection.properties.name}</span>
                               </div>
@@ -700,16 +709,22 @@ export default function Tasks() {
                       return (
                         <div key={group.inspection.id} className="space-y-2">
                           {/* Inspection Header */}
-                          <div className="flex flex-col gap-2 pb-2 border-b border-destructive/30" onClick={(e) => e.stopPropagation()}>
+                          <div 
+                            className="flex flex-col gap-2 pb-2 border-b border-destructive/30 cursor-pointer hover:bg-destructive/5 -mx-2 px-2 py-1 rounded-t transition-colors"
+                            onClick={() => {
+                              setSelectedInspectionId(group.inspection.id);
+                              setDetailsDialogOpen(true);
+                            }}
+                          >
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs pointer-events-none`}>
+                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs`}>
                                 {group.inspection.type}
                               </Badge>
-                              <div className="flex items-center gap-1 text-xs text-destructive pointer-events-none">
+                              <div className="flex items-center gap-1 text-xs text-destructive">
                                 <Calendar className="h-3 w-3" />
                                 <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
                               </div>
-                              <div className="flex items-center gap-1 text-xs pointer-events-none">
+                              <div className="flex items-center gap-1 text-xs">
                                 <MapPin className="h-3 w-3 text-muted-foreground" />
                                 <span>{group.inspection.properties.name}</span>
                               </div>
@@ -848,6 +863,12 @@ export default function Tasks() {
           onSaved={fetchTasks}
         />
       )}
+
+      <InspectionDetailsDialog
+        inspectionId={selectedInspectionId}
+        open={detailsDialogOpen}
+        onOpenChange={setDetailsDialogOpen}
+      />
 
       <AddTaskDialog
         open={addTaskDialogOpen}
