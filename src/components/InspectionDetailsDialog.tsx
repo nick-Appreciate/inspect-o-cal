@@ -2101,7 +2101,7 @@ export default function InspectionDetailsDialog({
                             return next;
                           });
                         }}
-                        className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b will-change-transform ${
+                        className={`sticky top-[130px] z-[15] w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b will-change-transform ${
                           allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                         }`}
                         style={{ marginTop: '-1px' }}
