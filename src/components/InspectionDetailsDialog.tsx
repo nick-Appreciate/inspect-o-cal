@@ -646,51 +646,63 @@ export default function InspectionDetailsDialog({
     if (!inspectionId) return;
     
     try {
-      const { data: unitTemplateData, error } = await supabase
+      // Fetch raw associations without relying on FK joins
+      const { data: unitTemplateRows, error: assocError } = await supabase
         .from("inspection_unit_templates")
-        .select(`
-          unit_id,
-          template_id,
-          units(name),
-          inspection_templates:template_id(name)
-        `)
+        .select("unit_id, template_id")
         .eq("inspection_id", inspectionId);
-        
-      if (error) {
-        console.error("Failed to fetch unit templates:", error);
+
+      if (assocError) {
+        console.error("Failed to fetch unit/template associations:", assocError);
         return;
       }
-      
-      if (unitTemplateData && unitTemplateData.length > 0) {
+
+      if (unitTemplateRows && unitTemplateRows.length > 0) {
         setIsMultiUnitInspection(true);
-        const formatted = unitTemplateData.map((ut: any) => ({
-          unit_id: ut.unit_id,
-          template_id: ut.template_id,
-          unit_name: ut.unit_id ? ut.units?.name || "Unknown Unit" : "Entire Property",
-          template_name: ut.inspection_templates?.name || "Unknown Template"
+
+        const unitIds = Array.from(new Set(unitTemplateRows.map(r => r.unit_id).filter(Boolean))) as string[];
+        const templateIds = Array.from(new Set(unitTemplateRows.map(r => r.template_id)));
+
+        // Parallel fetch unit and template names
+        const [unitsRes, templatesRes] = await Promise.all([
+          unitIds.length > 0
+            ? supabase.from("units").select("id, name").in("id", unitIds)
+            : Promise.resolve({ data: [] as any[] }),
+          templateIds.length > 0
+            ? supabase.from("inspection_templates").select("id, name").in("id", templateIds)
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+
+        const unitMap = new Map((unitsRes.data || []).map((u: any) => [u.id, u.name]));
+        const templateMap = new Map((templatesRes.data || []).map((t: any) => [t.id, t.name]));
+
+        const formatted = unitTemplateRows.map((r: any) => ({
+          unit_id: r.unit_id,
+          template_id: r.template_id,
+          unit_name: r.unit_id ? unitMap.get(r.unit_id) || "Unknown Unit" : "Entire Property",
+          template_name: templateMap.get(r.template_id) || "Unknown Template",
         }));
+
         setUnitTemplates(formatted);
-        // Expand first template by default
         if (formatted.length > 0) {
           setExpandedUnitTemplates(new Set([`${formatted[0].unit_id || 'entire'}-${formatted[0].template_id}`]));
         }
-        
-        // Fetch inspection runs to map run_id to template and unit
+
+        // Fetch inspection runs with unit ids
         const { data: runsData } = await supabase
           .from("inspection_runs")
           .select("id, template_id, unit_id")
           .eq("inspection_id", inspectionId);
-          
+
         if (runsData) {
           const runsMap = new Map<string, { template_id: string, unit_id: string | null }>();
-          runsData.forEach(run => {
+          runsData.forEach((run) => {
             runsMap.set(run.id, {
               template_id: run.template_id || '',
-              unit_id: run.unit_id
+              unit_id: run.unit_id ?? null,
             });
           });
           setInspectionRuns(runsMap);
-          console.log('Inspection runs mapping:', Array.from(runsMap.entries()));
         }
       } else {
         setIsMultiUnitInspection(false);
@@ -1638,15 +1650,24 @@ export default function InspectionDetailsDialog({
 
                 // For multi-unit inspections, group by unit/template first
                 if (isMultiUnitInspection && unitTemplates.length > 0) {
+                  // Determine if there's a single run combination for fallback
+                  const runCombos = new Set(Array.from(inspectionRuns.values()).map(v => `${v.template_id}|${v.unit_id || 'null'}`));
+                  const singleRunKey = runCombos.size === 1 ? Array.from(runCombos)[0] : null;
+
                   return unitTemplates.map(ut => {
                     const unitKey = `${ut.unit_id || 'entire'}-${ut.template_id}`;
                     const isUnitExpanded = expandedUnitTemplates.has(unitKey);
+                    const utKey = `${ut.template_id}|${ut.unit_id || 'null'}`;
                     
                     // Filter subtasks for this unit/template
                     const unitSubtasks = filteredSubtasks.filter(s => {
-                      if (!s.inspection_run_id) return false;
-                      const runInfo = inspectionRuns.get(s.inspection_run_id);
-                      return runInfo?.template_id === ut.template_id && runInfo?.unit_id === ut.unit_id;
+                      if (s.inspection_run_id) {
+                        const runInfo = inspectionRuns.get(s.inspection_run_id);
+                        return runInfo?.template_id === ut.template_id && runInfo?.unit_id === ut.unit_id;
+                      }
+                      // Fallback: if only one run combo exists, attribute null-run subtasks to it
+                      if (singleRunKey && singleRunKey === utKey) return true;
+                      return false;
                     });
                     
                     if (unitSubtasks.length === 0) return null;

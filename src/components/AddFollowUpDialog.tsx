@@ -153,28 +153,95 @@ export default function AddFollowUpDialog({
         roomIdMap.set(oldRoom.id, createdRooms[idx].id);
       });
 
-      // Step 2: Fetch and copy subtasks with full data
+      // Step 2: Build inspection_runs for the new inspection based on parent runs or single-template info
+      const { data: parentRuns } = await supabase
+        .from("inspection_runs")
+        .select("id, template_id, unit_id")
+        .eq("inspection_id", parentId);
+
+      // If no parent runs, fall back to parent's single template/unit if available
+      let newRuns: Array<{ id: string; template_id: string | null; unit_id: string | null } > = [];
+      const runKey = (templateId: string | null, unitId: string | null) => `${templateId || ""}|${unitId || "null"}`;
+      const oldRunIdToKey = new Map<string, string>();
+      const newKeyToRunId = new Map<string, string>();
+
+
+      if (parentRuns && parentRuns.length > 0) {
+        const runsToCreate = parentRuns.map((r) => ({
+          inspection_id: newInspectionId,
+          template_id: r.template_id,
+          unit_id: r.unit_id,
+          started_by: user.id,
+          started_at: new Date().toISOString(),
+        }));
+        const { data: createdRuns, error: runsError } = await supabase
+          .from("inspection_runs")
+          .insert(runsToCreate)
+          .select("id, template_id, unit_id");
+        if (runsError) throw runsError;
+        newRuns = createdRuns || [];
+        parentRuns.forEach((pr) => {
+          oldRunIdToKey.set(pr.id, runKey(pr.template_id, pr.unit_id));
+        });
+        newRuns.forEach((nr) => newKeyToRunId.set(runKey(nr.template_id, nr.unit_id), nr.id));
+      } else {
+        // Single template fallback
+        const { data: parentInspectionMeta } = await supabase
+          .from("inspections")
+          .select("inspection_template_id, unit_id")
+          .eq("id", parentId)
+          .maybeSingle();
+        if (parentInspectionMeta?.inspection_template_id) {
+          const { data: createdRun, error: runErr } = await supabase
+            .from("inspection_runs")
+            .insert({
+              inspection_id: newInspectionId,
+              template_id: parentInspectionMeta.inspection_template_id,
+              unit_id: parentInspectionMeta.unit_id || null,
+              started_by: user.id,
+              started_at: new Date().toISOString(),
+            })
+            .select("id, template_id, unit_id")
+            .single();
+          if (runErr) throw runErr;
+          newRuns = [createdRun];
+          newKeyToRunId.set(runKey(createdRun.template_id, createdRun.unit_id), createdRun.id);
+        }
+      }
+
+      // Step 3: Fetch and copy subtasks with full data
       const subtasks = await getAllSubtasksInChain(parentId);
 
       if (subtasks.length > 0) {
-        const subtasksToInsert = subtasks.map((subtask) => ({
-          inspection_id: newInspectionId,
-          original_inspection_id: subtask.original_inspection_id,
-          inspection_room_id: subtask.inspection_room_id 
-            ? (roomIdMap.get(subtask.inspection_room_id) || null)
-            : null,
-          description: subtask.description,
-          room_name: subtask.room_name,
-          inventory_type_id: subtask.inventory_type_id,
-          vendor_type_id: subtask.vendor_type_id,
-          inventory_quantity: subtask.inventory_quantity || 0,
-          order_index: subtask.order_index || 0,
-          assigned_users: subtask.assigned_users,
-          attachment_url: subtask.attachment_url,
-          status: 'pending',
-          completed: false,
-          created_by: subtask.created_by,
-        }));
+        const subtasksToInsert = subtasks.map((subtask) => {
+          let mappedRunId: string | null = null;
+          if (subtask.inspection_run_id && oldRunIdToKey.size > 0 && newKeyToRunId.size > 0) {
+            const key = oldRunIdToKey.get(subtask.inspection_run_id) || null;
+            if (key) mappedRunId = newKeyToRunId.get(key) || null;
+          }
+          if (!mappedRunId && newRuns.length === 1) {
+            mappedRunId = newRuns[0].id;
+          }
+          return {
+            inspection_id: newInspectionId,
+            original_inspection_id: subtask.original_inspection_id,
+            inspection_room_id: subtask.inspection_room_id 
+              ? (roomIdMap.get(subtask.inspection_room_id) || null)
+              : null,
+            inspection_run_id: mappedRunId,
+            description: subtask.description,
+            room_name: subtask.room_name,
+            inventory_type_id: subtask.inventory_type_id,
+            vendor_type_id: subtask.vendor_type_id,
+            inventory_quantity: subtask.inventory_quantity || 0,
+            order_index: subtask.order_index || 0,
+            assigned_users: subtask.assigned_users,
+            attachment_url: subtask.attachment_url,
+            status: 'pending',
+            completed: false,
+            created_by: subtask.created_by,
+          };
+        });
 
         const { error } = await supabase.from("subtasks").insert(subtasksToInsert);
         if (error) throw error;
@@ -190,13 +257,21 @@ export default function AddFollowUpDialog({
       .eq("id", inspectionId)
       .single();
 
-    // Get subtasks for current inspection
-    const { data: subtasks } = await supabase
-      .from("subtasks")
-      .select("*")
-      .eq("inspection_id", inspectionId);
-
-    let allSubtasks = subtasks || [];
+    // Fetch subtasks with pagination to avoid 1000 limit
+    let allSubtasks: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: subtasks } = await supabase
+        .from("subtasks")
+        .select("*")
+        .eq("inspection_id", inspectionId)
+        .range(from, from + pageSize - 1);
+      if (!subtasks || subtasks.length === 0) break;
+      allSubtasks = [...allSubtasks, ...subtasks];
+      if (subtasks.length < pageSize) break;
+      from += pageSize;
+    }
 
     // Recursively get subtasks from parent
     if (inspection?.parent_inspection_id) {
@@ -206,7 +281,7 @@ export default function AddFollowUpDialog({
       allSubtasks = [...allSubtasks, ...parentSubtasks];
     }
 
-    // Remove duplicates based on original_inspection_id + description
+    // Remove duplicates based on original_inspection_id + room + description
     const uniqueSubtasks = Array.from(
       new Map(
         allSubtasks.map((task) => [
