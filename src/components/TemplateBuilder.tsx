@@ -430,8 +430,36 @@ export function TemplateBuilder({
       return;
     }
 
+    // Fetch default tasks associated with this room template
+    const { data: defaultTaskAssociations } = await supabase
+      .from("default_task_room_templates")
+      .select("default_task_id")
+      .eq("room_template_id", selectedRoomTemplate);
+
+    const defaultTaskIds = defaultTaskAssociations?.map(a => a.default_task_id) || [];
+    
+    let defaultTasks: any[] = [];
+    if (defaultTaskIds.length > 0) {
+      const { data: fetchedDefaultTasks } = await supabase
+        .from("default_room_tasks")
+        .select("*")
+        .in("id", defaultTaskIds);
+      
+      defaultTasks = fetchedDefaultTasks || [];
+    }
+
+    // Combine template items and default tasks
+    const allTasksToAdd = [
+      ...(templateItems || []),
+      ...defaultTasks.map((task: any) => ({
+        ...task,
+        // Mark these as default tasks so we can distinguish them
+        is_default_task: true
+      }))
+    ];
+
     // Copy tasks to the new room if any exist
-    if (templateItems && templateItems.length > 0) {
+    if (allTasksToAdd.length > 0) {
       // Get existing items to check for duplicates (in case trigger already added them)
       const { data: existingItems } = await supabase
         .from("template_items")
@@ -443,7 +471,7 @@ export function TemplateBuilder({
       );
 
       // Filter out items that already exist
-      const itemsToInsert = templateItems
+      const itemsToInsert = allTasksToAdd
         .filter((item: any) => !existingDescriptions.has(item.description.toLowerCase()))
         .map((item: any, index: number) => ({
           room_id: newRoom.id,
@@ -452,7 +480,7 @@ export function TemplateBuilder({
           inventory_type_id: item.inventory_type_id,
           inventory_quantity: item.inventory_quantity,
           vendor_type_id: item.vendor_type_id,
-          source_room_template_item_id: item.id, // Track source for auto-sync
+          source_room_template_item_id: item.is_default_task ? null : item.id, // Track source for auto-sync (only for room template items)
         }));
 
       if (itemsToInsert.length > 0) {
@@ -473,7 +501,7 @@ export function TemplateBuilder({
     setRooms([...rooms, newRoom]);
     setSelectedRoomTemplate("");
     setExpandedRoomIds(prev => new Set([...prev, newRoom.id]));
-    toast.success(`Room added with ${templateItems?.length || 0} tasks`);
+    toast.success(`Room added with ${allTasksToAdd.length || 0} tasks`);
   };
 
   const deleteRoom = async (roomId: string) => {
