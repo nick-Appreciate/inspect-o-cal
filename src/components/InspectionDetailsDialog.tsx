@@ -1321,7 +1321,7 @@ export default function InspectionDetailsDialog({
           {/* Scrollable Content */}
           <div className="overflow-y-auto flex-1 relative">
             {/* Pass/Fail Buttons - Sticky */}
-            <div className="sticky top-0 z-30 bg-background border-b transform-gpu">
+            <div className="sticky top-0 z-30 bg-background border-b will-change-transform">
               <div className="flex gap-2 px-3 sm:px-4 py-2">
                 <Button
                   variant={inspection?.status === 'passed' ? "default" : "outline"}
@@ -1453,7 +1453,7 @@ export default function InspectionDetailsDialog({
             )}
 
             {/* Filter Buttons with Counters - Sticky */}
-            <div className="sticky top-[45px] z-30 bg-background border-b transform-gpu">
+            <div className="sticky top-[45px] z-30 bg-background border-b will-change-transform">
               <div className="flex gap-2 px-3 sm:px-4 py-2">
                 <Button
                   variant={showCompleted === 'to-do' ? "default" : "outline"}
@@ -1528,9 +1528,10 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b -mt-px transform-gpu ${
+                      className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b will-change-transform ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                       }`}
+                      style={{ marginTop: '-1px' }}
                     >
                       <div className="flex items-center gap-2">
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -1948,9 +1949,9 @@ export default function InspectionDetailsDialog({
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select a user" />
                     </SelectTrigger>
-                    <SelectContent className="z-50 bg-background">
+                    <SelectContent className="z-[100] bg-background border shadow-lg" position="popper" sideOffset={4}>
                       {users.map((u) => (
-                        <SelectItem key={u.id} value={u.id} className="text-sm">
+                        <SelectItem key={u.id} value={u.id} className="text-sm cursor-pointer">
                           {u.full_name || u.email}
                         </SelectItem>
                       ))}
