@@ -105,11 +105,35 @@ export default function AddInspectionDialog({
     if (!selectedProperty?.id) return;
     
     try {
+      // If "Entire Property" is selected
+      if (selectedUnit === "entire-property") {
+        // Show templates with no floorplan (entire property) that are associated with this property
+        const { data: propertyTemplates } = await supabase
+          .from("template_properties")
+          .select("template_id")
+          .eq("property_id", selectedProperty.id);
+
+        if (propertyTemplates && propertyTemplates.length > 0) {
+          const templateIds = propertyTemplates.map(pt => pt.template_id);
+          const { data } = await supabase
+            .from("inspection_templates")
+            .select("id, name, floorplan_id, template_properties(property_id)")
+            .in("id", templateIds)
+            .is("floorplan_id", null)
+            .order("name");
+          
+          setTemplates(data || []);
+        } else {
+          setTemplates([]);
+        }
+        return;
+      }
+      
       let query = supabase
         .from("inspection_templates")
         .select("id, name, floorplan_id, template_properties(property_id)");
 
-      // If unit is selected, filter by floorplan
+      // If a specific unit is selected, filter by floorplan
       if (selectedUnit && selectedUnit !== "none") {
         const { data: unitData } = await supabase
           .from("units")
@@ -121,7 +145,7 @@ export default function AddInspectionDialog({
           query = query.eq("floorplan_id", unitData.floorplan_id);
         }
       } else {
-        // Filter by property associations
+        // Filter by property associations (any template for this property)
         const { data: propertyTemplates } = await supabase
           .from("template_properties")
           .select("template_id")
@@ -254,7 +278,7 @@ export default function AddInspectionDialog({
           date: date.toISOString().split('T')[0],
           time,
           property_id: selectedProperty.id,
-          unit_id: selectedUnit && selectedUnit !== "none" ? selectedUnit : null,
+          unit_id: selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
           created_by: user.id,
           inspection_template_id: selectedTemplate,
           attachment_url: attachmentUrl,
@@ -398,7 +422,7 @@ export default function AddInspectionDialog({
         time,
         property: selectedProperty,
         attachment,
-        unitId: selectedUnit && selectedUnit !== "none" ? selectedUnit : null,
+        unitId: selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
       });
 
       toast.success("Inspection created with checklist items");
@@ -607,7 +631,8 @@ export default function AddInspectionDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Select a unit (optional)" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background z-50 border shadow-lg">
+                    <SelectItem value="entire-property">Entire Property</SelectItem>
                     <SelectItem value="none">No unit</SelectItem>
                     {units.map((unit) => (
                       <SelectItem key={unit.id} value={unit.id}>
@@ -646,7 +671,12 @@ export default function AddInspectionDialog({
                   <SelectTrigger>
                     <SelectValue placeholder="Select a template" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background z-50 border shadow-lg">
+                    {templates.length === 0 && (
+                      <div className="p-2 text-sm text-muted-foreground">
+                        No templates available for this selection
+                      </div>
+                    )}
                     {templates.map((template) => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}

@@ -143,16 +143,10 @@ export default function Templates() {
       return;
     }
 
-    // Require floorplan
-    if (!newFloorplanId && !newFloorplanName.trim()) {
-      toast.error("Please select or create a floorplan");
-      return;
-    }
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    let floorplanId = newFloorplanId;
+    let floorplanId = newFloorplanId === "entire-property" ? null : newFloorplanId;
 
     // Create new floorplan if name is provided
     if (newFloorplanName.trim()) {
@@ -178,7 +172,7 @@ export default function Templates() {
       .from("inspection_templates")
       .insert({
         name: newTemplateName,
-        floorplan_id: floorplanId || null,
+        floorplan_id: floorplanId,
         created_by: user.id,
       })
       .select()
@@ -361,9 +355,10 @@ export default function Templates() {
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select existing floorplan" />
+                  <SelectValue placeholder="Select floorplan or entire property" />
                 </SelectTrigger>
-                <SelectContent className="bg-background z-50">
+                <SelectContent className="bg-background z-50 border shadow-lg">
+                  <SelectItem value="entire-property">Entire Property</SelectItem>
                   {floorplans.map((floorplan) => (
                     <SelectItem key={floorplan.id} value={floorplan.id}>
                       {floorplan.name}
@@ -435,7 +430,7 @@ export default function Templates() {
                 <SelectTrigger>
                   <SelectValue placeholder="Start from scratch" />
                 </SelectTrigger>
-                <SelectContent className="bg-background z-50">
+                <SelectContent className="bg-background z-50 border shadow-lg">
                   {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.name}
@@ -479,11 +474,9 @@ export default function Templates() {
               <div className="flex-1 min-w-0">
                 <CardTitle className="text-base sm:text-lg truncate">{template.name}</CardTitle>
                 <div className="space-y-1 mt-1">
-                  {template.floorplan && (
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                      Floorplan: {template.floorplan.name}
-                    </p>
-                  )}
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                    {template.floorplan ? `Floorplan: ${template.floorplan.name}` : 'Entire Property'}
+                  </p>
                   {template.template_properties && template.template_properties.length > 0 && (
                     <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
                       Properties: {template.template_properties.map(tp => tp.properties.name).join(", ")}
