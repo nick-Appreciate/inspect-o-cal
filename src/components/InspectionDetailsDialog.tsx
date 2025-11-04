@@ -406,8 +406,10 @@ export default function InspectionDetailsDialog({
   const fetchSubtasks = async () => {
     if (!inspectionId) return;
 
-    // Get all subtasks from the entire inspection chain
+    // Get all subtasks from the entire inspection chain without pagination limit
     const allSubtasks = await getAllSubtasksInChain(inspectionId);
+    
+    console.log(`Total subtasks fetched: ${allSubtasks.length}`);
 
     // Collect all unique user IDs that we need profiles for
     const userIds = new Set<string>();
@@ -503,13 +505,31 @@ export default function InspectionDetailsDialog({
       .eq("id", currentInspectionId)
       .single();
 
-    // Get subtasks for current inspection
-    const { data: subtasks } = await supabase
-      .from("subtasks")
-      .select("*")
-      .eq("inspection_id", currentInspectionId);
-
-    let allSubtasks = subtasks || [];
+    // Fetch ALL subtasks using pagination to avoid 1000 limit
+    let allSubtasks: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: subtasks, error } = await supabase
+        .from("subtasks")
+        .select("*")
+        .eq("inspection_id", currentInspectionId)
+        .range(from, from + pageSize - 1);
+        
+      if (error) {
+        console.error("Error fetching subtasks:", error);
+        break;
+      }
+      
+      if (!subtasks || subtasks.length === 0) break;
+      
+      allSubtasks = [...allSubtasks, ...subtasks];
+      
+      if (subtasks.length < pageSize) break;
+      
+      from += pageSize;
+    }
 
     // Recursively get subtasks from parent inspection chain
     if (inspection?.parent_inspection_id) {
@@ -658,20 +678,19 @@ export default function InspectionDetailsDialog({
         // Fetch inspection runs to map run_id to template and unit
         const { data: runsData } = await supabase
           .from("inspection_runs")
-          .select("id, template_id")
+          .select("id, template_id, unit_id")
           .eq("inspection_id", inspectionId);
           
         if (runsData) {
           const runsMap = new Map<string, { template_id: string, unit_id: string | null }>();
           runsData.forEach(run => {
-            // Find the matching unit for this template
-            const matchingUnit = formatted.find(ut => ut.template_id === run.template_id);
             runsMap.set(run.id, {
-              template_id: run.template_id,
-              unit_id: matchingUnit?.unit_id || null
+              template_id: run.template_id || '',
+              unit_id: run.unit_id
             });
           });
           setInspectionRuns(runsMap);
+          console.log('Inspection runs mapping:', Array.from(runsMap.entries()));
         }
       } else {
         setIsMultiUnitInspection(false);

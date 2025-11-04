@@ -408,15 +408,46 @@ export default function AddInspectionDialog({
 
         if (associationError) throw associationError;
 
-        // Create subtasks for each unit-template combination
+        // Create inspection_runs and subtasks for each unit-template combination
         for (const unitId of selectedUnits) {
           const templateId = unitTemplates[unitId];
-          await createSubtasksForTemplate(inspection.id, templateId, user.id, unitId);
+          
+          // Create an inspection_run for this unit/template
+          const { data: runData, error: runError } = await supabase
+            .from("inspection_runs")
+            .insert({
+              inspection_id: inspection.id,
+              template_id: templateId,
+              unit_id: unitId === "entire-property" ? null : unitId,
+              started_by: user.id,
+              started_at: new Date().toISOString(),
+            })
+            .select()
+            .single();
+
+          if (runError) throw runError;
+
+          await createSubtasksForTemplate(inspection.id, templateId, user.id, unitId, runData.id);
         }
       } else {
-        // Single template inspection - existing logic
+        // Single template inspection - create one inspection_run
+        const { data: runData, error: runError } = await supabase
+          .from("inspection_runs")
+          .insert({
+            inspection_id: inspection.id,
+            template_id: selectedTemplate,
+            unit_id: selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
+            started_by: user.id,
+            started_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (runError) throw runError;
+
         await createSubtasksForTemplate(inspection.id, selectedTemplate, user.id, 
-          selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null);
+          selectedUnit && selectedUnit !== "none" && selectedUnit !== "entire-property" ? selectedUnit : null,
+          runData.id);
       }
 
       console.log("Inspection created successfully with all tasks");
@@ -445,7 +476,8 @@ export default function AddInspectionDialog({
     inspectionId: string, 
     templateId: string, 
     userId: string,
-    unitId: string | null
+    unitId: string | null,
+    inspectionRunId: string
   ) => {
     // Step 1: Fetch template rooms with ordering
     const { data: templateRooms, error: roomsError } = await supabase
@@ -497,6 +529,7 @@ export default function AddInspectionDialog({
       inspection_id: string;
       original_inspection_id: string;
       inspection_room_id: string;
+      inspection_run_id: string;
       description: string;
       room_name: string;
       inventory_type_id: string | null;
@@ -531,6 +564,7 @@ export default function AddInspectionDialog({
           inspection_id: inspectionId,
           original_inspection_id: inspectionId,
           inspection_room_id: inspectionRoomId,
+          inspection_run_id: inspectionRunId,
           description: item.description,
           room_name: templateRoom.name,
           inventory_type_id: item.inventory_type_id,

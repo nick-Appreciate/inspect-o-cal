@@ -164,6 +164,7 @@ export type Database = {
           started_at: string
           started_by: string
           template_id: string | null
+          unit_id: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -174,6 +175,7 @@ export type Database = {
           started_at?: string
           started_by: string
           template_id?: string | null
+          unit_id?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -184,6 +186,7 @@ export type Database = {
           started_at?: string
           started_by?: string
           template_id?: string | null
+          unit_id?: string | null
         }
         Relationships: [
           {
@@ -198,6 +201,13 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "inspection_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_runs_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
