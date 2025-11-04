@@ -279,12 +279,55 @@ export default function InspectionDetailsDialog({
           fetchSubtasks();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'template_items'
+        },
+        async (payload) => {
+          // When template items change, sync to open inspections that use this template
+          // This ensures that changes in templates propagate to active inspections
+          if (!inspection?.inspection_template_id) return;
+          
+          fetchSubtasks();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'room_template_items'
+        },
+        async (payload) => {
+          // When room template items change, sync to open inspections
+          if (!inspection?.inspection_template_id) return;
+          
+          fetchSubtasks();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'default_task_room_templates'
+        },
+        async (payload) => {
+          // When default tasks are added/removed from room templates, sync to open inspections
+          if (!inspection?.inspection_template_id) return;
+          
+          fetchSubtasks();
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [open, inspectionId]);
+  }, [open, inspectionId, inspection?.inspection_template_id]);
 
   const fetchInspectionDetails = async () => {
     if (!inspectionId) return;

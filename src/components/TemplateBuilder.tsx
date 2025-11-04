@@ -184,6 +184,66 @@ export function TemplateBuilder({
       .on(
         'postgres_changes',
         {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'room_template_items',
+        },
+        async (payload) => {
+          // When a new room template item is added, add it to all template rooms using this room template
+          if (payload.new && 'room_template_id' in payload.new) {
+            const roomTemplateId = (payload.new as any).room_template_id;
+            
+            // Find all template rooms using this room template
+            const { data: affectedRooms } = await supabase
+              .from('template_rooms')
+              .select('id')
+              .eq('room_template_id', roomTemplateId);
+            
+            if (affectedRooms && affectedRooms.length > 0) {
+              // Add the task to each affected room (if not already exists)
+              for (const room of affectedRooms) {
+                // Check if task already exists
+                const { data: existing } = await supabase
+                  .from('template_items')
+                  .select('id')
+                  .eq('room_id', room.id)
+                  .ilike('description', (payload.new as any).description);
+                
+                if (!existing || existing.length === 0) {
+                  // Get max order_index for this room
+                  const { data: maxOrderData } = await supabase
+                    .from('template_items')
+                    .select('order_index')
+                    .eq('room_id', room.id)
+                    .order('order_index', { ascending: false })
+                    .limit(1);
+                  
+                  const nextOrder = (maxOrderData && maxOrderData.length > 0) 
+                    ? (maxOrderData[0].order_index + 1) 
+                    : 0;
+                  
+                  await supabase
+                    .from('template_items')
+                    .insert({
+                      room_id: room.id,
+                      description: (payload.new as any).description,
+                      inventory_quantity: (payload.new as any).inventory_quantity,
+                      inventory_type_id: (payload.new as any).inventory_type_id,
+                      vendor_type_id: (payload.new as any).vendor_type_id,
+                      order_index: nextOrder,
+                      source_room_template_item_id: (payload.new as any).id,
+                    });
+                }
+                
+                fetchItems(room.id);
+              }
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
           event: 'UPDATE',
           schema: 'public',
           table: 'room_template_items',
