@@ -1684,7 +1684,7 @@ export default function InspectionDetailsDialog({
                     const allCompleted = totalCompleted === unitSubtasks.length;
                     
                     return (
-                      <div key={unitKey} className="border rounded-lg overflow-hidden">
+                      <div key={unitKey} className="border rounded-lg">
                         {/* Unit/Template Header */}
                         <button
                           onClick={() => {
