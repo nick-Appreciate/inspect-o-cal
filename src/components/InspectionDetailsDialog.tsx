@@ -1514,7 +1514,7 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-0 z-10 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors ${
+                      className={`sticky top-0 z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
                       }`}
                     >
