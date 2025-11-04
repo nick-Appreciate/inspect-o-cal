@@ -74,6 +74,14 @@ export default function AddFollowUpDialog({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Mark parent inspection as failed (follow-up implies failure)
+      const { error: updateError } = await supabase
+        .from("inspections")
+        .update({ status: 'failed' })
+        .eq("id", parentInspection.id);
+
+      if (updateError) console.error("Failed to update parent status:", updateError);
+
       // Create the follow-up inspection
       const { data: newInspection, error } = await supabase
         .from("inspections")

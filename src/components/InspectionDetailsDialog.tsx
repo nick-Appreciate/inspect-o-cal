@@ -37,6 +37,7 @@ interface Inspection {
   parent_inspection_id?: string;
   unit_id?: string;
   inspection_template_id?: string | null;
+  status?: 'pending' | 'passed' | 'failed';
   properties: {
     name: string;
     address: string;
@@ -270,7 +271,7 @@ export default function InspectionDetailsDialog({
     if (error) {
       toast.error("Failed to load inspection details");
     } else {
-      setInspection(data);
+      setInspection(data as any);
 
       // Load template name if present
       setTemplateName(null);
@@ -292,7 +293,7 @@ export default function InspectionDetailsDialog({
           .single();
         
         if (parentData) {
-          setParentInspection(parentData);
+          setParentInspection(parentData as any);
         }
       } else {
         setParentInspection(null);
@@ -307,7 +308,7 @@ export default function InspectionDetailsDialog({
         .order("date", { ascending: true });
       
       if (childData) {
-        setChildInspections(childData);
+        setChildInspections(childData as any);
       }
     }
     setLoading(false);
@@ -584,6 +585,31 @@ export default function InspectionDetailsDialog({
     } catch (error: any) {
       toast.error(error.message || "Failed to add task");
     }
+  };
+
+  const handleInspectionStatusChange = async (newStatus: 'passed' | 'failed') => {
+    if (!inspectionId) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    const finalStatus = inspection?.status === newStatus ? 'pending' : newStatus;
+
+    const { error } = await supabase
+      .from("inspections")
+      .update({ status: finalStatus })
+      .eq("id", inspectionId);
+
+    if (error) {
+      toast.error("Failed to update inspection status");
+      return;
+    }
+
+    toast.success(`Inspection marked as ${finalStatus}`);
+    fetchInspectionDetails();
   };
 
   const toggleSubtaskComplete = async (subtaskId: string, completed: boolean) => {
@@ -1154,6 +1180,28 @@ export default function InspectionDetailsDialog({
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Pass/Fail Buttons */}
+          <div className="flex gap-2 px-3 sm:px-4 py-3 border-b bg-muted/20">
+            <Button
+              variant={inspection?.status === 'passed' ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleInspectionStatusChange('passed')}
+              className={`flex-1 ${inspection?.status === 'passed' ? 'bg-green-600 hover:bg-green-700' : 'border-green-600 text-green-600 hover:bg-green-50'}`}
+            >
+              <Check className="h-4 w-4 mr-2" />
+              Pass Inspection
+            </Button>
+            <Button
+              variant={inspection?.status === 'failed' ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleInspectionStatusChange('failed')}
+              className={`flex-1 ${inspection?.status === 'failed' ? 'bg-destructive hover:bg-destructive/90' : 'border-destructive text-destructive hover:bg-destructive/10'}`}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Fail Inspection
+            </Button>
           </div>
 
           {/* Scrollable Content */}

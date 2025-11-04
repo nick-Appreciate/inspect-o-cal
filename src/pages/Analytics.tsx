@@ -17,6 +17,10 @@ export default function Analytics() {
     totalInspections: number;
     passRate: number;
     failRate: number;
+    inspectionPassRate: number;
+    inspectionFailRate: number;
+    passedInspections: number;
+    failedInspections: number;
     completedTasks: number;
     pendingTasks: number;
     topFailedItems: Array<{ name: string; count: number }>;
@@ -27,6 +31,10 @@ export default function Analytics() {
     totalInspections: 0,
     passRate: 0,
     failRate: 0,
+    inspectionPassRate: 0,
+    inspectionFailRate: 0,
+    passedInspections: 0,
+    failedInspections: 0,
     completedTasks: 0,
     pendingTasks: 0,
     topFailedItems: [],
@@ -65,10 +73,10 @@ export default function Analytics() {
     setLoading(true);
 
     try {
-      // Fetch all inspections (including archived, but not deleted ones)
+      // Fetch all inspections (including archived for analytics, but not hidden deleted ones)
       const { data: inspections, error: inspError } = await supabase
         .from("inspections")
-        .select("id, type, date, completed")
+        .select("id, type, date, completed, status")
         .order("date", { ascending: false });
 
       if (inspError) throw inspError;
@@ -97,14 +105,20 @@ export default function Analytics() {
       // Calculate statistics
       const totalInspections = inspections?.length || 0;
       const completedInspections = inspections?.filter(i => i.completed).length || 0;
+      
+      // Inspection pass/fail statistics
+      const passedInspections = inspections?.filter(i => i.status === 'passed').length || 0;
+      const failedInspections = inspections?.filter(i => i.status === 'failed').length || 0;
+      const inspectionPassRate = totalInspections > 0 ? (passedInspections / totalInspections) * 100 : 0;
+      const inspectionFailRate = totalInspections > 0 ? (failedInspections / totalInspections) * 100 : 0;
 
       // Task statistics
       const passedTasks = subtasks?.filter(s => s.status === 'pass' || s.completed).length || 0;
       const failedTasks = subtasks?.filter(s => s.status === 'fail').length || 0;
       const totalTasks = subtasks?.length || 0;
       
-      const passRate = totalTasks > 0 ? (passedTasks / totalTasks) * 100 : 0;
-      const failRate = totalTasks > 0 ? (failedTasks / totalTasks) * 100 : 0;
+      const taskPassRate = totalTasks > 0 ? (passedTasks / totalTasks) * 100 : 0;
+      const taskFailRate = totalTasks > 0 ? (failedTasks / totalTasks) * 100 : 0;
 
       // Top failed items
       const failedSubtasks = subtasks?.filter(s => s.status === 'fail' && s.inventory_type_id) || [];
@@ -178,8 +192,12 @@ export default function Analytics() {
 
       setStats({
         totalInspections,
-        passRate,
-        failRate,
+        passRate: taskPassRate,
+        failRate: taskFailRate,
+        inspectionPassRate,
+        inspectionFailRate,
+        passedInspections,
+        failedInspections,
         completedTasks: passedTasks,
         pendingTasks: totalTasks - passedTasks,
         topFailedItems,
@@ -226,7 +244,7 @@ export default function Analytics() {
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
           {/* Overview Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Inspections</CardTitle>
@@ -234,28 +252,42 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.totalInspections}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats.passedInspections} passed, {stats.failedInspections} failed
+                </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pass Rate</CardTitle>
+                <CardTitle className="text-sm font-medium">Inspection Pass Rate</CardTitle>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{stats.inspectionPassRate.toFixed(1)}%</div>
+                <p className="text-xs text-muted-foreground">{stats.passedInspections} passed</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Inspection Fail Rate</CardTitle>
+                <XCircle className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">{stats.inspectionFailRate.toFixed(1)}%</div>
+                <p className="text-xs text-muted-foreground">{stats.failedInspections} failed</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Task Pass Rate</CardTitle>
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">{stats.passRate.toFixed(1)}%</div>
                 <p className="text-xs text-muted-foreground">{stats.completedTasks} tasks passed</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Fail Rate</CardTitle>
-                <XCircle className="h-4 w-4 text-destructive" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-destructive">{stats.failRate.toFixed(1)}%</div>
-                <p className="text-xs text-muted-foreground">{stats.pendingTasks} tasks need attention</p>
               </CardContent>
             </Card>
 

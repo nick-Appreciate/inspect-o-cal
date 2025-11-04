@@ -272,6 +272,7 @@ export type Database = {
           inspection_template_id: string | null
           parent_inspection_id: string | null
           property_id: string
+          status: string
           time: string
           type: string
           unit_id: string | null
@@ -289,6 +290,7 @@ export type Database = {
           inspection_template_id?: string | null
           parent_inspection_id?: string | null
           property_id: string
+          status?: string
           time: string
           type: string
           unit_id?: string | null
@@ -306,6 +308,7 @@ export type Database = {
           inspection_template_id?: string | null
           parent_inspection_id?: string | null
           property_id?: string
+          status?: string
           time?: string
           type?: string
           unit_id?: string | null

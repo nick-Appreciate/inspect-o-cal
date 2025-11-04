@@ -40,6 +40,7 @@ interface Inspection {
   };
   parent_inspection_id: string | null;
   completed: boolean;
+  status?: 'pending' | 'passed' | 'failed';
 }
 
 type SortField = "type" | "date" | "time" | "property" | "unit";
@@ -98,6 +99,7 @@ const Inspections = () => {
         unit: item.units ? { id: item.units.id, name: item.units.name } : undefined,
         parent_inspection_id: item.parent_inspection_id,
         completed: item.completed || false,
+        status: item.status || 'pending',
       }));
 
       setInspections(transformedData);
@@ -686,16 +688,21 @@ const Inspections = () => {
                                     onClick={(e) => e.stopPropagation()}
                                   />
                                 </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    {idx > 0 && (
-                                      <span className="text-xs text-muted-foreground">└─</span>
-                                    )}
-                                    <Badge className={getInspectionColor(inspection.type)}>
-                                      {inspection.type}
-                                    </Badge>
-                                  </div>
-                                </TableCell>
+                                 <TableCell>
+                                   <div className="flex items-center gap-2">
+                                     {idx > 0 && (
+                                       <span className="text-xs text-muted-foreground">└─</span>
+                                     )}
+                                     <Badge className={getInspectionColor(inspection.type)}>
+                                       {inspection.type}
+                                     </Badge>
+                                     {isInspectionPast(inspection.date, inspection.id) && inspection.status === 'pending' && (
+                                       <Badge variant="destructive" className="text-xs">
+                                         Needs Status
+                                       </Badge>
+                                     )}
+                                   </div>
+                                 </TableCell>
                                 <TableCell>
                                   {format(new Date(inspection.date), "MMM d, yyyy")}
                                 </TableCell>
@@ -776,14 +783,19 @@ const Inspections = () => {
                                   className="mt-1"
                                 />
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    {idx > 0 && (
-                                      <span className="text-xs text-muted-foreground">└─</span>
-                                    )}
-                                    <Badge className={getInspectionColor(inspection.type)}>
-                                      {inspection.type}
-                                    </Badge>
-                                  </div>
+                                   <div className="flex items-center gap-2 mb-1">
+                                     {idx > 0 && (
+                                       <span className="text-xs text-muted-foreground">└─</span>
+                                     )}
+                                     <Badge className={getInspectionColor(inspection.type)}>
+                                       {inspection.type}
+                                     </Badge>
+                                     {isInspectionPast(inspection.date, inspection.id) && inspection.status === 'pending' && (
+                                       <Badge variant="destructive" className="text-xs">
+                                         Needs Status
+                                       </Badge>
+                                     )}
+                                   </div>
                                   
                                   {/* Date and Time */}
                                   <div className="text-xs text-muted-foreground space-y-0.5">
