@@ -1316,7 +1316,7 @@ export default function InspectionDetailsDialog({
           {/* Scrollable Content */}
           <div className="overflow-y-auto flex-1 relative">
             {/* Pass/Fail Buttons - Sticky */}
-            <div className="sticky top-0 z-30 flex gap-2 px-3 sm:px-4 py-2 border-b bg-background">
+            <div className="sticky top-0 z-30 flex gap-2 px-3 sm:px-4 py-2 bg-background border-b">
               <Button
                 variant={inspection?.status === 'passed' ? "default" : "outline"}
                 size="sm"
@@ -1446,7 +1446,7 @@ export default function InspectionDetailsDialog({
             )}
 
             {/* Filter Buttons with Counters - Sticky */}
-            <div className="sticky top-[41px] z-30 flex gap-2 mb-3 bg-background py-2 -mt-2">
+            <div className="sticky top-[45px] z-30 flex gap-2 mb-3 bg-background pb-2 border-b">
               <Button
                 variant={showCompleted === 'to-do' ? "default" : "outline"}
                 size="sm"
@@ -1518,7 +1518,7 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-[81px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
+                      className={`sticky top-[86px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                       }`}
                     >
