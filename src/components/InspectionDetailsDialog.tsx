@@ -1276,6 +1276,28 @@ export default function InspectionDetailsDialog({
                   <Plus className="h-3 w-3 mr-1" />
                   <span>Follow-up</span>
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  aria-label="Delete this inspection"
+                  title="Delete this inspection"
+                  onClick={async () => {
+                    if (!window.confirm('Are you sure you want to delete this inspection?')) return;
+                    const { error } = await supabase
+                      .from('inspections')
+                      .update({ archived: true })
+                      .eq('id', inspectionId);
+                    if (error) {
+                      toast.error('Failed to delete inspection');
+                    } else {
+                      toast.success('Inspection deleted');
+                      onOpenChange(false);
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             </div>
             <div className="flex items-start gap-1 text-xs mt-2">
@@ -1478,7 +1500,7 @@ export default function InspectionDetailsDialog({
                 const allCompleted = roomCompletedCount === roomSubtasks.length;
 
                 return (
-                  <div key={roomName} className="border rounded-lg overflow-hidden">
+                  <div key={roomName} className="border rounded-lg">
                     {/* Room Header - Sticky */}
                     <button
                       onClick={() => {
