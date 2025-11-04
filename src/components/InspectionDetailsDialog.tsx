@@ -1251,9 +1251,9 @@ export default function InspectionDetailsDialog({
             <DialogDescription>View and manage inspection subtasks</DialogDescription>
           </DialogHeader>
           {/* Compact Header */}
-          <div className="p-3 sm:p-4 pb-2 flex-shrink-0 border-b">
+          <div className="p-3 sm:p-4 pb-2 pr-12 flex-shrink-0 border-b">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap sm:order-last">
                 <Badge className={`${getInspectionColor(inspection.type)} text-white text-[10px] sm:text-xs px-2 py-0.5`}>
                   {inspection.type}
                 </Badge>
@@ -1266,7 +1266,7 @@ export default function InspectionDetailsDialog({
                   </span>
                 )}
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-1 sm:order-first">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1518,7 +1518,7 @@ export default function InspectionDetailsDialog({
                         });
                       }}
                       className={`sticky top-0 z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
-                        allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
+                        allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                       }`}
                     >
                       <div className="flex items-center gap-2">
