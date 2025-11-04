@@ -1344,7 +1344,7 @@ export default function InspectionDetailsDialog({
               </div>
             </div>
 
-            <div className="px-3 sm:px-4 py-3">
+            <div className="px-3 sm:px-4 pb-3">
             {/* Compact Inventory Summary - Items Needed from Failed Tasks */}
             {totalItemsNeeded > 0 && (
               <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
@@ -1453,7 +1453,7 @@ export default function InspectionDetailsDialog({
             )}
 
             {/* Filter Buttons with Counters - Sticky */}
-            <div className="sticky top-[46px] z-30 bg-background border-b">
+            <div className="sticky top-[45px] z-30 bg-background border-b">
               <div className="flex gap-2 px-3 sm:px-4 py-2">
                 <Button
                   variant={showCompleted === 'to-do' ? "default" : "outline"}
@@ -1527,7 +1527,7 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-[92px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
+                      className={`sticky top-[87px] z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
                       }`}
                     >
