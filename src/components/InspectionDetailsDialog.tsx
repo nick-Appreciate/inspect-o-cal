@@ -1250,66 +1250,68 @@ export default function InspectionDetailsDialog({
             <DialogTitle>Inspection Details</DialogTitle>
             <DialogDescription>View and manage inspection subtasks</DialogDescription>
           </DialogHeader>
-          {/* Compact Header */}
-          <div className="p-3 sm:p-4 pb-2 pr-12 flex-shrink-0 border-b">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2 flex-wrap sm:order-last">
-                <Badge className={`${getInspectionColor(inspection.type)} text-white text-[10px] sm:text-xs px-2 py-0.5`}>
-                  {inspection.type}
+          {/* Header */}
+          <div className="p-3 sm:p-4 pr-12 flex-shrink-0 border-b space-y-3">
+            {/* Inspection Info Row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge className={`${getInspectionColor(inspection.type)} text-white text-xs px-2.5 py-0.5`}>
+                {inspection.type}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {format(new Date(inspection.date), "MMM d, yyyy")} • {inspection.time}
+              </span>
+              {templateName && (
+                <Badge variant="outline" className="text-xs">
+                  {templateName}
                 </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {format(new Date(inspection.date), "MMM d")} • {inspection.time}
-                </span>
-                {templateName && (
-                  <span className="text-xs text-muted-foreground">
-                    Template: {templateName}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-1 sm:order-first">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFollowUpDialog(true)}
-                  className="h-7 text-xs px-2"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  <span>Follow-up</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  aria-label="Delete this inspection"
-                  title="Delete this inspection"
-                  onClick={async () => {
-                    if (!window.confirm('Are you sure you want to delete this inspection?')) return;
-                    const { error } = await supabase
-                      .from('inspections')
-                      .update({ archived: true })
-                      .eq('id', inspectionId);
-                    if (error) {
-                      toast.error('Failed to delete inspection');
-                    } else {
-                      toast.success('Inspection deleted');
-                      onOpenChange(false);
-                    }
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              )}
             </div>
-            <div className="flex items-start gap-1 text-xs mt-2">
-              <MapPin className="h-3 w-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+
+            {/* Property Info Row */}
+            <div className="flex items-start gap-1.5 text-xs">
+              <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
               <div>
                 <div className="font-medium">{inspection.properties.name}</div>
                 {inspection.units && (
-                  <div className="text-muted-foreground text-[10px]">
+                  <div className="text-muted-foreground text-[11px]">
                     Unit: {inspection.units.name}
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Action Buttons Row */}
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFollowUpDialog(true)}
+                className="h-8 text-xs"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                Create Follow-up
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={async () => {
+                  if (!window.confirm('Are you sure you want to delete this inspection?')) return;
+                  const { error } = await supabase
+                    .from('inspections')
+                    .update({ archived: true })
+                    .eq('id', inspectionId);
+                  if (error) {
+                    toast.error('Failed to delete inspection');
+                  } else {
+                    toast.success('Inspection deleted');
+                    onOpenChange(false);
+                  }
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Delete
+              </Button>
             </div>
           </div>
 
