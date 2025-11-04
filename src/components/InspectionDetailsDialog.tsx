@@ -1269,32 +1269,34 @@ export default function InspectionDetailsDialog({
 
             {/* Property Info + Action Buttons Row */}
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-1.5 text-xs min-w-0 flex-1">
+              <div className="flex items-start gap-1.5 text-xs min-w-0 flex-[2]">
                 <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{inspection.properties.name}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{inspection.properties.name}</div>
                   {inspection.units && (
-                    <div className="text-muted-foreground text-[11px] truncate">
+                    <div className="text-muted-foreground text-[11px]">
                       Unit: {inspection.units.name}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="flex gap-2 flex-shrink-0">
+              <div className="flex gap-1.5 flex-shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setShowFollowUpDialog(true)}
-                  className="h-8 text-xs"
+                  className="h-8 text-xs px-2"
+                  title="Create Follow-up"
                 >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Follow-up
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline ml-1.5">Follow-up</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  title="Delete inspection"
                   onClick={async () => {
                     if (!window.confirm('Are you sure you want to delete this inspection?')) return;
                     const { error } = await supabase
@@ -1309,8 +1311,8 @@ export default function InspectionDetailsDialog({
                     }
                   }}
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                  Delete
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline ml-1.5">Delete</span>
                 </Button>
               </div>
             </div>
