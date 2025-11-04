@@ -1740,8 +1740,9 @@ export default function InspectionDetailsDialog({
                                       });
                                     }}
                                     className={`sticky top-[130px] z-[15] w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-b ${
-                                      allRoomCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/50"
+                                      allRoomCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-card"
                                     }`}
+                                    style={{ marginTop: '8px' }}
                                   >
                                     <div className="flex items-center gap-2">
                                       {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -2102,9 +2103,9 @@ export default function InspectionDetailsDialog({
                           });
                         }}
                         className={`sticky top-[130px] z-[15] w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border-x border-b will-change-transform ${
-                          allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted"
+                          allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-card"
                         }`}
-                        style={{ marginTop: '-1px' }}
+                        style={{ marginTop: '8px' }}
                       >
                         <div className="flex items-center gap-2">
                           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
