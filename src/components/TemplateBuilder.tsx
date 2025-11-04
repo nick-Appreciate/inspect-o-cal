@@ -1184,28 +1184,50 @@ export function TemplateBuilder({
                     {properties.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No properties available</p>
                     ) : (
-                      properties.map((property) => (
-                        <div key={property.id} className="flex items-center space-x-2">
+                      <>
+                        <div className="flex items-center space-x-2 pb-2 border-b">
                           <input
                             type="checkbox"
-                            id={`prop-${property.id}`}
-                            checked={selectedPropertyIds.includes(property.id)}
+                            id="select-all-properties"
+                            checked={properties.length > 0 && selectedPropertyIds.length === properties.length}
                             onChange={(e) => {
                               const newIds = e.target.checked
-                                ? [...selectedPropertyIds, property.id]
-                                : selectedPropertyIds.filter(id => id !== property.id);
+                                ? properties.map(p => p.id)
+                                : [];
                               updateProperties(newIds);
                             }}
                             className="rounded border-input"
                           />
                           <label
-                            htmlFor={`prop-${property.id}`}
-                            className="text-sm cursor-pointer"
+                            htmlFor="select-all-properties"
+                            className="text-sm font-medium cursor-pointer"
                           >
-                            {property.name} - {property.address}
+                            Select All Properties
                           </label>
                         </div>
-                      ))
+                        {properties.map((property) => (
+                          <div key={property.id} className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id={`prop-${property.id}`}
+                              checked={selectedPropertyIds.includes(property.id)}
+                              onChange={(e) => {
+                                const newIds = e.target.checked
+                                  ? [...selectedPropertyIds, property.id]
+                                  : selectedPropertyIds.filter(id => id !== property.id);
+                                updateProperties(newIds);
+                              }}
+                              className="rounded border-input"
+                            />
+                            <label
+                              htmlFor={`prop-${property.id}`}
+                              className="text-sm cursor-pointer"
+                            >
+                              {property.name} - {property.address}
+                            </label>
+                          </div>
+                        ))}
+                      </>
                     )}
                   </div>
                 </div>
