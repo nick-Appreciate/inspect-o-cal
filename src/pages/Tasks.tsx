@@ -553,16 +553,16 @@ export default function Tasks() {
                       return (
                         <div key={group.inspection.id} className="space-y-2">
                           {/* Inspection Header */}
-                          <div className="flex flex-col gap-2 pb-2 border-b">
+                          <div className="flex flex-col gap-2 pb-2 border-b" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs`}>
+                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs pointer-events-none`}>
                                 {group.inspection.type}
                               </Badge>
-                              <div className="flex items-center gap-1 text-xs">
+                              <div className="flex items-center gap-1 text-xs pointer-events-none">
                                 <Calendar className="h-3 w-3 text-muted-foreground" />
                                 <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
                               </div>
-                              <div className="flex items-center gap-1 text-xs">
+                              <div className="flex items-center gap-1 text-xs pointer-events-none">
                                 <MapPin className="h-3 w-3 text-muted-foreground" />
                                 <span>{group.inspection.properties.name}</span>
                               </div>
@@ -700,16 +700,16 @@ export default function Tasks() {
                       return (
                         <div key={group.inspection.id} className="space-y-2">
                           {/* Inspection Header */}
-                          <div className="flex flex-col gap-2 pb-2 border-b border-destructive/30">
+                          <div className="flex flex-col gap-2 pb-2 border-b border-destructive/30" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs`}>
+                              <Badge className={`${getInspectionColor(group.inspection.type)} text-white text-xs pointer-events-none`}>
                                 {group.inspection.type}
                               </Badge>
-                              <div className="flex items-center gap-1 text-xs text-destructive">
+                              <div className="flex items-center gap-1 text-xs text-destructive pointer-events-none">
                                 <Calendar className="h-3 w-3" />
                                 <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
                               </div>
-                              <div className="flex items-center gap-1 text-xs">
+                              <div className="flex items-center gap-1 text-xs pointer-events-none">
                                 <MapPin className="h-3 w-3 text-muted-foreground" />
                                 <span>{group.inspection.properties.name}</span>
                               </div>
