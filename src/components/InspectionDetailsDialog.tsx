@@ -261,6 +261,31 @@ export default function InspectionDetailsDialog({
     };
   }, [open, expandedActivity]);
 
+  // Setup realtime subscription for subtasks (for live updates when tasks are added/removed)
+  useEffect(() => {
+    if (!open || !inspectionId) return;
+
+    const channel = supabase
+      .channel('subtask-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subtasks'
+        },
+        (payload) => {
+          // Refresh subtasks whenever any change occurs
+          fetchSubtasks();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, inspectionId]);
+
   const fetchInspectionDetails = async () => {
     if (!inspectionId) return;
 
