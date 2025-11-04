@@ -1367,27 +1367,11 @@ export default function InspectionDetailsDialog({
             {(inspection.parent_inspection_id || childInspections.length > 0) && (
               <div className="mb-3 p-2 bg-accent/20 rounded text-xs space-y-1">
                 {inspection.parent_inspection_id && parentInspection && (
-                  <div className="flex items-center gap-1">
-                    <Link2 className="h-3 w-3 flex-shrink-0" />
-                    <span className="text-muted-foreground">Follow-up of: </span>
-                    <Button
-                      variant="link"
-                      className="h-auto p-0 text-xs"
-                      onClick={() => {
-                        onOpenChange(false);
-                        setTimeout(() => {
-                          window.dispatchEvent(new CustomEvent('openInspectionDetails', { 
-                            detail: { inspectionId: inspection.parent_inspection_id } 
-                          }));
-                        }, 100);
-                      }}
-                    >
-                      {parentInspection.type}
-                    </Button>
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-5 w-5 p-0 ml-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      className="h-6 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={async () => {
                         if (!window.confirm('Are you sure you want to delete this follow-up inspection?')) {
                           return;
@@ -1405,8 +1389,27 @@ export default function InspectionDetailsDialog({
                         }
                       }}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete
                     </Button>
+                    <div className="flex items-center gap-1">
+                      <Link2 className="h-3 w-3 flex-shrink-0" />
+                      <span className="text-muted-foreground">Follow-up of: </span>
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 text-xs"
+                        onClick={() => {
+                          onOpenChange(false);
+                          setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('openInspectionDetails', { 
+                              detail: { inspectionId: inspection.parent_inspection_id } 
+                            }));
+                          }, 100);
+                        }}
+                      >
+                        {parentInspection.type}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1500,8 +1503,8 @@ export default function InspectionDetailsDialog({
                 const allCompleted = roomCompletedCount === roomSubtasks.length;
 
                 return (
-                  <div key={roomName} className="border rounded-lg">
-                    {/* Room Header - Sticky */}
+                  <div key={roomName} className="rounded-lg">
+                    {/* Room Header - Sticky with border and background */}
                     <button
                       onClick={() => {
                         setCollapsedRooms(prev => {
@@ -1514,7 +1517,7 @@ export default function InspectionDetailsDialog({
                           return next;
                         });
                       }}
-                      className={`sticky top-0 z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors ${
+                      className={`sticky top-0 z-20 w-full px-3 py-2 flex items-center justify-between text-sm font-medium hover:bg-accent/50 transition-colors border rounded-t-lg ${
                         allCompleted ? "bg-green-50 dark:bg-green-950/20" : "bg-muted/30"
                       }`}
                     >
@@ -1530,7 +1533,7 @@ export default function InspectionDetailsDialog({
 
                     {/* Room Tasks */}
                     {!isCollapsed && (
-                      <div className="p-2 space-y-2">
+                      <div className="p-2 space-y-2 border-x border-b rounded-b-lg">
                         {roomSubtasks.map((subtask) => {
                           const isInherited = subtask.original_inspection_id !== inspectionId;
                           const effectiveStatus = localStatus[subtask.id] ?? subtask.status;
