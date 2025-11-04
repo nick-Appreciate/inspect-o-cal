@@ -159,12 +159,174 @@ export function TemplateBuilder({
           fetchRoomTemplates();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'room_template_items',
+        },
+        async (payload) => {
+          // When a room template item is deleted, delete corresponding template items
+          if (payload.old && 'id' in payload.old) {
+            const { error } = await supabase
+              .from('template_items')
+              .delete()
+              .eq('source_room_template_item_id', payload.old.id);
+            
+            if (!error) {
+              // Refresh all rooms to show the changes
+              rooms.forEach(room => fetchItems(room.id));
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'room_template_items',
+        },
+        async (payload) => {
+          // When a room template item is updated, update corresponding template items
+          if (payload.new && 'id' in payload.new) {
+            const { error } = await supabase
+              .from('template_items')
+              .update({
+                description: (payload.new as any).description,
+                inventory_quantity: (payload.new as any).inventory_quantity,
+                inventory_type_id: (payload.new as any).inventory_type_id,
+                vendor_type_id: (payload.new as any).vendor_type_id,
+              })
+              .eq('source_room_template_item_id', payload.new.id);
+            
+            if (!error) {
+              // Refresh all rooms to show the changes
+              rooms.forEach(room => fetchItems(room.id));
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'default_task_room_templates',
+        },
+        async (payload) => {
+          // When a default task is selected, add it to all templates using this room template
+          if (payload.new && 'room_template_id' in payload.new && 'default_task_id' in payload.new) {
+            const roomTemplateId = (payload.new as any).room_template_id;
+            const defaultTaskId = (payload.new as any).default_task_id;
+            
+            // Get the default task details
+            const { data: defaultTask } = await supabase
+              .from('default_room_tasks')
+              .select('*')
+              .eq('id', defaultTaskId)
+              .single();
+            
+            if (defaultTask) {
+              // Find all template rooms using this room template
+              const { data: affectedRooms } = await supabase
+                .from('template_rooms')
+                .select('id')
+                .eq('room_template_id', roomTemplateId);
+              
+              if (affectedRooms && affectedRooms.length > 0) {
+                // Add the task to each affected room (if not already exists)
+                for (const room of affectedRooms) {
+                  // Check if task already exists
+                  const { data: existing } = await supabase
+                    .from('template_items')
+                    .select('id')
+                    .eq('room_id', room.id)
+                    .ilike('description', defaultTask.description);
+                  
+                  if (!existing || existing.length === 0) {
+                    // Get max order_index for this room
+                    const { data: maxOrderData } = await supabase
+                      .from('template_items')
+                      .select('order_index')
+                      .eq('room_id', room.id)
+                      .order('order_index', { ascending: false })
+                      .limit(1);
+                    
+                    const nextOrder = (maxOrderData && maxOrderData.length > 0) 
+                      ? (maxOrderData[0].order_index + 1) 
+                      : 0;
+                    
+                    await supabase
+                      .from('template_items')
+                      .insert({
+                        room_id: room.id,
+                        description: defaultTask.description,
+                        inventory_quantity: defaultTask.inventory_quantity,
+                        inventory_type_id: defaultTask.inventory_type_id,
+                        vendor_type_id: defaultTask.vendor_type_id,
+                        order_index: nextOrder,
+                      });
+                  }
+                  
+                  fetchItems(room.id);
+                }
+              }
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'default_task_room_templates',
+        },
+        async (payload) => {
+          // When a default task is deselected, remove it from all templates using this room template
+          if (payload.old && 'room_template_id' in payload.old && 'default_task_id' in payload.old) {
+            const roomTemplateId = (payload.old as any).room_template_id;
+            const defaultTaskId = (payload.old as any).default_task_id;
+            
+            // Get the default task details
+            const { data: defaultTask } = await supabase
+              .from('default_room_tasks')
+              .select('description')
+              .eq('id', defaultTaskId)
+              .single();
+            
+            if (defaultTask) {
+              // Find all template rooms using this room template
+              const { data: affectedRooms } = await supabase
+                .from('template_rooms')
+                .select('id')
+                .eq('room_template_id', roomTemplateId);
+              
+              if (affectedRooms && affectedRooms.length > 0) {
+                // Remove the task from each affected room (only if it has no source_room_template_item_id, meaning it came from default tasks)
+                for (const room of affectedRooms) {
+                  await supabase
+                    .from('template_items')
+                    .delete()
+                    .eq('room_id', room.id)
+                    .ilike('description', defaultTask.description)
+                    .is('source_room_template_item_id', null);
+                  
+                  fetchItems(room.id);
+                }
+              }
+            }
+          }
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [rooms]);
 
   const fetchRooms = async () => {
     const { data, error } = await supabase
