@@ -988,6 +988,13 @@ export function TemplateBuilder({
                     </p>
                   )}
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => deleteItem(item.id, room.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             ))
           ) : (
@@ -995,6 +1002,109 @@ export function TemplateBuilder({
               No tasks yet. Add a room from a room template that has tasks defined.
             </p>
           )}
+
+          {/* Add New Item Form */}
+          <div className="p-4 border-2 border-dashed rounded-md bg-muted/50">
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor={`new-item-${room.id}`}>Task Description *</Label>
+                <Input
+                  id={`new-item-${room.id}`}
+                  placeholder="Enter task description"
+                  value={newItemDescription[room.id] || ""}
+                  onChange={(e) =>
+                    setNewItemDescription((prev) => ({
+                      ...prev,
+                      [room.id]: e.target.value,
+                    }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      addItem(room.id);
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label htmlFor={`quantity-${room.id}`}>Quantity</Label>
+                  <Input
+                    id={`quantity-${room.id}`}
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={newItemQuantity[room.id] || ""}
+                    onChange={(e) =>
+                      setNewItemQuantity((prev) => ({
+                        ...prev,
+                        [room.id]: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor={`type-${room.id}`}>Inventory Type</Label>
+                  <Select
+                    value={newItemType[room.id] || ""}
+                    onValueChange={(value) =>
+                      setNewItemType((prev) => ({
+                        ...prev,
+                        [room.id]: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id={`type-${room.id}`}>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {inventoryTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor={`vendor-${room.id}`}>Vendor Type</Label>
+                  <Select
+                    value={newItemVendorType[room.id] || ""}
+                    onValueChange={(value) =>
+                      setNewItemVendorType((prev) => ({
+                        ...prev,
+                        [room.id]: value,
+                      }))
+                    }
+                  >
+                    <SelectTrigger id={`vendor-${room.id}`}>
+                      <SelectValue placeholder="Select vendor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {vendorTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => addItem(room.id)}
+                className="w-full"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </div>
+          </div>
         </div>
         </>
         )}
