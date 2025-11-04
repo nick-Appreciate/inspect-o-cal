@@ -432,7 +432,7 @@ export default function AddInspectionDialog({
   const resetForm = () => {
     setDate(undefined);
     setType(undefined);
-    setTime("");
+    setTime("12:00");
     setSelectedProperty(undefined);
     setAttachment(undefined);
     setShowAddProperty(false);
