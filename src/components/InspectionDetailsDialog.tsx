@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { format, formatDistanceToNow } from "date-fns";
-import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList, ChevronDown, ChevronUp, ChevronRight, History } from "lucide-react";
+import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList, ChevronDown, ChevronUp, ChevronRight, History, Calendar as CalendarIcon, Edit } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,9 @@ import { UserAvatar } from "./UserAvatar";
 import { AddTaskDialog } from "./AddTaskDialog";
 import { AlertCircle } from "lucide-react";
 import SetInventoryQuantityDialog from "./SetInventoryQuantityDialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { formatInTimeZone } from "date-fns-tz";
 
 interface Inspection {
   id: string;
@@ -214,6 +217,11 @@ export default function InspectionDetailsDialog({
   }>>([]);
   const [expandedUnitTemplates, setExpandedUnitTemplates] = useState<Set<string>>(new Set());
   const [inspectionRuns, setInspectionRuns] = useState<Map<string, { template_id: string, unit_id: string | null }>>(new Map());
+  
+  // Reschedule state
+  const [showReschedulePopover, setShowReschedulePopover] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState<Date | undefined>();
+  const [rescheduleTime, setRescheduleTime] = useState("");
 
   useEffect(() => {
     if (inspectionId && open) {
@@ -226,6 +234,14 @@ export default function InspectionDetailsDialog({
       fetchUnitTemplates();
     }
   }, [inspectionId, open]);
+
+  // Initialize reschedule fields when inspection loads
+  useEffect(() => {
+    if (inspection && open) {
+      setRescheduleDate(new Date(inspection.date));
+      setRescheduleTime(inspection.time);
+    }
+  }, [inspection, open]);
 
   // Setup realtime subscription for subtask activities
   useEffect(() => {
@@ -1379,9 +1395,85 @@ export default function InspectionDetailsDialog({
               <Badge className={`${getInspectionColor(inspection.type)} text-white text-xs px-2.5 py-0.5`}>
                 {inspection.type}
               </Badge>
-              <span className="text-xs text-muted-foreground">
-                {format(new Date(inspection.date), "MMM d, yyyy")} • {inspection.time}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">
+                  {format(new Date(inspection.date), "MMM d, yyyy")} • {inspection.time}
+                </span>
+                <Popover open={showReschedulePopover} onOpenChange={setShowReschedulePopover}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                      title="Reschedule"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-4" align="start">
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">New Date</label>
+                        <Calendar
+                          mode="single"
+                          selected={rescheduleDate}
+                          onSelect={setRescheduleDate}
+                          initialFocus
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">New Time</label>
+                        <Input
+                          type="time"
+                          value={rescheduleTime}
+                          onChange={(e) => setRescheduleTime(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          onClick={async () => {
+                            if (!rescheduleDate || !rescheduleTime) {
+                              toast.error("Please select both date and time");
+                              return;
+                            }
+                            
+                            const newDate = formatInTimeZone(rescheduleDate, 'America/Chicago', 'yyyy-MM-dd');
+                            
+                            const { error } = await supabase
+                              .from('inspections')
+                              .update({
+                                date: newDate,
+                                time: rescheduleTime
+                              })
+                              .eq('id', inspectionId);
+                            
+                            if (error) {
+                              toast.error('Failed to reschedule inspection');
+                            } else {
+                              toast.success('Inspection rescheduled');
+                              setShowReschedulePopover(false);
+                              fetchInspectionDetails();
+                              // Trigger refresh in parent
+                              window.dispatchEvent(new CustomEvent('inspectionUpdated'));
+                            }
+                          }}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowReschedulePopover(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
               {templateName && (
                 <Badge variant="outline" className="text-xs">
                   {templateName}

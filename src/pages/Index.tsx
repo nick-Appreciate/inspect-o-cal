@@ -66,9 +66,16 @@ const Index = () => {
       setDetailsDialogOpen(true);
     };
 
+    const handleInspectionUpdated = () => {
+      fetchInspections();
+    };
+
     window.addEventListener('openInspectionDetails' as any, handleOpenInspectionDetails);
+    window.addEventListener('inspectionUpdated' as any, handleInspectionUpdated);
+    
     return () => {
       window.removeEventListener('openInspectionDetails' as any, handleOpenInspectionDetails);
+      window.removeEventListener('inspectionUpdated' as any, handleInspectionUpdated);
     };
   }, []);
 
