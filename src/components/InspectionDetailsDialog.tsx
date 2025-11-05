@@ -1454,7 +1454,7 @@ export default function InspectionDetailsDialog({
                             } else {
                               toast.success('Inspection rescheduled');
                               setShowReschedulePopover(false);
-                              fetchInspectionDetails();
+                              await fetchInspectionDetails();
                               // Trigger refresh in parent
                               window.dispatchEvent(new CustomEvent('inspectionUpdated'));
                             }
