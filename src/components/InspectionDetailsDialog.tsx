@@ -35,7 +35,7 @@ import { AlertCircle } from "lucide-react";
 import SetInventoryQuantityDialog from "./SetInventoryQuantityDialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 interface Inspection {
   id: string;
@@ -238,7 +238,8 @@ export default function InspectionDetailsDialog({
   // Initialize reschedule fields when inspection loads
   useEffect(() => {
     if (inspection && open) {
-      setRescheduleDate(new Date(inspection.date));
+      // Use noon in America/Chicago to avoid off-by-one due to timezone parsing
+      setRescheduleDate(fromZonedTime(`${inspection.date}T12:00:00`, 'America/Chicago'));
       setRescheduleTime(inspection.time);
     }
   }, [inspection, open]);
@@ -1419,6 +1420,7 @@ export default function InspectionDetailsDialog({
                           selected={rescheduleDate}
                           onSelect={setRescheduleDate}
                           initialFocus
+                          className="p-3 pointer-events-auto"
                         />
                       </div>
                       <div className="space-y-2">
