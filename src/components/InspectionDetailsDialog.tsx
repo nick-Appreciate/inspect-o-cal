@@ -2173,7 +2173,239 @@ export default function InspectionDetailsDialog({
                                         </Badge>
                                       )}
                                    </div>
-                                   {/* Note: Full subtask content (Pass/Fail buttons, notes, activity) is already rendered above in multi-unit section */}
+
+                                   {/* Pass/Fail Buttons - Modern Design */}
+                                   {!isInherited && !subtask.completed && (
+                                     <div className="mb-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                       <Button
+                                         variant={isPass ? "default" : "outline"}
+                                         size="sm"
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleStatusChange(subtask.id, 'pass', subtask.status);
+                                         }}
+                                         className={`flex-1 h-8 font-semibold transition-all ${
+                                           isPass 
+                                             ? 'bg-green-600 hover:bg-green-700 text-white shadow-md' 
+                                             : 'hover:bg-green-50 hover:text-green-700 hover:border-green-300'
+                                         }`}
+                                       >
+                                         <Check className="h-3.5 w-3.5 mr-1" />
+                                         Pass
+                                       </Button>
+                                       <Button
+                                         variant={isFail ? "destructive" : "outline"}
+                                         onClick={(e) => {
+                                           e.stopPropagation();
+                                           handleStatusChange(subtask.id, 'fail', subtask.status);
+                                         }}
+                                         className={`flex-1 h-8 font-semibold transition-all ${
+                                           isFail 
+                                             ? 'shadow-md' 
+                                             : 'hover:bg-red-50 hover:text-red-700 hover:border-red-300'
+                                         }`}
+                                       >
+                                         <X className="h-3.5 w-3.5 mr-1" />
+                                         Fail
+                                       </Button>
+                                     </div>
+                                   )}
+
+                                   {/* Notes and Activity (visible when expanded) */}
+                                   {expandedActivity[subtask.id] && (
+                                     <div className="space-y-3">
+                                       {/* Add Note Form */}
+                                       {!isInherited && (
+                                         <div className="space-y-2 relative" onClick={(e) => e.stopPropagation()}>
+                                           {pendingFailSubtask === subtask.id && (
+                                             <div className="text-xs font-semibold text-destructive mb-2 flex items-center gap-2">
+                                               <AlertCircle className="h-4 w-4" />
+                                               Add notes and assign a user (@mention) to complete marking as failed
+                                             </div>
+                                           )}
+                                           <Textarea
+                                             data-subtask-id={subtask.id}
+                                             placeholder="Add a note... (Type @ to mention and assign users)"
+                                             value={subtaskNotes[subtask.id] || ''}
+                                             onChange={(e) => {
+                                               e.stopPropagation();
+                                               const value = e.target.value;
+                                               setSubtaskNotes({ ...subtaskNotes, [subtask.id]: value });
+                                               const lastAt = value.lastIndexOf('@');
+                                               if (lastAt !== -1) {
+                                                 const after = value.slice(lastAt + 1);
+                                                 if (!after.includes(' ') && after.length >= 0) {
+                                                   setSubtaskMention(prev => ({ ...prev, [subtask.id]: { query: after.toLowerCase(), atIndex: lastAt } }));
+                                                 } else {
+                                                   setSubtaskMention(prev => {
+                                                     const newMention = { ...prev };
+                                                     delete newMention[subtask.id];
+                                                     return newMention;
+                                                   });
+                                                 }
+                                               } else {
+                                                 setSubtaskMention(prev => {
+                                                   const newMention = { ...prev };
+                                                   delete newMention[subtask.id];
+                                                   return newMention;
+                                                 });
+                                               }
+                                             }}
+                                             onKeyDown={(e) => {
+                                               e.stopPropagation();
+                                               // Handle Tab for autocomplete
+                                               if (e.key === 'Tab' && subtaskMention[subtask.id]?.query !== undefined) {
+                                                 e.preventDefault();
+                                                 const filteredUsers = users.filter(u => 
+                                                   (u.full_name || u.email).toLowerCase().includes(subtaskMention[subtask.id]!.query)
+                                                 );
+                                                 if (filteredUsers.length > 0) {
+                                                   const firstUser = filteredUsers[0];
+                                                   const current = subtaskNotes[subtask.id] || '';
+                                                   const atIndex = subtaskMention[subtask.id]!.atIndex;
+                                                   const before = current.slice(0, atIndex);
+                                                   const after = current.slice(atIndex + subtaskMention[subtask.id]!.query.length + 1);
+                                                   const name = firstUser.full_name || firstUser.email;
+                                                   const next = `${before}@${name} ${after}`;
+                                                   setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
+                                                   setSubtaskMention(prev => {
+                                                     const newMention = { ...prev };
+                                                     delete newMention[subtask.id];
+                                                     return newMention;
+                                                   });
+                                                   handleAssignUser(subtask.id, firstUser.id);
+                                                 }
+                                               }
+                                               // Handle Enter to submit
+                                               if (e.key === 'Enter' && !e.shiftKey) {
+                                                 e.preventDefault();
+                                                 handleSaveNotes(subtask.id);
+                                               }
+                                             }}
+                                             onClick={(e) => e.stopPropagation()}
+                                             className={`h-16 text-xs ${
+                                               pendingFailSubtask === subtask.id 
+                                                 ? 'border-destructive border-2 focus-visible:ring-destructive' 
+                                                 : ''
+                                             }`}
+                                           />
+
+                                           {/* Mentions dropdown */}
+                                           {subtaskMention[subtask.id]?.query !== undefined && (
+                                             <div className="absolute left-0 top-full mt-1 w-56 bg-background border border-border rounded-md shadow-lg z-50">
+                                               <ul className="max-h-40 overflow-auto text-xs">
+                                                 {users
+                                                   .filter(u => (u.full_name || u.email).toLowerCase().includes(subtaskMention[subtask.id]!.query))
+                                                   .slice(0, 5)
+                                                   .map(u => (
+                                                     <li
+                                                       key={u.id}
+                                                       className="px-2 py-1.5 hover:bg-accent cursor-pointer flex items-center gap-2"
+                                                       onMouseDown={(e) => {
+                                                         e.preventDefault();
+                                                         e.stopPropagation();
+                                                         const current = subtaskNotes[subtask.id] || '';
+                                                         const atIndex = subtaskMention[subtask.id]!.atIndex;
+                                                         const before = current.slice(0, atIndex);
+                                                         const after = current.slice(atIndex + subtaskMention[subtask.id]!.query.length + 1);
+                                                         const name = u.full_name || u.email;
+                                                         const next = `${before}@${name} ${after}`;
+                                                         setSubtaskNotes({ ...subtaskNotes, [subtask.id]: next });
+                                                         setSubtaskMention(prev => {
+                                                           const newMention = { ...prev };
+                                                           delete newMention[subtask.id];
+                                                           return newMention;
+                                                         });
+                                                         handleAssignUser(subtask.id, u.id);
+                                                       }}
+                                                     >
+                                                       <UserAvatar
+                                                         avatarUrl={u.avatar_url}
+                                                         name={u.full_name}
+                                                         size="sm"
+                                                       />
+                                                       {u.full_name || u.email}
+                                                       <span className="ml-auto text-[10px] text-muted-foreground">Tab</span>
+                                                     </li>
+                                                   ))}
+                                               </ul>
+                                             </div>
+                                           )}
+
+                                           <Button
+                                             size="sm"
+                                             onClick={(e) => {
+                                               e.stopPropagation();
+                                               handleSaveNotes(subtask.id);
+                                             }}
+                                             className={`h-7 text-xs w-full ${
+                                               pendingFailSubtask === subtask.id 
+                                                 ? 'bg-destructive hover:bg-destructive/90' 
+                                                 : ''
+                                             }`}
+                                           >
+                                             {pendingFailSubtask === subtask.id ? 'Complete Fail with Note' : 'Add Note'}
+                                           </Button>
+                                           <p className="text-[10px] text-muted-foreground text-center">
+                                             Press Enter to submit • Tab to autocomplete
+                                           </p>
+                                         </div>
+                                       )}
+
+                                       {/* Activity Feed */}
+                                       <div className="border-l-2 border-muted pl-3 space-y-2 max-h-48 overflow-y-auto">
+                                         {subtaskActivities[subtask.id] && subtaskActivities[subtask.id].length > 0 ? (
+                                           subtaskActivities[subtask.id].map((activity: any) => (
+                                             <div key={activity.id} className="text-xs">
+                                               <div className="flex items-start gap-2">
+                                                 <div className="w-2 h-2 bg-primary rounded-full mt-1 -ml-[calc(0.75rem+2px)]"></div>
+                                                 <div className="flex-1">
+                                                   <div className="font-medium">
+                                                     {activity.activity_type === 'created' && 'Created'}
+                                                     {activity.activity_type === 'status_change' && `Status: ${activity.old_value} → ${activity.new_value}`}
+                                                     {activity.activity_type === 'note_added' && 'Note added'}
+                                                     {activity.activity_type === 'completed' && 'Marked complete'}
+                                                     {activity.activity_type === 'uncompleted' && 'Unmarked complete'}
+                                                   </div>
+                                                   {activity.notes && (
+                                                     <div className="text-muted-foreground mt-1">{activity.notes}</div>
+                                                   )}
+                                                   <div className="text-muted-foreground text-[10px] mt-0.5">
+                                                     {activity.created_by_profile?.full_name || activity.created_by_profile?.email || 'Unknown'} • 
+                                                     {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}
+                                                   </div>
+                                                 </div>
+                                               </div>
+                                             </div>
+                                           ))
+                                         ) : (
+                                           <div className="text-xs text-muted-foreground italic py-2">
+                                             No activity yet
+                                           </div>
+                                         )}
+                                       </div>
+                                     </div>
+                                   )}
+
+                                   {/* Assigned Users */}
+                                   {subtask.assignedProfiles && subtask.assignedProfiles.length > 0 && (
+                                     <div className="flex items-center gap-1 mt-1">
+                                       {subtask.assignedProfiles.slice(0, 3).map((profile, idx) => (
+                                         <UserAvatar
+                                           key={idx}
+                                           avatarUrl={profile.avatar_url}
+                                           name={profile.full_name}
+                                           email={profile.email}
+                                           size="sm"
+                                         />
+                                       ))}
+                                       {subtask.assignedProfiles.length > 3 && (
+                                         <span className="text-[10px] text-muted-foreground">
+                                           +{subtask.assignedProfiles.length - 3}
+                                         </span>
+                                       )}
+                                     </div>
+                                   )}
                                  </div>
                                  
                                {!isInherited && !subtask.completed && (
