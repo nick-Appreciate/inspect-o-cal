@@ -241,7 +241,7 @@ export default function WeeklyCalendar({
     <Card className="p-3 sm:p-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
         <h2 className="text-lg sm:text-2xl font-bold">
-          {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
+          {formatInTimeZone(weekStart, 'America/Chicago', "MMM d")} - {formatInTimeZone(weekEnd, 'America/Chicago', "MMM d, yyyy")}
         </h2>
         <div className="flex gap-2 w-full sm:w-auto">
           <Button variant="outline" onClick={goToToday} size="sm" className="flex-1 sm:flex-none">

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, isPast, parseISO } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import type { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import { AddTaskDialog } from "@/components/AddTaskDialog";
 import EditSubtaskDialog from "@/components/EditSubtaskDialog";
@@ -569,7 +570,7 @@ export default function Tasks() {
                               </Badge>
                               <div className="flex items-center gap-1 text-xs">
                                 <Calendar className="h-3 w-3 text-muted-foreground" />
-                                <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
+                                <span>{formatInTimeZone(parseISO(group.inspection.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy")} at {group.inspection.time}</span>
                               </div>
                               <div className="flex items-center gap-1 text-xs">
                                 <MapPin className="h-3 w-3 text-muted-foreground" />
@@ -722,7 +723,7 @@ export default function Tasks() {
                               </Badge>
                               <div className="flex items-center gap-1 text-xs text-destructive">
                                 <Calendar className="h-3 w-3" />
-                                <span>{format(parseISO(group.inspection.date), "MMM d, yyyy")} at {group.inspection.time}</span>
+                                <span>{formatInTimeZone(parseISO(group.inspection.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy")} at {group.inspection.time}</span>
                               </div>
                               <div className="flex items-center gap-1 text-xs">
                                 <MapPin className="h-3 w-3 text-muted-foreground" />

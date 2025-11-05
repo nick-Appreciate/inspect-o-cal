@@ -1397,7 +1397,7 @@ export default function InspectionDetailsDialog({
               </Badge>
               <div className="flex items-center gap-1">
                 <span className="text-xs text-muted-foreground">
-                  {format(new Date(inspection.date), "MMM d, yyyy")} • {inspection.time}
+                  {formatInTimeZone(new Date(inspection.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy")} • {inspection.time}
                 </span>
                 <Popover open={showReschedulePopover} onOpenChange={setShowReschedulePopover}>
                   <PopoverTrigger asChild>
@@ -1675,7 +1675,7 @@ export default function InspectionDetailsDialog({
                           {hist.type}
                         </Badge>
                         <span className="text-muted-foreground">
-                          {format(new Date(hist.date), "MMM d, yyyy")}
+                          {formatInTimeZone(new Date(hist.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy")}
                         </span>
                       </div>
                       <span className="text-muted-foreground">

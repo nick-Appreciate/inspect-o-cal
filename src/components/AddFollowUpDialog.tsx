@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { InspectionType } from "@/types/inspection";
+import { formatInTimeZone } from "date-fns-tz";
 
 interface AddFollowUpDialogProps {
   parentInspection: {
@@ -334,7 +335,7 @@ export default function AddFollowUpDialog({
               onChange={(e) => setDate(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Follow-up must be scheduled on or after {new Date(parentInspection.date).toLocaleDateString()}
+              Follow-up must be scheduled on or after {formatInTimeZone(new Date(parentInspection.date + 'T00:00:00'), 'America/Chicago', 'MMM d, yyyy')}
             </p>
           </div>
 

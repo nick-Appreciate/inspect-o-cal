@@ -421,7 +421,7 @@ const Inspections = () => {
 
     const searchableText = [
       inspection.type,
-      format(new Date(inspection.date), "MMM d, yyyy"),
+      formatInTimeZone(new Date(inspection.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy"),
       inspection.time,
       inspection.property.name,
       inspection.property.address,
@@ -704,7 +704,7 @@ const Inspections = () => {
                                    </div>
                                  </TableCell>
                                 <TableCell>
-                                  {format(new Date(inspection.date), "MMM d, yyyy")}
+                                  {formatInTimeZone(new Date(inspection.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy")}
                                 </TableCell>
                                 <TableCell>{inspection.time}</TableCell>
                                 <TableCell>
@@ -800,7 +800,7 @@ const Inspections = () => {
                                   {/* Date and Time */}
                                   <div className="text-xs text-muted-foreground space-y-0.5">
                                     <div>
-                                      📅 {format(new Date(inspection.date), "MMM d, yyyy")} at {inspection.time}
+                                      📅 {formatInTimeZone(new Date(inspection.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy")} at {inspection.time}
                                     </div>
                                     {inspection.unit && (
                                       <div>🏢 Unit: {inspection.unit.name}</div>

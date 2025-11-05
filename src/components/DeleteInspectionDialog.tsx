@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 
 interface Property {
   id: string;
@@ -88,7 +88,7 @@ export function DeleteInspectionDialog({
   if (!mainInspection) return null;
 
   const formatInspectionDetails = (inspection: Inspection) => {
-    const dateStr = format(new Date(inspection.date), "MMM d, yyyy");
+    const dateStr = formatInTimeZone(new Date(inspection.date + 'T00:00:00'), 'America/Chicago', "MMM d, yyyy");
     const parts = [inspection.type, dateStr];
     if (inspection.property) parts.push(inspection.property.name);
     if (inspection.unit?.name) parts.push(inspection.unit.name);
