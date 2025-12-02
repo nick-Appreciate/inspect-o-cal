@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { FileText, Download, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { FileText, Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Set worker source
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -24,10 +28,13 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [fileType, setFileType] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
+  const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [pdfRendering, setPdfRendering] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const extractStoragePath = (fullUrl: string) => {
-    // Extract bucket and path from Supabase storage URL
-    // URL format: https://xxx.supabase.co/storage/v1/object/public/bucket/path
     const match = fullUrl.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
     if (match) {
       return { bucket: match[1], path: match[2] };
@@ -43,9 +50,41 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     return url;
   };
 
+  const renderPage = async (doc: pdfjsLib.PDFDocumentProxy, pageNum: number) => {
+    if (!canvasRef.current || pdfRendering) return;
+    
+    setPdfRendering(true);
+    try {
+      const page = await doc.getPage(pageNum);
+      const canvas = canvasRef.current;
+      const context = canvas.getContext("2d");
+      
+      if (!context) return;
+
+      // Scale to fit container width while maintaining aspect ratio
+      const containerWidth = canvas.parentElement?.clientWidth || 800;
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = Math.min(containerWidth / viewport.width, 2);
+      const scaledViewport = page.getViewport({ scale });
+
+      canvas.height = scaledViewport.height;
+      canvas.width = scaledViewport.width;
+
+      await page.render({
+        canvasContext: context,
+        viewport: scaledViewport,
+      }).promise;
+    } catch (error) {
+      console.error("Error rendering PDF page:", error);
+    } finally {
+      setPdfRendering(false);
+    }
+  };
+
   const handleOpen = async () => {
     setIsOpen(true);
     setLoading(true);
+    setCurrentPage(1);
 
     try {
       const proxyUrl = getProxyUrl();
@@ -65,6 +104,14 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
       setBlobUrl(objectUrl);
       setFileType(blob.type);
       setFileName(url.split("/").pop() || "attachment");
+
+      // If PDF, load with PDF.js
+      if (blob.type === "application/pdf") {
+        const arrayBuffer = await blob.arrayBuffer();
+        const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        setPdfDoc(doc);
+        setTotalPages(doc.numPages);
+      }
     } catch (error) {
       console.error("Error loading attachment:", error);
       toast.error("Failed to load attachment");
@@ -73,12 +120,22 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     }
   };
 
+  // Render PDF page when doc or currentPage changes
+  useEffect(() => {
+    if (pdfDoc && isOpen) {
+      renderPage(pdfDoc, currentPage);
+    }
+  }, [pdfDoc, currentPage, isOpen]);
+
   const handleClose = () => {
     setIsOpen(false);
     if (blobUrl) {
       URL.revokeObjectURL(blobUrl);
       setBlobUrl(null);
     }
+    setPdfDoc(null);
+    setTotalPages(0);
+    setCurrentPage(1);
   };
 
   const handleDownload = () => {
@@ -93,8 +150,15 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
   };
 
   const handleOpenInNewTab = () => {
-    // Open the proxy URL directly in a new tab
     window.open(getProxyUrl(), "_blank");
+  };
+
+  const goToPrevPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
   const isImage = fileType.startsWith("image/");
@@ -121,16 +185,33 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
       return <img src={blobUrl} alt="Attachment" className="max-w-full h-auto mx-auto" />;
     }
     
-    if (isPdf) {
+    if (isPdf && pdfDoc) {
       return (
-        <div className="flex flex-col items-center justify-center h-64 gap-4 bg-muted/50 rounded-lg p-8">
-          <FileText className="h-20 w-20 text-primary" />
-          <p className="text-lg font-medium">{fileName}</p>
-          <p className="text-muted-foreground text-sm">PDF Document</p>
-          <Button onClick={handleDownload} size="lg" className="mt-2">
-            <Download className="h-5 w-5 mr-2" />
-            Download PDF
-          </Button>
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex items-center gap-4 bg-muted/50 rounded-md px-4 py-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={goToPrevPage} 
+              disabled={currentPage <= 1 || pdfRendering}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={goToNextPage} 
+              disabled={currentPage >= totalPages || pdfRendering}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="w-full overflow-auto flex justify-center">
+            <canvas ref={canvasRef} className="border border-border shadow-sm" />
+          </div>
         </div>
       );
     }
