@@ -123,9 +123,15 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     
     if (isPdf) {
       return (
-        <object data={blobUrl} type="application/pdf" className="w-full h-[70vh]">
-          <embed src={blobUrl} type="application/pdf" className="w-full h-[70vh]" />
-        </object>
+        <div className="flex flex-col items-center justify-center h-64 gap-4 bg-muted/50 rounded-lg p-8">
+          <FileText className="h-20 w-20 text-primary" />
+          <p className="text-lg font-medium">{fileName}</p>
+          <p className="text-muted-foreground text-sm">PDF Document</p>
+          <Button onClick={handleDownload} size="lg" className="mt-2">
+            <Download className="h-5 w-5 mr-2" />
+            Download PDF
+          </Button>
+        </div>
       );
     }
     
