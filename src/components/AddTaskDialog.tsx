@@ -30,6 +30,10 @@ interface VendorType {
   name: string;
 }
 
+interface Room {
+  name: string;
+}
+
 interface AddTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,9 +42,11 @@ interface AddTaskDialogProps {
     inventory_quantity: number;
     inventory_type_id: string | null;
     vendor_type_id: string | null;
+    room_name: string | null;
   }) => void;
   inventoryTypes: InventoryType[];
   vendorTypes?: VendorType[];
+  rooms?: Room[];
   onCreateInventoryType: (name: string) => Promise<void>;
   title?: string;
   description?: string;
@@ -52,6 +58,7 @@ export function AddTaskDialog({
   onAdd,
   inventoryTypes,
   vendorTypes = [],
+  rooms = [],
   onCreateInventoryType,
   title = "Add Task",
   description = "Add a new task to the checklist",
@@ -60,6 +67,7 @@ export function AddTaskDialog({
   const [quantity, setQuantity] = useState(0);
   const [typeId, setTypeId] = useState("");
   const [vendorTypeId, setVendorTypeId] = useState("");
+  const [roomName, setRoomName] = useState("");
   const [showAddInventoryType, setShowAddInventoryType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
 
@@ -73,6 +81,7 @@ export function AddTaskDialog({
       inventory_quantity: quantity,
       inventory_type_id: typeId && typeId !== "none" ? typeId : null,
       vendor_type_id: vendorTypeId && vendorTypeId !== "none" ? vendorTypeId : null,
+      room_name: roomName && roomName !== "none" ? roomName : null,
     });
 
     // Reset form
@@ -80,6 +89,7 @@ export function AddTaskDialog({
     setQuantity(0);
     setTypeId("");
     setVendorTypeId("");
+    setRoomName("");
     onOpenChange(false);
   };
 
@@ -98,6 +108,24 @@ export function AddTaskDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
+          {rooms.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="room">Room</Label>
+              <Select value={roomName} onValueChange={setRoomName}>
+                <SelectTrigger id="room">
+                  <SelectValue placeholder="Select room" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="none">No Room</SelectItem>
+                  {rooms.map((room) => (
+                    <SelectItem key={room.name} value={room.name}>
+                      {room.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="task-description">Description</Label>
             <Textarea
