@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
 interface AttachmentViewerProps {
   url: string;
   label?: string;
@@ -40,16 +42,16 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
       const storageInfo = extractStoragePath(url);
       
       if (storageInfo) {
-        // Fetch via Supabase client to avoid ad blocker issues
-        const { data, error } = await supabase.storage
-          .from(storageInfo.bucket)
-          .download(storageInfo.path);
-
-        if (error) {
-          throw error;
+        // Fetch via edge function proxy to avoid ad blocker issues
+        const proxyUrl = `${SUPABASE_URL}/functions/v1/serve-attachment?bucket=${encodeURIComponent(storageInfo.bucket)}&path=${encodeURIComponent(storageInfo.path)}`;
+        
+        const response = await fetch(proxyUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch: ${response.status}`);
         }
 
-        const blob = data;
+        const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
         setBlobUrl(objectUrl);
         setFileType(blob.type);
