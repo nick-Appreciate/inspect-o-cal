@@ -187,8 +187,8 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     
     if (isPdf && pdfDoc) {
       return (
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center gap-4 bg-muted/50 rounded-md px-4 py-2">
+        <div className="flex flex-col items-center gap-4 h-full">
+          <div className="flex items-center gap-4 bg-muted/50 rounded-md px-4 py-2 sticky top-0 z-10">
             <Button 
               variant="outline" 
               size="sm" 
@@ -209,8 +209,8 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <div className="w-full overflow-auto flex justify-center">
-            <canvas ref={canvasRef} className="border border-border shadow-sm" />
+          <div className="w-full flex-1 overflow-auto flex justify-center pb-4">
+            <canvas ref={canvasRef} className="border border-border shadow-sm max-w-full" />
           </div>
         </div>
       );
@@ -230,8 +230,8 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
 
   const dialogContent = (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center justify-between">
             <span>{variant === "compact" ? "Attachment" : label}</span>
             <div className="flex gap-2">
@@ -248,7 +248,7 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
             View and download the attachment file
           </DialogDescription>
         </DialogHeader>
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto min-h-0">
           {renderContent()}
         </div>
       </DialogContent>
