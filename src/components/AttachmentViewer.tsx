@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { FileText, Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Download, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -29,10 +29,9 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
   const [fileType, setFileType] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
   const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [pdfRendering, setPdfRendering] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [pagesRendered, setPagesRendered] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const extractStoragePath = (fullUrl: string) => {
     const match = fullUrl.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
@@ -50,21 +49,24 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     return url;
   };
 
-  const renderPage = async (doc: pdfjsLib.PDFDocumentProxy, pageNum: number) => {
-    if (!canvasRef.current || pdfRendering) return;
+  const renderAllPages = async (doc: pdfjsLib.PDFDocumentProxy) => {
+    if (!containerRef.current) return;
     
-    setPdfRendering(true);
-    try {
+    // Clear existing canvases
+    containerRef.current.innerHTML = '';
+    
+    for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
       const page = await doc.getPage(pageNum);
-      const canvas = canvasRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.className = 'border border-border shadow-sm mb-4 max-w-full';
       const context = canvas.getContext("2d");
       
-      if (!context) return;
+      if (!context) continue;
 
       // Scale to fit container width while maintaining aspect ratio
-      const containerWidth = canvas.parentElement?.clientWidth || 800;
+      const containerWidth = containerRef.current.clientWidth || 800;
       const viewport = page.getViewport({ scale: 1 });
-      const scale = Math.min(containerWidth / viewport.width, 2);
+      const scale = Math.min((containerWidth - 32) / viewport.width, 2);
       const scaledViewport = page.getViewport({ scale });
 
       canvas.height = scaledViewport.height;
@@ -74,17 +76,17 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
         canvasContext: context,
         viewport: scaledViewport,
       }).promise;
-    } catch (error) {
-      console.error("Error rendering PDF page:", error);
-    } finally {
-      setPdfRendering(false);
+      
+      containerRef.current.appendChild(canvas);
     }
+    
+    setPagesRendered(true);
   };
 
   const handleOpen = async () => {
     setIsOpen(true);
     setLoading(true);
-    setCurrentPage(1);
+    setPagesRendered(false);
 
     try {
       const proxyUrl = getProxyUrl();
@@ -120,12 +122,12 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     }
   };
 
-  // Render PDF page when doc or currentPage changes
+  // Render all PDF pages when doc is loaded
   useEffect(() => {
-    if (pdfDoc && isOpen) {
-      renderPage(pdfDoc, currentPage);
+    if (pdfDoc && isOpen && !pagesRendered) {
+      renderAllPages(pdfDoc);
     }
-  }, [pdfDoc, currentPage, isOpen]);
+  }, [pdfDoc, isOpen, pagesRendered]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -135,7 +137,7 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     }
     setPdfDoc(null);
     setTotalPages(0);
-    setCurrentPage(1);
+    setPagesRendered(false);
   };
 
   const handleDownload = () => {
@@ -151,14 +153,6 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
 
   const handleOpenInNewTab = () => {
     window.open(getProxyUrl(), "_blank");
-  };
-
-  const goToPrevPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
-  };
-
-  const goToNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
   const isImage = fileType.startsWith("image/");
@@ -188,30 +182,13 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     if (isPdf && pdfDoc) {
       return (
         <div className="flex flex-col items-center gap-4 h-full">
-          <div className="flex items-center gap-4 bg-muted/50 rounded-md px-4 py-2 sticky top-0 z-10">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={goToPrevPage} 
-              disabled={currentPage <= 1 || pdfRendering}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={goToNextPage} 
-              disabled={currentPage >= totalPages || pdfRendering}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          <div className="text-sm text-muted-foreground">
+            {totalPages} page{totalPages !== 1 ? 's' : ''} - Scroll to view all
           </div>
-          <div className="w-full flex-1 overflow-auto flex justify-center pb-4">
-            <canvas ref={canvasRef} className="border border-border shadow-sm max-w-full" />
-          </div>
+          <div 
+            ref={containerRef} 
+            className="w-full flex-1 overflow-auto flex flex-col items-center pb-4"
+          />
         </div>
       );
     }
