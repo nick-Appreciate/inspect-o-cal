@@ -1488,6 +1488,21 @@ export default function InspectionDetailsDialog({
               )}
             </div>
 
+            {/* Inspection Attachment */}
+            {inspection.attachment_url && (
+              <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-md">
+                <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                <a
+                  href={inspection.attachment_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline font-medium truncate"
+                >
+                  View Inspection Attachment
+                </a>
+              </div>
+            )}
+
             {/* Property Info + Action Buttons Row */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-1.5 text-xs min-w-0 flex-[2]">
@@ -1503,6 +1518,16 @@ export default function InspectionDetailsDialog({
               </div>
 
               <div className="flex gap-1.5 flex-shrink-0">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowAddTaskDialog(true)}
+                  className="h-8 text-xs px-2"
+                  title="Add Task"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="ml-1.5">Add Task</span>
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -2544,7 +2569,7 @@ export default function InspectionDetailsDialog({
                                    <Trash2 className="h-3 w-3 text-destructive" />
                                  </Button>
                                )}
-                              </div>
+                               </div>
                             );
                           })}
                         </div>
@@ -2553,17 +2578,6 @@ export default function InspectionDetailsDialog({
                   );
                 });
               })()}
-
-              {/* Add New Task */}
-              <Button
-                onClick={() => setShowAddTaskDialog(true)}
-                variant="outline"
-                size="sm"
-                className="w-full border-dashed h-10"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Task
-              </Button>
             </div>
             </div>
           </div>
