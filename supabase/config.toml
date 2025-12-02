@@ -1,1 +1,4 @@
 project_id = "xslzfmhjcyyjbphrmitn"
+
+[functions.serve-attachment]
+verify_jwt = false
