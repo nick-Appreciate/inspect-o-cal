@@ -187,6 +187,7 @@ export default function InspectionDetailsDialog({
   const [showAssignAllButton, setShowAssignAllButton] = useState(false);
   const [assignAllUser, setAssignAllUser] = useState<string>("");
   const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
+  const [inspectionRooms, setInspectionRooms] = useState<Array<{ name: string }>>([]);
   const [historicalInspections, setHistoricalInspections] = useState<Array<{
     id: string;
     date: string;
@@ -448,7 +449,7 @@ export default function InspectionDetailsDialog({
     const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
     // Fetch inspection_rooms for ordering (preserves template structure)
-    const { data: inspectionRooms } = await supabase
+    const { data: inspectionRoomsData } = await supabase
       .from("inspection_rooms")
       .select("id, name, order_index")
       .eq("inspection_id", inspectionId)
@@ -458,11 +459,13 @@ export default function InspectionDetailsDialog({
     const roomNameToOrder = new Map<string, number>();
     const roomIdToOrder = new Map<string, number>();
     
-    if (inspectionRooms) {
-      inspectionRooms.forEach((room) => {
+    if (inspectionRoomsData) {
+      inspectionRoomsData.forEach((room) => {
         roomNameToOrder.set(room.name, room.order_index);
         roomIdToOrder.set(room.id, room.order_index);
       });
+      // Store rooms for AddTaskDialog
+      setInspectionRooms(inspectionRoomsData.map(r => ({ name: r.name })));
     }
 
     // Map profiles to subtasks
@@ -752,6 +755,7 @@ export default function InspectionDetailsDialog({
     inventory_quantity: number;
     inventory_type_id: string | null;
     vendor_type_id: string | null;
+    room_name: string | null;
   }) => {
     if (!inspectionId) return;
 
@@ -768,6 +772,7 @@ export default function InspectionDetailsDialog({
         inventory_quantity: task.inventory_quantity || 0,
         inventory_type_id: task.inventory_type_id,
         vendor_type_id: task.vendor_type_id,
+        room_name: task.room_name,
         assigned_users: null,
         attachment_url: null,
         created_by: user.id,
@@ -1880,7 +1885,7 @@ export default function InspectionDetailsDialog({
                                     toggleActivity(subtask.id);
                                   }}
                                 >
-                                  {expandedActivity[subtask.id] ? (
+                                   {expandedActivity[subtask.id] ? (
                                     <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                                   ) : (
                                     <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
@@ -1888,6 +1893,18 @@ export default function InspectionDetailsDialog({
                                    <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
                                      {subtask.description}
                                    </p>
+                                   {subtask.attachment_url && (
+                                     <a
+                                       href={subtask.attachment_url}
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       className="text-primary hover:underline text-[10px] flex items-center gap-1"
+                                       onClick={(e) => e.stopPropagation()}
+                                     >
+                                       <FileText className="h-3 w-3" />
+                                       Attachment
+                                     </a>
+                                   )}
                                    {subtask.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0) && (
                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 bg-amber-50">
                                        Needs Qty
@@ -2244,28 +2261,40 @@ export default function InspectionDetailsDialog({
                                      }}
                                    >
                                      {expandedActivity[subtask.id] ? (
-                                       <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                                     ) : (
-                                       <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
-                                     )}
-                                      <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
-                                        {subtask.description}
-                                      </p>
-                                      {subtask.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0) && (
-                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 bg-amber-50">
-                                          Needs Qty
-                                        </Badge>
+                                        <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                      ) : (
+                                        <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
                                       )}
-                                      {isPass && (
-                                        <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600 hover:bg-green-600">
-                                          Pass
-                                        </Badge>
-                                      )}
-                                      {isFail && (
-                                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                                          Fail
-                                        </Badge>
-                                      )}
+                                       <p className={`flex-1 ${subtask.completed ? "line-through text-muted-foreground" : ""}`}>
+                                         {subtask.description}
+                                       </p>
+                                       {subtask.attachment_url && (
+                                         <a
+                                           href={subtask.attachment_url}
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           className="text-primary hover:underline text-[10px] flex items-center gap-1"
+                                           onClick={(e) => e.stopPropagation()}
+                                         >
+                                           <FileText className="h-3 w-3" />
+                                           Attachment
+                                         </a>
+                                       )}
+                                       {subtask.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0) && (
+                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 bg-amber-50">
+                                           Needs Qty
+                                         </Badge>
+                                       )}
+                                       {isPass && (
+                                         <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600 hover:bg-green-600">
+                                           Pass
+                                         </Badge>
+                                       )}
+                                       {isFail && (
+                                         <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                                           Fail
+                                         </Badge>
+                                       )}
                                    </div>
 
                                    {/* Pass/Fail Buttons - Modern Design */}
@@ -2598,6 +2627,7 @@ export default function InspectionDetailsDialog({
             onAdd={handleAddTaskFromDialog}
             inventoryTypes={inventoryTypes}
             vendorTypes={vendorTypes}
+            rooms={inspectionRooms}
             onCreateInventoryType={handleCreateInventoryType}
             title="Add Task"
             description="Add a new task to this inspection"
