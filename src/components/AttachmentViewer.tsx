@@ -122,7 +122,11 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     }
     
     if (isPdf) {
-      return <iframe src={blobUrl} className="w-full h-[70vh]" title="PDF Viewer" />;
+      return (
+        <object data={blobUrl} type="application/pdf" className="w-full h-[70vh]">
+          <embed src={blobUrl} type="application/pdf" className="w-full h-[70vh]" />
+        </object>
+      );
     }
     
     return (
