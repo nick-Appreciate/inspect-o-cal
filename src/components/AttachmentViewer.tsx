@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { FileText, X, Download, ExternalLink, Loader2 } from "lucide-react";
+import { FileText, Download, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -23,6 +23,7 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
   const [loading, setLoading] = useState(false);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [fileType, setFileType] = useState<string>("");
+  const [fileName, setFileName] = useState<string>("");
 
   const extractStoragePath = (fullUrl: string) => {
     // Extract bucket and path from Supabase storage URL
@@ -34,35 +35,36 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     return null;
   };
 
+  const getProxyUrl = () => {
+    const storageInfo = extractStoragePath(url);
+    if (storageInfo) {
+      return `${SUPABASE_URL}/functions/v1/serve-attachment?bucket=${encodeURIComponent(storageInfo.bucket)}&path=${encodeURIComponent(storageInfo.path)}`;
+    }
+    return url;
+  };
+
   const handleOpen = async () => {
     setIsOpen(true);
     setLoading(true);
 
     try {
-      const storageInfo = extractStoragePath(url);
+      const proxyUrl = getProxyUrl();
+      console.log("Fetching attachment from:", proxyUrl);
       
-      if (storageInfo) {
-        // Fetch via edge function proxy to avoid ad blocker issues
-        const proxyUrl = `${SUPABASE_URL}/functions/v1/serve-attachment?bucket=${encodeURIComponent(storageInfo.bucket)}&path=${encodeURIComponent(storageInfo.path)}`;
-        
-        const response = await fetch(proxyUrl);
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch: ${response.status}`);
-        }
-
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        setBlobUrl(objectUrl);
-        setFileType(blob.type);
-      } else {
-        // Fallback for non-Supabase URLs
-        const response = await fetch(url);
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        setBlobUrl(objectUrl);
-        setFileType(blob.type);
+      const response = await fetch(proxyUrl);
+      console.log("Response status:", response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.status}`);
       }
+
+      const blob = await response.blob();
+      console.log("Blob type:", blob.type, "size:", blob.size);
+      
+      const objectUrl = URL.createObjectURL(blob);
+      setBlobUrl(objectUrl);
+      setFileType(blob.type);
+      setFileName(url.split("/").pop() || "attachment");
     } catch (error) {
       console.error("Error loading attachment:", error);
       toast.error("Failed to load attachment");
@@ -83,15 +85,84 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
     if (blobUrl) {
       const a = document.createElement("a");
       a.href = blobUrl;
-      a.download = url.split("/").pop() || "attachment";
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     }
   };
 
+  const handleOpenInNewTab = () => {
+    // Open the proxy URL directly in a new tab
+    window.open(getProxyUrl(), "_blank");
+  };
+
   const isImage = fileType.startsWith("image/");
   const isPdf = fileType === "application/pdf";
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    
+    if (!blobUrl) {
+      return (
+        <div className="flex items-center justify-center h-64 text-muted-foreground">
+          Failed to load attachment
+        </div>
+      );
+    }
+
+    if (isImage) {
+      return <img src={blobUrl} alt="Attachment" className="max-w-full h-auto mx-auto" />;
+    }
+    
+    if (isPdf) {
+      return <iframe src={blobUrl} className="w-full h-[70vh]" title="PDF Viewer" />;
+    }
+    
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <FileText className="h-16 w-16 text-muted-foreground" />
+        <p className="text-muted-foreground">Preview not available for this file type</p>
+        <Button onClick={handleDownload}>
+          <Download className="h-4 w-4 mr-2" />
+          Download File
+        </Button>
+      </div>
+    );
+  };
+
+  const dialogContent = (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">
+            <span>{variant === "compact" ? "Attachment" : label}</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleDownload} disabled={!blobUrl}>
+                <Download className="h-4 w-4 mr-1" />
+                Download
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>
+                Open in New Tab
+              </Button>
+            </div>
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            View and download the attachment file
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto">
+          {renderContent()}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (variant === "compact") {
     return (
@@ -106,54 +177,7 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
           <FileText className="h-3 w-3" />
           Attachment
         </button>
-
-        <Dialog open={isOpen} onOpenChange={handleClose}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between">
-                <span>Attachment</span>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleDownload} disabled={!blobUrl}>
-                    <Download className="h-4 w-4 mr-1" />
-                    Download
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-1" />
-                      Open Direct
-                    </a>
-                  </Button>
-                </div>
-              </DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 overflow-auto">
-              {loading ? (
-                <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : blobUrl ? (
-                isImage ? (
-                  <img src={blobUrl} alt="Attachment" className="max-w-full h-auto mx-auto" />
-                ) : isPdf ? (
-                  <iframe src={blobUrl} className="w-full h-[70vh]" title="PDF Viewer" />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-64 gap-4">
-                    <FileText className="h-16 w-16 text-muted-foreground" />
-                    <p className="text-muted-foreground">Preview not available for this file type</p>
-                    <Button onClick={handleDownload}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Download File
-                    </Button>
-                  </div>
-                )
-              ) : (
-                <div className="flex items-center justify-center h-64 text-muted-foreground">
-                  Failed to load attachment
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        {dialogContent}
       </>
     );
   }
@@ -169,54 +193,7 @@ export function AttachmentViewer({ url, label = "View Attachment", variant = "de
           {label}
         </span>
       </div>
-
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>{label}</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleDownload} disabled={!blobUrl}>
-                  <Download className="h-4 w-4 mr-1" />
-                  Download
-                </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4 mr-1" />
-                    Open Direct
-                  </a>
-                </Button>
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto">
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : blobUrl ? (
-              isImage ? (
-                <img src={blobUrl} alt="Attachment" className="max-w-full h-auto mx-auto" />
-              ) : isPdf ? (
-                <iframe src={blobUrl} className="w-full h-[70vh]" title="PDF Viewer" />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-64 gap-4">
-                  <FileText className="h-16 w-16 text-muted-foreground" />
-                  <p className="text-muted-foreground">Preview not available for this file type</p>
-                  <Button onClick={handleDownload}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download File
-                  </Button>
-                </div>
-              )
-            ) : (
-              <div className="flex items-center justify-center h-64 text-muted-foreground">
-                Failed to load attachment
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {dialogContent}
     </>
   );
 }
