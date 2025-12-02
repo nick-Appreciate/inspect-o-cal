@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { FileText, Clock, MapPin, Check, Upload, Send, Trash2, User, X, Plus, Link2, ClipboardList, ChevronDown, ChevronUp, ChevronRight, History, Calendar as CalendarIcon, Edit } from "lucide-react";
+import { AttachmentViewer } from "./AttachmentViewer";
 import {
   Dialog,
   DialogContent,
@@ -1490,17 +1491,7 @@ export default function InspectionDetailsDialog({
 
             {/* Inspection Attachment */}
             {inspection.attachment_url && (
-              <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-md">
-                <FileText className="h-4 w-4 text-primary flex-shrink-0" />
-                <a
-                  href={inspection.attachment_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline font-medium truncate"
-                >
-                  View Inspection Attachment
-                </a>
-              </div>
+              <AttachmentViewer url={inspection.attachment_url} label="View Inspection Attachment" />
             )}
 
             {/* Property Info + Action Buttons Row */}
@@ -1919,17 +1910,8 @@ export default function InspectionDetailsDialog({
                                      {subtask.description}
                                    </p>
                                    {subtask.attachment_url && (
-                                     <a
-                                       href={subtask.attachment_url}
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       className="text-primary hover:underline text-[10px] flex items-center gap-1"
-                                       onClick={(e) => e.stopPropagation()}
-                                     >
-                                       <FileText className="h-3 w-3" />
-                                       Attachment
-                                     </a>
-                                   )}
+                                      <AttachmentViewer url={subtask.attachment_url} variant="compact" />
+                                    )}
                                    {subtask.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0) && (
                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 bg-amber-50">
                                        Needs Qty
@@ -2294,17 +2276,8 @@ export default function InspectionDetailsDialog({
                                          {subtask.description}
                                        </p>
                                        {subtask.attachment_url && (
-                                         <a
-                                           href={subtask.attachment_url}
-                                           target="_blank"
-                                           rel="noopener noreferrer"
-                                           className="text-primary hover:underline text-[10px] flex items-center gap-1"
-                                           onClick={(e) => e.stopPropagation()}
-                                         >
-                                           <FileText className="h-3 w-3" />
-                                           Attachment
-                                         </a>
-                                       )}
+                                          <AttachmentViewer url={subtask.attachment_url} variant="compact" />
+                                        )}
                                        {subtask.inventory_type_id && (!subtask.inventory_quantity || subtask.inventory_quantity === 0) && (
                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500 text-amber-600 bg-amber-50">
                                            Needs Qty
